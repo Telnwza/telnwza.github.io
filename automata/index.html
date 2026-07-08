@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Automata Studio</title>
+<link rel="stylesheet" href="../css/style.css" />
+<style>
+:root{
+  --bg:#0b1020;--panel:#111827;--panel2:#0f172a;--card:#182235;--text:#e5e7eb;
+  --muted:#94a3b8;--line:#334155;--accent:#60a5fa;--accent2:#2563eb;
+  --ok:#22c55e;--warn:#f59e0b;--danger:#ef4444;--shadow:0 10px 30px rgba(0,0,0,.25)
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input,select,textarea{font:inherit}
+button{color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px 11px;cursor:pointer}
+button:hover{border-color:var(--accent);background:#1e293b}
+button.primary{background:var(--accent2);border-color:var(--accent2)}
+button.danger{color:#fecaca}
+button.active{background:#1d4ed8;border-color:#60a5fa}
+input,select,textarea{width:100%;color:var(--text);background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:8px 9px}
+textarea{resize:vertical;min-height:72px}
+label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
+.app{min-height:calc(100vh - 72px);display:grid;grid-template-rows:auto 1fr}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand h1{font-size:19px;line-height:1.2;letter-spacing:0;margin:0}.brand p{font-size:12px;color:var(--muted);margin:3px 0 0}
+.top-actions,.toolbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.workspace{min-height:0;display:grid;grid-template-columns:290px 1fr 340px;gap:10px;padding:10px}
+.panel{min-height:0;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:var(--shadow)}
+.panel h2{font-size:14px;margin:0 0 10px}.panel h3{font-size:13px;margin:16px 0 8px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.stack{display:grid;gap:8px}
+.help{padding:9px;border:1px solid #1e3a8a;background:#0b1f3a;border-radius:8px;color:#bfdbfe;font-size:12px;line-height:1.45}
+.canvas-panel{display:grid;grid-template-rows:auto 1fr auto;min-width:0}
+.canvas-shell{position:relative;min-height:480px;overflow:hidden;border:1px solid var(--line);border-radius:10px;background-color:#0b1220;background-image:linear-gradient(#172033 1px,transparent 1px),linear-gradient(90deg,#172033 1px,transparent 1px);background-size:24px 24px}
+svg{width:100%;height:100%;min-height:580px;display:block;touch-action:none;user-select:none}
+.state{cursor:grab}.state circle.outer{fill:#0f172a;stroke:#cbd5e1;stroke-width:2}.state circle.inner{fill:none;stroke:#cbd5e1;stroke-width:2}
+.state text{fill:#f8fafc;font-size:14px;font-weight:650;pointer-events:none}
+.state.initial circle.outer{stroke:#60a5fa}.selected circle.outer,.selected path{stroke:#60a5fa!important;stroke-width:3!important}
+.edge{cursor:pointer}.edge path{fill:none;stroke:#94a3b8;stroke-width:2}.edge text{fill:#f8fafc;font-size:12px;font-weight:600;paint-order:stroke;stroke:#0b1220;stroke-width:4px;stroke-linejoin:round}
+.edge-hit{fill:none;stroke:transparent;stroke-width:16}
+.statusbar{display:flex;justify-content:space-between;gap:10px;padding-top:8px;color:var(--muted);font-size:12px}
+.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#172554;color:#bfdbfe;font-size:11px}
+.result{white-space:pre-wrap;background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:9px;font-size:12px;line-height:1.55}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--danger);font-weight:700}.warn{color:var(--warn);font-weight:700}
+.small{font-size:12px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid var(--line);padding:6px;text-align:center}th{background:#182235}
+.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#0b1220;border:1px solid var(--line);padding:4px 7px;border-radius:7px;font-size:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px}.tab{flex:1}.tab.active{background:#1d4ed8}
+.hidden{display:none!important}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.58);display:none;align-items:center;justify-content:center;z-index:50}
+.modal{width:min(560px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+.modal h2{margin:0 0 12px;font-size:16px}
+kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 5px;font-size:11px}
+@media(max-width:1150px){.workspace{grid-template-columns:1fr}.panel{overflow:visible}.canvas-shell{min-height:560px}}
+@media(max-width:780px){.topbar{align-items:flex-start;flex-direction:column}.top-actions select{max-width:100%}}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#automata-workspace">Skip to automata workspace</a>
+<header class="site-header">
+  <nav class="site-nav container" aria-label="Primary navigation">
+    <a class="brand-link" href="../" aria-label="Visual Learning Tools home">
+      <span class="brand-mark" aria-hidden="true">VL</span>
+      <span>Visual Learning Tools</span>
+    </a>
+    <div class="nav-links">
+      <a href="../">Home</a>
+      <a href="../#tools">Tools</a>
+      <a href="https://github.com/" rel="noopener">GitHub</a>
+      <a href="../">Back to dashboard</a>
+    </div>
+  </nav>
+</header>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>Automata Studio</h1>
+      <p>DFA, NFA, PDA และ Turing Machine ในหน้าเดียว</p>
+    </div>
+    <div class="top-actions">
+      <select id="machineType" style="width:auto">
+        <option value="DFA">DFA</option>
+        <option value="NFA">NFA / ε-NFA</option>
+        <option value="PDA">Pushdown Automaton</option>
+        <option value="TM">Turing Machine</option>
+      </select>
+      <button id="undoBtn">Undo</button>
+      <button id="redoBtn">Redo</button>
+      <button id="saveBtn">Save</button>
+      <button id="loadBtn">Load</button>
+      <button id="exportBtn">Export JSON</button>
+      <button id="importBtn">Import JSON</button>
+      <button id="exportSvgBtn">Export SVG</button>
+      <input id="importFile" type="file" accept=".json" hidden />
+    </div>
+  </header>
+
+  <main class="workspace" id="automata-workspace">
+    <aside class="panel">
+      <h2>เครื่องมือ</h2>
+      <div class="toolbar">
+        <button id="selectTool" class="active">เลือก/ลาก</button>
+        <button id="addTool">เพิ่ม State</button>
+        <button id="connectTool">โยงเส้น</button>
+        <button id="deleteTool">ลบ</button>
+      </div>
+      <div class="help">
+        ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state<br>
+        ใช้ <kbd>Shift</kbd> + คลิก state สองตัวเพื่อโยงเส้น<br>
+        กด <kbd>Delete</kbd> เพื่อลบ, <kbd>Ctrl/Cmd+Z</kbd> เพื่อ Undo
+      </div>
+
+      <h3>ตั้งค่า</h3>
+      <div class="row">
+        <div><label>Alphabet Σ</label><input id="alphabet" value="0,1"></div>
+        <div><label>ความยาวสมาชิก</label><input id="maxLen" type="number" min="0" max="8" value="4"></div>
+      </div>
+
+      <h3>State ที่เลือก</h3>
+      <div class="stack">
+        <div><label>ชื่อ State</label><input id="stateName" placeholder="เช่น q0"></div>
+        <div class="row">
+          <button id="toggleInitial">Initial</button>
+          <button id="toggleFinal">Final</button>
+        </div>
+      </div>
+
+      <h3>Transition ที่เลือก</h3>
+      <div class="stack">
+        <div>
+          <label id="edgeLabelTitle">Label</label>
+          <textarea id="edgeLabel" placeholder="DFA/NFA: 0 หรือ 0,1"></textarea>
+        </div>
+        <button id="applyEdgeLabel" class="primary">บันทึก Transition</button>
+      </div>
+
+      <h3>Preset</h3>
+      <div class="stack">
+        <button data-preset="ends01">DFA: ลงท้ายด้วย 01</button>
+        <button data-preset="contains001">DFA: มี 001</button>
+        <button data-preset="even0">DFA: จำนวน 0 เป็นเลขคู่</button>
+        <button data-preset="nfaEnds01">NFA: ลงท้ายด้วย 01</button>
+        <button data-preset="pdaAnBn">PDA: aⁿbⁿ</button>
+        <button data-preset="tmUnaryInc">TM: เพิ่ม unary 1 หนึ่งตัว</button>
+      </div>
+
+      <h3>ล้างงาน</h3>
+      <button id="clearBtn" class="danger" style="width:100%">ล้างทั้งหมด</button>
+    </aside>
+
+    <section class="panel canvas-panel">
+      <div class="toolbar">
+        <span class="badge" id="modeBadge">โหมด: เลือก/ลาก</span>
+        <button id="fitBtn">จัดให้อยู่กลาง</button>
+        <button id="validateBtn">ตรวจความถูกต้อง</button>
+      </div>
+      <div class="canvas-shell">
+        <svg id="canvas" viewBox="0 0 1000 620">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#94a3b8"></path>
+            </marker>
+          </defs>
+          <g id="viewport">
+            <g id="edgesLayer"></g>
+            <g id="statesLayer"></g>
+          </g>
+        </svg>
+      </div>
+      <div class="statusbar">
+        <span id="status">พร้อมใช้งาน</span>
+        <span id="countInfo">0 states, 0 transitions</span>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="tabs">
+        <button class="tab active" data-tab="simulate">จำลอง</button>
+        <button class="tab" data-tab="formal">สมการ</button>
+        <button class="tab" data-tab="members">สมาชิก</button>
+      </div>
+
+      <section id="tab-simulate">
+        <h2>Simulation</h2>
+        <label>Input</label>
+        <input id="testInput" placeholder="เช่น 10101 หรือ λ">
+        <div class="row" style="margin-top:8px">
+          <button id="runBtn" class="primary">Run</button>
+          <button id="stepBtn">Step</button>
+        </div>
+        <div id="runResult" class="result" style="margin-top:8px">ยังไม่ได้ทดสอบ</div>
+
+        <h3>Current Configuration</h3>
+        <div id="configuration" class="result">—</div>
+
+        <h3>Validation</h3>
+        <div id="validation" class="result">ยังไม่ได้ตรวจ</div>
+      </section>
+
+      <section id="tab-formal" class="hidden">
+        <h2>Formal Definition</h2>
+        <div id="formal" class="result"></div>
+        <h3>Transition Table</h3>
+        <div id="tableWrap"></div>
+      </section>
+
+      <section id="tab-members" class="hidden">
+        <h2>Language Explorer</h2>
+        <div class="small">ใช้เต็มรูปแบบกับ DFA/NFA เท่านั้น</div>
+        <h3>Accepted</h3>
+        <div id="members" class="chips"></div>
+        <h3>Rejected</h3>
+        <div id="rejectMembers" class="chips"></div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<div id="edgeModal" class="modal-backdrop">
+  <div class="modal">
+    <h2>สร้าง Transition</h2>
+    <label id="modalLabelHint">Label</label>
+    <textarea id="modalEdgeLabel"></textarea>
+    <div class="row" style="margin-top:12px">
+      <button id="cancelEdge">ยกเลิก</button>
+      <button id="confirmEdge" class="primary">สร้าง</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const svg=$('canvas'), viewport=$('viewport'), statesLayer=$('statesLayer'), edgesLayer=$('edgesLayer');
+
+let states=[],edges=[],selected=null,tool='select',connectFrom=null,drag=null,counter=0;
+let history=[],future=[],sim=null;
+const EPS=['ε','eps','epsilon','λ'];
+
+function type(){return $('machineType').value}
+function alphabet(){return $('alphabet').value.split(',').map(x=>x.trim()).filter(Boolean)}
+function stateById(id){return states.find(s=>s.id===id)}
+function edgeById(id){return edges.find(e=>e.id===id)}
+function uid(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+
+function snapshot(push=true){
+  if(push){history.push(JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value})); if(history.length>80)history.shift(); future=[]}
+  localStorage.setItem('automataStudioAuto',JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value}));
+}
+function restore(raw){
+  const d=JSON.parse(raw);states=d.states||[];edges=d.edges||[];counter=d.counter||states.length;
+  if(d.type)$('machineType').value=d.type;if(d.alphabet)$('alphabet').value=d.alphabet;
+  selected=null;connectFrom=null;sim=null;render();
+}
+function commit(fn){snapshot();fn();render();snapshot(false)}
+
+function setTool(t){
+  tool=t;connectFrom=null;
+  ['select','add','connect','delete'].forEach(x=>$(x+'Tool').classList.toggle('active',x===t));
+  const names={select:'เลือก/ลาก',add:'เพิ่ม State',connect:'โยงเส้น',delete:'ลบ'};
+  $('modeBadge').textContent='โหมด: '+names[t];$('status').textContent='เลือกโหมด '+names[t];
+}
+
+function svgPoint(ev){
+  const p=svg.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;
+  return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+function addState(x,y,name){
+  const id=uid('s');states.push({id,name:name||'q'+counter++,x,y,initial:false,final:false});
+  selected={type:'state',id};
+}
+function removeSelected(){
+  if(!selected)return;
+  if(selected.type==='state'){states=states.filter(s=>s.id!==selected.id);edges=edges.filter(e=>e.from!==selected.id&&e.to!==selected.id)}
+  else edges=edges.filter(e=>e.id!==selected.id);
+  selected=null;
+}
+function openEdgeModal(from,to){
+  window.pendingEdge={from,to};$('modalEdgeLabel').value=defaultEdgeLabel();$('edgeModal').style.display='flex';
+  $('modalEdgeLabel').focus();
+}
+function defaultEdgeLabel(){
+  if(type()==='PDA')return 'a,ε→A';
+  if(type()==='TM')return '1→1,R';
+  return alphabet()[0]||'0';
+}
+function edgeHint(){
+  if(type()==='DFA'||type()==='NFA')return 'ใช้ comma คั่น เช่น 0,1 หรือ ε';
+  if(type()==='PDA')return 'รูปแบบ: input,pop→push เช่น a,ε→A หรือ b,A→ε';
+  return 'รูปแบบ: read→write,move เช่น 1→1,R หรือ □→1,S';
+}
+
+function render(){
+  edgesLayer.innerHTML='';statesLayer.innerHTML='';
+  for(const e of edges)drawEdge(e);
+  for(const s of states)drawState(s);
+  syncInspector();refreshAnalysis();
+  $('countInfo').textContent=`${states.length} states, ${edges.length} transitions`;
+}
+function drawEdge(e){
+  const a=stateById(e.from),b=stateById(e.to);if(!a||!b)return;
+  const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('class','edge'+(selected?.type==='edge'&&selected.id===e.id?' selected':''));
+  let d,lx,ly;
+  if(a.id===b.id){
+    d=`M ${a.x-18} ${a.y-26} C ${a.x-78} ${a.y-115}, ${a.x+78} ${a.y-115}, ${a.x+18} ${a.y-26}`;
+    lx=a.x;ly=a.y-88;
+  }else{
+    const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,nx=-uy,ny=ux;
+    const same=edges.filter(x=>x.from===e.from&&x.to===e.to),idx=same.indexOf(e),curve=(idx-(same.length-1)/2)*42;
+    const sx=a.x+ux*34,sy=a.y+uy*34,ex=b.x-ux*39,ey=b.y-uy*39,mx=(sx+ex)/2,my=(sy+ey)/2;
+    d=`M ${sx} ${sy} Q ${mx+nx*curve} ${my+ny*curve} ${ex} ${ey}`;
+    lx=mx+nx*(curve+16);ly=my+ny*(curve+16);
+  }
+  const hit=document.createElementNS('http://www.w3.org/2000/svg','path');hit.setAttribute('d',d);hit.setAttribute('class','edge-hit');
+  const p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d',d);p.setAttribute('marker-end','url(#arrow)');
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('x',lx);t.setAttribute('y',ly);t.setAttribute('text-anchor','middle');t.textContent=e.label||'∅';
+  g.append(hit,p,t);
+  g.onclick=ev=>{ev.stopPropagation();if(tool==='delete')commit(()=>{selected={type:'edge',id:e.id};removeSelected()});else{selected={type:'edge',id:e.id};render()}};
+  g.ondblclick=ev=>{ev.stopPropagation();selected={type:'edge',id:e.id};render();$('edgeLabel').focus()};
+  edgesLayer.append(g);
+}
+function drawState(s){
+  const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('class','state'+(s.final?' final':'')+(s.initial?' initial':'')+(selected?.type==='state'&&selected.id===s.id?' selected':''));
+  g.setAttribute('transform',`translate(${s.x},${s.y})`);
+  if(s.initial){
+    const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1','-72');l.setAttribute('y1','0');l.setAttribute('x2','-35');l.setAttribute('y2','0');l.setAttribute('stroke','#60a5fa');l.setAttribute('stroke-width','2');l.setAttribute('marker-end','url(#arrow)');g.append(l)
+  }
+  const c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.setAttribute('class','outer');c.setAttribute('r','31');g.append(c);
+  if(s.final){const i=document.createElementNS('http://www.w3.org/2000/svg','circle');i.setAttribute('class','inner');i.setAttribute('r','25');g.append(i)}
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','middle');t.textContent=s.name;g.append(t);
+
+  g.onmousedown=ev=>{
+    ev.stopPropagation();
+    if(ev.shiftKey){ if(!connectFrom){connectFrom=s.id;$('status').textContent='เลือกต้นทาง '+s.name+' แล้ว'} else{openEdgeModal(connectFrom,s.id);connectFrom=null} return }
+    if(tool==='delete'){commit(()=>{selected={type:'state',id:s.id};removeSelected()});return}
+    if(tool==='connect'){if(!connectFrom){connectFrom=s.id;$('status').textContent='เลือกต้นทาง '+s.name+' แล้ว'}else{openEdgeModal(connectFrom,s.id);connectFrom=null}return}
+    selected={type:'state',id:s.id};
+    if(tool==='select'){const p=svgPoint(ev);drag={id:s.id,dx:p.x-s.x,dy:p.y-s.y};snapshot()}
+    render()
+  };
+  g.ondblclick=ev=>{ev.stopPropagation();selected={type:'state',id:s.id};render();$('stateName').focus()};
+  statesLayer.append(g);
+}
+
+svg.onmousemove=ev=>{if(!drag)return;const s=stateById(drag.id),p=svgPoint(ev);s.x=Math.max(40,Math.min(960,p.x-drag.dx));s.y=Math.max(40,Math.min(580,p.y-drag.dy));render()};
+window.onmouseup=()=>{if(drag){drag=null;snapshot(false)}};
+svg.onclick=ev=>{
+  if(ev.target.closest('.state')||ev.target.closest('.edge'))return;
+  const p=svgPoint(ev);
+  if(tool==='add'){commit(()=>addState(p.x,p.y));return}
+  selected=null;connectFrom=null;render()
+};
+svg.ondblclick=ev=>{if(ev.target===svg||ev.target.closest('#viewport')){const p=svgPoint(ev);commit(()=>addState(p.x,p.y))}};
+
+function syncInspector(){
+  const s=selected?.type==='state'?stateById(selected.id):null,e=selected?.type==='edge'?edgeById(selected.id):null;
+  $('stateName').value=s?.name||'';$('edgeLabel').value=e?.label||'';
+  $('edgeLabelTitle').textContent=edgeHint();$('modalLabelHint').textContent=edgeHint();$('edgeLabel').placeholder=edgeHint();
+}
+
+$('stateName').onchange=()=>{if(selected?.type==='state')commit(()=>stateById(selected.id).name=$('stateName').value.trim()||'q')};
+$('toggleInitial').onclick=()=>{if(selected?.type!=='state')return;commit(()=>{const s=stateById(selected.id);if(!s.initial)states.forEach(x=>x.initial=false);s.initial=!s.initial})};
+$('toggleFinal').onclick=()=>{if(selected?.type!=='state')return;commit(()=>stateById(selected.id).final=!stateById(selected.id).final)};
+$('applyEdgeLabel').onclick=()=>{if(selected?.type==='edge')commit(()=>edgeById(selected.id).label=$('edgeLabel').value.trim())};
+
+$('confirmEdge').onclick=()=>{const p=window.pendingEdge,label=$('modalEdgeLabel').value.trim();if(!p)return;commit(()=>edges.push({id:uid('e'),from:p.from,to:p.to,label}));$('edgeModal').style.display='none';window.pendingEdge=null};
+$('cancelEdge').onclick=()=>{$('edgeModal').style.display='none';window.pendingEdge=null};
+$('edgeModal').onclick=e=>{if(e.target===$('edgeModal'))$('cancelEdge').click()};
+
+['select','add','connect','delete'].forEach(t=>$(t+'Tool').onclick=()=>setTool(t));
+$('clearBtn').onclick=()=>commit(()=>{states=[];edges=[];selected=null;counter=0});
+$('alphabet').onchange=()=>{snapshot();render()};
+$('maxLen').onchange=refreshAnalysis;
+$('machineType').onchange=()=>{sim=null;snapshot();render()};
+
+window.addEventListener('keydown',ev=>{
+  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();ev.shiftKey?redo():undo()}
+  else if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='y'){ev.preventDefault();redo()}
+  else if(ev.key==='Delete'&&selected){commit(removeSelected)}
+  else if(ev.key==='Escape'){connectFrom=null;setTool('select');$('edgeModal').style.display='none'}
+});
+
+function undo(){if(!history.length)return;future.push(JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value}));restore(history.pop())}
+function redo(){if(!future.length)return;history.push(JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value}));restore(future.pop())}
+$('undoBtn').onclick=undo;$('redoBtn').onclick=redo;
+
+function parseFAEdge(label){return label.split(',').map(x=>x.trim()).filter(Boolean)}
+function transMap(){
+  const m=new Map();
+  for(const e of edges)for(const c of parseFAEdge(e.label)){const k=e.from+'|'+c;if(!m.has(k))m.set(k,[]);m.get(k).push(e.to)}
+  return m
+}
+function epsilonClosure(ids,map){
+  const st=[...ids],seen=new Set(ids);
+  while(st.length){const id=st.pop();for(const ep of EPS){for(const d of map.get(id+'|'+ep)||[])if(!seen.has(d)){seen.add(d);st.push(d)}}}
+  return [...seen]
+}
+function validate(){
+  const errs=[],warns=[],A=alphabet(),init=states.filter(s=>s.initial);
+  if(init.length!==1)errs.push('ต้องมี Initial state 1 state');
+  if(!states.length)errs.push('ยังไม่มี state');
+  if(type()==='DFA'){
+    const m=transMap();
+    for(const s of states)for(const c of A){const ds=m.get(s.id+'|'+c)||[];if(ds.length===0)errs.push(`ขาด δ(${s.name},${c})`);if(ds.length>1)errs.push(`δ(${s.name},${c}) มีหลายปลายทาง`)}
+    for(const e of edges)if(parseFAEdge(e.label).some(x=>EPS.includes(x)))errs.push('DFA ห้ามมี ε-transition')
+  }
+  if(type()==='NFA')warns.push('NFA สามารถมีหลาย transition และ ε-transition ได้');
+  if(type()==='PDA')for(const e of edges)if(!e.label.includes('→')||!e.label.includes(','))warns.push(`รูปแบบ PDA ที่ "${e.label}" อาจไม่ถูกต้อง`);
+  if(type()==='TM')for(const e of edges)if(!e.label.includes('→')||!e.label.includes(','))warns.push(`รูปแบบ TM ที่ "${e.label}" อาจไม่ถูกต้อง`);
+  return{errs,warns}
+}
+$('validateBtn').onclick=()=>{const v=validate();$('validation').innerHTML=(v.errs.length?'<span class="bad">'+v.errs.join('\n')+'</span>':'<span class="ok">โครงสร้างพื้นฐานถูกต้อง</span>')+(v.warns.length?'\n<span class="warn">'+v.warns.join('\n')+'</span>':'')};
+
+function runFA(input){
+  const init=states.find(s=>s.initial);if(!init)return{ok:false,error:'ไม่มี Initial state'};
+  const str=EPS.includes(input)?'':input,m=transMap();
+  if(type()==='DFA'){
+    let cur=init,path=[cur.name];
+    for(const c of str){if(!alphabet().includes(c))return{ok:false,error:`${c} ไม่อยู่ใน alphabet`};const ds=m.get(cur.id+'|'+c)||[];if(ds.length!==1)return{ok:false,error:`δ(${cur.name},${c}) ไม่สมบูรณ์`};cur=stateById(ds[0]);path.push(cur.name)}
+    return{ok:true,accepted:cur.final,detail:'Path: '+path.join(' → '),config:cur.name}
+  }else{
+    let cur=epsilonClosure([init.id],m),detail=[`Start: {${cur.map(id=>stateById(id).name).join(', ')}}`];
+    for(const c of str){if(!alphabet().includes(c))return{ok:false,error:`${c} ไม่อยู่ใน alphabet`};let next=[];for(const id of cur)next.push(...(m.get(id+'|'+c)||[]));cur=epsilonClosure([...new Set(next)],m);detail.push(`${c}: {${cur.map(id=>stateById(id).name).join(', ')}}`)}
+    return{ok:true,accepted:cur.some(id=>stateById(id).final),detail:detail.join('\n'),config:'{'+cur.map(id=>stateById(id).name).join(', ')+'}'}
+  }
+}
+function parsePDA(label){
+  const [left,pushRaw]=label.split('→');if(!pushRaw||!left.includes(','))return null;
+  const [inp,pop]=left.split(',').map(x=>x.trim());return{inp,pop,push:pushRaw.trim()}
+}
+function runPDA(input,maxSteps=500){
+  const init=states.find(s=>s.initial);if(!init)return{ok:false,error:'ไม่มี Initial state'};
+  const str=EPS.includes(input)?'':input;
+  let queue=[{state:init.id,pos:0,stack:[],trace:[init.name]}],seen=new Set(),steps=0;
+  while(queue.length&&steps++<maxSteps){
+    const c=queue.shift(),key=c.state+'|'+c.pos+'|'+c.stack.join('');if(seen.has(key))continue;seen.add(key);
+    const st=stateById(c.state);
+    if(c.pos===str.length&&st.final)return{ok:true,accepted:true,detail:c.trace.join('\n'),config:`(${st.name}, end, ${c.stack.join('')||'ε'})`};
+    for(const e of edges.filter(e=>e.from===c.state)){
+      for(const line of e.label.split(';').map(x=>x.trim()).filter(Boolean)){
+        const r=parsePDA(line);if(!r)continue;
+        const inOk=EPS.includes(r.inp)||str[c.pos]===r.inp;
+        const top=c.stack[c.stack.length-1],popOk=EPS.includes(r.pop)||top===r.pop;
+        if(!inOk||!popOk)continue;
+        const ns=[...c.stack];if(!EPS.includes(r.pop))ns.pop();
+        if(!EPS.includes(r.push))for(const ch of [...r.push].reverse())ns.push(ch);
+        const np=c.pos+(EPS.includes(r.inp)?0:1),dest=stateById(e.to);
+        queue.push({state:e.to,pos:np,stack:ns,trace:[...c.trace,`${line} → ${dest.name}, stack=${ns.join('')||'ε'}`]})
+      }
+    }
+  }
+  return{ok:true,accepted:false,detail:steps>=maxSteps?'หยุดเพราะเกินขีดจำกัด step':'ไม่พบ accepting path',config:'—'}
+}
+function parseTM(label){
+  const [read,right]=label.split('→');if(!right||!right.includes(','))return null;
+  const [write,move]=right.split(',').map(x=>x.trim());return{read:read.trim(),write,move:move.toUpperCase()}
+}
+function runTM(input,maxSteps=300){
+  const init=states.find(s=>s.initial);if(!init)return{ok:false,error:'ไม่มี Initial state'};
+  const blank='□',tape=new Map();[...input].forEach((c,i)=>tape.set(i,c));
+  let state=init.id,head=0,trace=[],steps=0;
+  while(steps++<maxSteps){
+    const st=stateById(state),read=tape.get(head)||blank;
+    trace.push(`${steps-1}: ${st.name}, head=${head}, read=${read}`);
+    if(st.final)return{ok:true,accepted:true,detail:trace.join('\n'),config:tapeView(tape,head)};
+    let chosen=null,rule=null;
+    for(const e of edges.filter(e=>e.from===state))for(const line of e.label.split(';').map(x=>x.trim()).filter(Boolean)){const r=parseTM(line);if(r&&r.read===read){chosen=e;rule=r;break}}
+    if(!chosen)return{ok:true,accepted:false,detail:trace.join('\n')+'\nหยุด: ไม่มี transition',config:tapeView(tape,head)};
+    tape.set(head,rule.write);if(rule.move==='R')head++;else if(rule.move==='L')head--;state=chosen.to;
+  }
+  return{ok:true,accepted:false,detail:trace.join('\n')+'\nหยุดเพราะเกินขีดจำกัด step',config:tapeView(tape,head)}
+}
+function tapeView(tape,head){
+  const keys=[...tape.keys(),head],min=Math.min(...keys)-2,max=Math.max(...keys)+2;
+  let s='';for(let i=min;i<=max;i++)s+=(i===head?'[':' ')+(tape.get(i)||'□')+(i===head?']':' ');
+  return s
+}
+function runCurrent(){
+  const inp=$('testInput').value.trim(),r=type()==='DFA'||type()==='NFA'?runFA(inp):type()==='PDA'?runPDA(inp):runTM(inp);
+  if(!r.ok){$('runResult').innerHTML='<span class="bad">Error:</span> '+r.error;return}
+  $('runResult').innerHTML=r.detail+'\nResult: <span class="'+(r.accepted?'ok':'bad')+'">'+(r.accepted?'ACCEPT':'REJECT')+'</span>';
+  $('configuration').textContent=r.config||'—'
+}
+$('runBtn').onclick=runCurrent;
+$('stepBtn').onclick=()=>{runCurrent();$('status').textContent='Step mode แบบละเอียดจะเพิ่มในเวอร์ชันถัดไป; ตอนนี้แสดง trace ทุก step แล้ว'};
+
+function allStrings(A,n){const out=[''];let lv=[''];for(let k=1;k<=n;k++){const nx=[];for(const p of lv)for(const c of A)nx.push(p+c);out.push(...nx);lv=nx}return out}
+function refreshAnalysis(){
+  const A=alphabet(),Q=states.map(s=>s.name),F=states.filter(s=>s.final).map(s=>s.name),init=states.find(s=>s.initial);
+  $('formal').textContent=`Type = ${type()}\nQ = {${Q.join(', ')}}\nΣ = {${A.join(', ')}}\nq₀ = ${init?.name||'—'}\nF = {${F.join(', ')}}`;
+  let html='<table><thead><tr><th>State</th>';
+  if(type()==='DFA'||type()==='NFA')html+=A.map(c=>`<th>${c}</th>`).join('');
+  else html+='<th>Transitions</th>';
+  html+='</tr></thead><tbody>';
+  const m=transMap();
+  for(const s of states){
+    html+=`<tr><td>${s.initial?'→ ':''}${s.final?'* ':''}${s.name}</td>`;
+    if(type()==='DFA'||type()==='NFA')for(const c of A){const ds=(m.get(s.id+'|'+c)||[]).map(id=>stateById(id)?.name);html+=`<td>${ds.join(', ')||'—'}</td>`}
+    else html+=`<td>${edges.filter(e=>e.from===s.id).map(e=>`${e.label} → ${stateById(e.to)?.name}`).join('<br>')||'—'}</td>`;
+    html+='</tr>'
+  }
+  $('tableWrap').innerHTML=html+'</tbody></table>';
+  const n=Math.max(0,Math.min(8,+$('maxLen').value||0));
+  if(type()==='DFA'||type()==='NFA'){
+    const acc=[],rej=[];for(const w of allStrings(A,n)){const r=runFA(w);if(r.ok)(r.accepted?acc:rej).push(w||'λ')}
+    $('members').innerHTML=acc.length?acc.map(x=>`<span class="chip">${x}</span>`).join(''):'<span class="small">ไม่มี</span>';
+    $('rejectMembers').innerHTML=rej.length?rej.map(x=>`<span class="chip">${x}</span>`).join(''):'<span class="small">ไม่มี</span>'
+  }else{$('members').innerHTML='<span class="small">ไม่ enumerate อัตโนมัติสำหรับ PDA/TM</span>';$('rejectMembers').innerHTML=''}
+  const v=validate();$('validation').innerHTML=(v.errs.length?'<span class="bad">'+v.errs.join('\n')+'</span>':'<span class="ok">พร้อมใช้งาน</span>')+(v.warns.length?'\n<span class="warn">'+v.warns.join('\n')+'</span>':'')
+}
+
+function preset(name){
+  snapshot();states=[];edges=[];counter=0;
+  const add=(n,x,y,i=false,f=false)=>{const id=uid('p');states.push({id,name:n,x,y,initial:i,final:f});return id};
+  const E=(a,b,l)=>edges.push({id:uid('e'),from:a,to:b,label:l});
+  if(name==='ends01'||name==='nfaEnds01'){
+    $('alphabet').value='0,1';$('machineType').value=name==='nfaEnds01'?'NFA':'DFA';
+    const q0=add('q0',180,320,true,false),q1=add('q1',480,220),q2=add('q2',780,320,false,true);
+    if(name==='ends01'){E(q0,q1,'0');E(q0,q0,'1');E(q1,q1,'0');E(q1,q2,'1');E(q2,q1,'0');E(q2,q0,'1')}
+    else{E(q0,q0,'0,1');E(q0,q1,'0');E(q1,q2,'1')}
+  }else if(name==='contains001'){
+    $('alphabet').value='0,1';$('machineType').value='DFA';
+    const q0=add('q0',120,320,true),q1=add('q1',340,220),q2=add('q2',570,220),q3=add('q3',800,320,false,true);
+    E(q0,q1,'0');E(q0,q0,'1');E(q1,q2,'0');E(q1,q0,'1');E(q2,q2,'0');E(q2,q3,'1');E(q3,q3,'0,1')
+  }else if(name==='even0'){
+    $('alphabet').value='0,1';$('machineType').value='DFA';const a=add('qEven',280,310,true,true),b=add('qOdd',700,310);E(a,b,'0');E(a,a,'1');E(b,a,'0');E(b,b,'1')
+  }else if(name==='pdaAnBn'){
+    $('alphabet').value='a,b';$('machineType').value='PDA';const q0=add('q0',160,310,true),q1=add('q1',450,220),q2=add('q2',730,310,false,true);
+    E(q0,q1,'ε,ε→$; a,ε→A');E(q1,q1,'a,ε→A; b,A→ε');E(q1,q2,'ε,$→ε')
+  }else{
+    $('alphabet').value='1';$('machineType').value='TM';const q0=add('q0',220,310,true),qf=add('qAccept',730,310,false,true);
+    E(q0,q0,'1→1,R');E(q0,qf,'□→1,S')
+  }
+  selected=null;sim=null;render();snapshot(false)
+}
+document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>preset(b.dataset.preset));
+
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
+  ['simulate','formal','members'].forEach(t=>$('tab-'+t).classList.toggle('hidden',b.dataset.tab!==t))
+});
+
+$('saveBtn').onclick=()=>{localStorage.setItem('automataStudioSave',JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value}));$('status').textContent='บันทึกใน browser แล้ว'};
+$('loadBtn').onclick=()=>{const x=localStorage.getItem('automataStudioSave');if(x)restore(x);else $('status').textContent='ยังไม่มีงานที่บันทึก'};
+$('exportBtn').onclick=()=>{
+  const blob=new Blob([JSON.stringify({version:2,type:type(),alphabet:$('alphabet').value,states,edges},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='automata-project.json';a.click();URL.revokeObjectURL(a.href)
+};
+$('importBtn').onclick=()=>$('importFile').click();
+$('importFile').onchange=async e=>{try{restore(await e.target.files[0].text())}catch{alert('ไฟล์ไม่ถูกต้อง')}};
+$('exportSvgBtn').onclick=()=>{
+  const clone=svg.cloneNode(true),data=new XMLSerializer().serializeToString(clone);
+  const blob=new Blob([data],{type:'image/svg+xml'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='automata-diagram.svg';a.click();URL.revokeObjectURL(a.href)
+};
+$('fitBtn').onclick=()=>{svg.setAttribute('viewBox','0 0 1000 620');$('status').textContent='จัดมุมมองแล้ว'};
+
+const auto=localStorage.getItem('automataStudioAuto');
+if(auto){try{restore(auto)}catch{preset('ends01')}}else preset('ends01');
+setTool('select');
+})();
+</script>
+</body>
+</html>

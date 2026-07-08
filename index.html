@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visual Learning Tools</title>
+  <meta name="description" content="Interactive learning tools for Computer Engineering topics.">
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="./js/main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#tools">Skip to tools</a>
+  <header class="site-header">
+    <nav class="site-nav container" aria-label="Primary navigation">
+      <a class="brand-link" href="./" aria-label="Visual Learning Tools home">
+        <span class="brand-mark" aria-hidden="true">VL</span>
+        <span>Visual Learning Tools</span>
+      </a>
+      <div class="nav-links">
+        <a href="./">Home</a>
+        <a href="#tools">Tools</a>
+        <a href="https://github.com/" rel="noopener">GitHub</a>
+        <a href="./">Back to dashboard</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero container" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <p class="eyebrow">Computer Engineering Visualizers</p>
+        <h1 id="page-title">Visual Learning Tools</h1>
+        <p class="hero-description">
+          A static collection of interactive learning tools for Computer Engineering topics, including automata,
+          mathematics, digital systems, embedded systems, and programming.
+        </p>
+      </div>
+      <div class="hero-panel" aria-label="Project goals">
+        <span class="metric">Static HTML</span>
+        <span class="metric">No backend</span>
+        <span class="metric">GitHub Pages ready</span>
+      </div>
+    </section>
+
+    <section class="container controls-panel" aria-labelledby="filter-title">
+      <div>
+        <p class="eyebrow" id="filter-title">Find a visualizer</p>
+        <label class="search-label" for="tool-search">Search tools by name, tag, category, or description</label>
+        <input id="tool-search" class="search-input" type="search" placeholder="Search DFA, logic gates, vectors..." autocomplete="off">
+      </div>
+      <div class="filter-group" aria-label="Category filters" id="category-filters"></div>
+    </section>
+
+    <section class="container section-block" aria-labelledby="recent-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Latest updates</p>
+          <h2 id="recent-title">Recently Added</h2>
+        </div>
+      </div>
+      <div class="card-grid compact-grid" id="recent-tools" aria-live="polite"></div>
+    </section>
+
+    <section class="container section-block" aria-labelledby="tools-title" id="tools">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Dashboard</p>
+          <h2 id="tools-title">All Tools</h2>
+        </div>
+        <p class="tool-count" id="tool-count"></p>
+      </div>
+      <div class="card-grid" id="tools-grid" aria-live="polite"></div>
+      <p class="empty-state" id="empty-state" hidden>No tools match the current search and category.</p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-content">
+      <p>Built as a static website for GitHub Pages.</p>
+      <a href="./">Back to dashboard</a>
+    </div>
+  </footer>
+</body>
+</html>

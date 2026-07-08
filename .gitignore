@@ -1,0 +1,33 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.log
+
+# Local development files
+.env
+.env.*
+!.env.example
+.cache/
+.parcel-cache/
+node_modules/
+
+# Python local server/cache artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
