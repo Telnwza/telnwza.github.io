@@ -9,6 +9,7 @@
   const wirePreviewLayer = $("wirePreviewLayer");
   const AUTO_SAVE_KEY = "logicGatesLabAutoV1";
   const SVG_NS = "http://www.w3.org/2000/svg";
+  const SEGMENT_NAMES = ["a", "b", "c", "d", "e", "f", "g"];
 
   let project = emptyProject("Untitled Circuit");
   let selected = null;
@@ -170,6 +171,7 @@
 
   function nodeSize(node) {
     const inputs = Engine.inputCount(node);
+    if (node.type === "SEVEN_SEG") return { width: 170, height: 240 };
     if (["INPUT", "OUTPUT", "CONST0", "CONST1"].includes(node.type)) return { width: 104, height: 68 };
     return { width: 116, height: Math.max(76, inputs * 24 + 22) };
   }
@@ -273,6 +275,7 @@
       const classes = ["logic-node"];
       if (node.type === "INPUT" || node.type.startsWith("CONST")) classes.push("input-node");
       if (node.type === "OUTPUT") classes.push("output-node");
+      if (node.type === "SEVEN_SEG") classes.push("seven-segment-node");
       if (selected?.type === "node" && selected.id === node.id) classes.push("selected");
       const group = svgElement("g", {
         class: classes.join(" "),
@@ -296,7 +299,14 @@
       label.textContent = node.label;
       const type = svgElement("text", { x: 0, y: 12, class: "node-type" });
       type.textContent = node.type;
-      group.append(label, type);
+      if (node.type === "SEVEN_SEG") {
+        label.setAttribute("y", -98);
+        type.setAttribute("y", -82);
+        group.append(label, type);
+        renderSevenSegment(group, node);
+      } else {
+        group.append(label, type);
+      }
 
       if (["INPUT", "OUTPUT", "CONST0", "CONST1"].includes(node.type)) {
         const value = currentEvaluation.values[node.id];
@@ -342,9 +352,18 @@
         });
         port.addEventListener("pointerdown", (event) => event.stopPropagation());
         group.append(port);
+        if (node.type === "SEVEN_SEG") {
+          const portLabel = svgElement("text", {
+            x: position.x - node.x + 14,
+            y: position.y - node.y + 4,
+            class: "segment-port-label",
+          });
+          portLabel.textContent = SEGMENT_NAMES[index];
+          group.append(portLabel);
+        }
       }
 
-      if (node.type !== "OUTPUT") {
+      if (!["OUTPUT", "SEVEN_SEG"].includes(node.type)) {
         const value = currentEvaluation.values[node.id];
         const position = portPosition(node, "out");
         const port = svgElement("circle", {
@@ -359,6 +378,35 @@
       }
       nodeLayer.append(group);
     }
+  }
+
+  function renderSevenSegment(group, node) {
+    const shapes = [
+      { x: -22, y: -66, width: 80, height: 12 },
+      { x: 48, y: -56, width: 12, height: 54 },
+      { x: 48, y: 10, width: 12, height: 54 },
+      { x: -22, y: 64, width: 80, height: 12 },
+      { x: -34, y: 10, width: 12, height: 54 },
+      { x: -34, y: -56, width: 12, height: 54 },
+      { x: -22, y: -1, width: 80, height: 12 },
+    ];
+    const active = [];
+    shapes.forEach((shape, index) => {
+      const wire = project.wires.find((item) => item.to.node === node.id && item.to.port === `in${index}`);
+      const value = wire ? currentEvaluation.values[wire.from.node] : null;
+      if (value === 1) active.push(SEGMENT_NAMES[index]);
+      const segment = svgElement("rect", {
+        ...shape,
+        rx: 6,
+        class: `seven-segment-bar ${wire ? signalClass(value) : "segment-open"}`,
+        "data-segment": SEGMENT_NAMES[index],
+      });
+      group.append(segment);
+    });
+    group.setAttribute(
+      "aria-label",
+      `${node.label} 7-Segment, segment ที่ติด ${active.length ? active.join(", ") : "ไม่มี"}`,
+    );
   }
 
   function renderInspector() {
@@ -389,10 +437,21 @@
     }
 
     const outputs = project.nodes.filter((node) => node.type === "OUTPUT").sort((a, b) => a.y - b.y);
-    $("outputSummary").innerHTML = outputs.length
-      ? outputs.map((node) => {
-        const value = currentEvaluation.values[node.id];
-        return `<div class="output-card ${value === 1 ? "value-one" : value === 0 ? "value-zero" : ""}"><span>${escapeHtml(node.label)}</span><strong>${displayValue(value)}</strong></div>`;
+    const displayOutputs = project.nodes
+      .filter((node) => node.type === "SEVEN_SEG")
+      .sort((a, b) => a.y - b.y)
+      .flatMap((node) => SEGMENT_NAMES.map((segment, index) => {
+        const wire = project.wires.find((item) => item.to.node === node.id && item.to.port === `in${index}`);
+        return { label: `${node.label}.${segment}`, value: wire ? currentEvaluation.values[wire.from.node] : null };
+      }));
+    const outputItems = [
+      ...outputs.map((node) => ({ label: node.label, value: currentEvaluation.values[node.id] })),
+      ...displayOutputs,
+    ];
+    $("outputSummary").innerHTML = outputItems.length
+      ? outputItems.map((item) => {
+        const value = item.value;
+        return `<div class="output-card ${value === 1 ? "value-one" : value === 0 ? "value-zero" : ""}"><span>${escapeHtml(item.label)}</span><strong>${displayValue(value)}</strong></div>`;
       }).join("")
       : '<p class="muted-copy">ยังไม่มี Output</p>';
 
@@ -416,7 +475,7 @@
           <code>${escapeHtml(item.expression)}</code>
           ${simplifiedByOutput.has(item.id) ? `<span>ย่อแล้ว</span><code>${escapeHtml(simplifiedByOutput.get(item.id))}</code>` : ""}
         </div>`).join("")
-      : '<p class="muted-copy">ต่อสายเข้า Output เพื่อดูสมการ</p>';
+      : '<p class="muted-copy">ต่อสายเข้า Output หรือ 7-Segment เพื่อดูสมการ</p>';
   }
 
   function renderCircuitTruthTable() {
@@ -448,12 +507,12 @@
     const labels = {
       INPUT: nextLabel("INPUT", "A"), OUTPUT: nextLabel("OUTPUT", "Y"),
       CONST0: "0", CONST1: "1", AND: "AND", OR: "OR", NOT: "NOT",
-      NAND: "NAND", NOR: "NOR", XOR: "XOR", XNOR: "XNOR",
+      NAND: "NAND", NOR: "NOR", XOR: "XOR", XNOR: "XNOR", SEVEN_SEG: "7-Segment",
     };
     const node = {
       id: uid("node"), type, label: labels[type] || type,
       x: snap(x), y: snap(y), value: 0,
-      inputCount: ["NOT", "OUTPUT"].includes(type) ? 1 : ["INPUT", "CONST0", "CONST1"].includes(type) ? 0 : 2,
+      inputCount: type === "SEVEN_SEG" ? 7 : ["NOT", "OUTPUT"].includes(type) ? 1 : ["INPUT", "CONST0", "CONST1"].includes(type) ? 0 : 2,
     };
     commit(() => {
       project.nodes.push(node);
@@ -524,7 +583,7 @@
     event.stopPropagation();
     event.preventDefault();
     const node = nodeById(nodeId);
-    if (!node || node.type === "OUTPUT") return;
+    if (!node || ["OUTPUT", "SEVEN_SEG"].includes(node.type)) return;
     wireState = { nodeId, start: portPosition(node, "out"), end: portPosition(node, "out") };
     setStatus("ลากไปยัง input port ที่ต้องการ");
     renderWirePreview();
@@ -974,6 +1033,7 @@
       .small-grid-line,.large-grid-line{fill:none;stroke:#17263a;stroke-width:1}.large-grid-line{stroke:#20334a;stroke-width:1.4}
       .grid-background{fill:#07101d}.circuit-wire{fill:none;stroke:#7f92ad;stroke-width:3}.signal-one .circuit-wire{stroke:#37d4b6}.signal-x .circuit-wire{stroke:#f4c95d;stroke-dasharray:7 6}.circuit-wire-hit{display:none}.wire-value{fill:#eef4ff;font:800 12px sans-serif;paint-order:stroke;stroke:#07101d;stroke-width:5}
       .node-body{fill:#101d2f;stroke:#4a607b;stroke-width:2}.input-node .node-body{fill:#162235;stroke:#7a6a3d}.output-node .node-body{fill:#1b1c35;stroke:#625889}.node-label,.node-type,.node-value{fill:#eef4ff;text-anchor:middle;font-family:sans-serif}.node-label{font-size:13px;font-weight:800}.node-type{fill:#91a5c2;font-size:10px}.node-value{font:900 20px monospace}.value-one{fill:#37d4b6}.value-x{fill:#f4c95d}.port{fill:#07101d;stroke:#a8b7ca;stroke-width:2.5}.port.signal-one{fill:#37d4b6}.port.signal-x{fill:#f4c95d}
+      .seven-segment-node .node-body{fill:#11101b;stroke:#4c5268}.seven-segment-bar{fill:rgba(127,146,173,.12);stroke:rgba(127,146,173,.22)}.seven-segment-bar.signal-one{fill:#37d4b6;stroke:#b9fff2}.seven-segment-bar.signal-x{fill:#f4c95d}.segment-port-label{fill:#91a5c2;font:800 11px monospace}
     `;
     clone.prepend(style);
     return new XMLSerializer().serializeToString(clone);
@@ -1063,6 +1123,8 @@
       "full-adder": buildFullAdder(),
       mux: buildMux(),
       majority: buildMajority(),
+      "seven-segment-tester": buildSevenSegmentTester(),
+      "seven-segment-decoder": buildSevenSegmentDecoderStarter(),
     };
   }
 
@@ -1142,6 +1204,28 @@
       makeWire(ab.id, or.id, 0), makeWire(ac.id, or.id, 1), makeWire(bc.id, or.id, 2),
       makeWire(or.id, y.id, 0),
     );
+    return next;
+  }
+
+  function buildSevenSegmentTester() {
+    const next = emptyProject("7-Segment Tester");
+    const display = makeNode("SEVEN_SEG", "Display", 660, 320, 0, 7);
+    const inputs = SEGMENT_NAMES.map((name, index) => makeNode("INPUT", name, 100, 70 + index * 82, 0, 0));
+    next.nodes.push(...inputs, display);
+    inputs.forEach((input, index) => next.wires.push(makeWire(input.id, display.id, index)));
+    return next;
+  }
+
+  function buildSevenSegmentDecoderStarter() {
+    const next = emptyProject("BCD to 7-Segment Decoder");
+    const inputs = [
+      makeNode("INPUT", "D (8)", 100, 130, 0, 0),
+      makeNode("INPUT", "C (4)", 100, 260, 0, 0),
+      makeNode("INPUT", "B (2)", 100, 390, 0, 0),
+      makeNode("INPUT", "A (1)", 100, 520, 0, 0),
+    ];
+    const display = makeNode("SEVEN_SEG", "BCD Display", 850, 320, 0, 7);
+    next.nodes.push(...inputs, display);
     return next;
   }
 

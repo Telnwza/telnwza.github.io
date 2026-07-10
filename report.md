@@ -74,13 +74,24 @@ visual-learning/
 ### 2. Live Simulation
 
 - คำนวณค่าทุก gate แบบสดเมื่อเปลี่ยน Input
-- ดับเบิลคลิก Input เพื่อสลับค่า 0/1
+- คลิก Input เพื่อสลับค่า 0/1
 - แสดงค่า 0, 1 หรือ X บน gate และสาย
 - ใช้ X สำหรับค่าที่ไม่ทราบ เช่น input port ที่ยังไม่ได้ต่อ
 - ใช้สีช่วยแยกสัญญาณ 0, 1 และ X โดยยังมีตัวเลขกำกับ
 - เปิด/ปิดการแสดงค่าบนสายได้
 - ตรวจ Combinational Loop และแสดงข้อผิดพลาด
 - ตรวจสายหรือ input port ที่ยังต่อไม่สมบูรณ์
+
+### 2.1 Seven-Segment Decoder Lab
+
+- เพิ่มอุปกรณ์ `7-Segment Display` ใน Component Library
+- มี input 7 ช่องเรียงและติดชื่อ `a, b, c, d, e, f, g` ตามมาตรฐาน
+- Segment ติด/ดับแบบสดตามสัญญาณ Active-high จากวงจร
+- แยกสถานะ 0, 1, X และขาที่ยังไม่ต่อด้วยสีและรูปแบบที่ต่างกัน
+- 7-Segment เป็น output sink จึงไม่มี output port และไม่ถูกนับเป็น gate ที่ต้องต่อออก
+- รองรับ Drag and Drop, Rename, Duplicate, Undo/Redo, Save/Load และ Export ภาพเหมือนอุปกรณ์อื่น
+- เพิ่ม preset `7-Segment Tester` สำหรับทดลองเปิดแต่ละ segment โดยตรง
+- เพิ่ม preset `BCD Decoder Starter` ที่เตรียม input 4-bit D/C/B/A และจอไว้สำหรับสร้าง decoder
 
 ### 3. Circuit → Truth Table
 

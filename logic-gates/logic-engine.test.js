@@ -67,3 +67,36 @@ test("reports combinational loops", () => {
   assert.equal(validation.valid, false);
   assert.equal(validation.cyclic, true);
 });
+
+test("models a seven-segment display as a seven-input sink", () => {
+  const display = node("display", "SEVEN_SEG", "Display", 0, 7);
+  const sources = Array.from({ length: 7 }, (_, index) => node(`source${index}`, "CONST1", "1", 1, 0));
+  const project = {
+    nodes: [...sources, display],
+    wires: sources.map((source, index) => wire(`segment${index}`, source.id, display.id, index)),
+  };
+  const validation = Engine.validateCircuit(project);
+  assert.equal(Engine.inputCount(display), 7);
+  assert.equal(validation.valid, true);
+  assert.equal(validation.warnings.includes("วงจรยังไม่มี Output"), false);
+});
+
+test("exposes seven-segment pins in truth tables and expressions", () => {
+  const input = node("a", "INPUT", "A", 0, 0);
+  const low = node("low", "CONST0", "0", 0, 0);
+  const display = node("display", "SEVEN_SEG", "Display", 0, 7);
+  const project = {
+    nodes: [input, low, display],
+    wires: [
+      wire("segmentA", input.id, display.id, 0),
+      ...Array.from({ length: 6 }, (_, index) => wire(`low${index}`, low.id, display.id, index + 1)),
+    ],
+  };
+  const table = Engine.truthTableForCircuit(project);
+  const expressions = Engine.circuitExpressions(project);
+  assert.deepEqual(table.outputs.map((output) => output.label), [
+    "Display.a", "Display.b", "Display.c", "Display.d", "Display.e", "Display.f", "Display.g",
+  ]);
+  assert.deepEqual(table.rows.map((row) => row.outputs[0]), [0, 1]);
+  assert.equal(expressions.find((item) => item.label === "Display.a").expression, "A");
+});

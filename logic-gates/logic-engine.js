@@ -7,8 +7,9 @@
 
   const GATE_TYPES = new Set([
     "INPUT", "OUTPUT", "CONST0", "CONST1", "AND", "OR", "NOT",
-    "NAND", "NOR", "XOR", "XNOR",
+    "NAND", "NOR", "XOR", "XNOR", "SEVEN_SEG",
   ]);
+  const SEGMENT_NAMES = ["a", "b", "c", "d", "e", "f", "g"];
 
   function normalizeValue(value) {
     if (value === 1 || value === "1" || value === true) return 1;
@@ -19,6 +20,7 @@
   function inputCount(node) {
     if (!node) return 0;
     if (["INPUT", "CONST0", "CONST1"].includes(node.type)) return 0;
+    if (node.type === "SEVEN_SEG") return 7;
     if (["OUTPUT", "NOT"].includes(node.type)) return 1;
     return Math.max(2, Math.min(8, Number(node.inputCount) || 2));
   }
@@ -29,6 +31,7 @@
 
   function evaluateGate(type, inputs) {
     const values = inputs.map(normalizeValue);
+    if (type === "SEVEN_SEG") return null;
     if (type === "OUTPUT") return values[0] ?? null;
     if (type === "NOT") return invert(values[0] ?? null);
 
@@ -120,7 +123,7 @@
         errors.push("พบสายที่อ้างถึงอุปกรณ์ที่ไม่มีอยู่");
         continue;
       }
-      if (from.type === "OUTPUT") errors.push(`Output ${from.label || from.id} ไม่สามารถเป็นต้นทางของสายได้`);
+      if (["OUTPUT", "SEVEN_SEG"].includes(from.type)) errors.push(`${from.label || from.id} ไม่สามารถเป็นต้นทางของสายได้`);
       if (["INPUT", "CONST0", "CONST1"].includes(to.type)) {
         errors.push(`${to.label || to.type} ไม่มี input port`);
       }
@@ -159,7 +162,7 @@
     if (cyclic) errors.push("พบวงจรย้อนกลับ (combinational loop)");
 
     if (!nodes.some((node) => node.type === "INPUT")) warnings.push("วงจรยังไม่มี Input");
-    if (!nodes.some((node) => node.type === "OUTPUT")) warnings.push("วงจรยังไม่มี Output");
+    if (!nodes.some((node) => node.type === "OUTPUT" || node.type === "SEVEN_SEG")) warnings.push("วงจรยังไม่มี Output");
     return { valid: errors.length === 0, errors, warnings, cyclic };
   }
 
@@ -199,19 +202,42 @@
       return result;
     }
 
-    return nodes
+    const results = nodes
       .filter((node) => node.type === "OUTPUT")
       .sort((a, b) => a.y - b.y)
       .map((node) => ({ id: node.id, label: node.label || "Y", expression: expressionFor(node.id) }));
+    nodes
+      .filter((node) => node.type === "SEVEN_SEG")
+      .sort((a, b) => a.y - b.y)
+      .forEach((node) => {
+        SEGMENT_NAMES.forEach((segment, index) => {
+          const wire = incoming.get(`${node.id}:in${index}`);
+          results.push({
+            id: `${node.id}:in${index}`,
+            label: `${node.label || "Display"}.${segment}`,
+            expression: wire ? expressionFor(wire.from.node) : "?",
+          });
+        });
+      });
+    return results;
   }
 
   function truthTableForCircuit(project, maxInputs = 6) {
     const inputs = (project.nodes || [])
       .filter((node) => node.type === "INPUT")
       .sort((a, b) => a.y - b.y || a.x - b.x);
+    const incoming = incomingMap(project);
     const outputs = (project.nodes || [])
-      .filter((node) => node.type === "OUTPUT")
-      .sort((a, b) => a.y - b.y || a.x - b.x);
+      .filter((node) => node.type === "OUTPUT" || node.type === "SEVEN_SEG")
+      .sort((a, b) => a.y - b.y || a.x - b.x)
+      .flatMap((node) => node.type === "OUTPUT"
+        ? [{ id: node.id, label: node.label || "Output", nodeId: node.id, port: null }]
+        : SEGMENT_NAMES.map((segment, index) => ({
+          id: `${node.id}:in${index}`,
+          label: `${node.label || "Display"}.${segment}`,
+          nodeId: node.id,
+          port: index,
+        })));
     if (!inputs.length) throw new Error("ต้องมี Input อย่างน้อย 1 ตัว");
     if (!outputs.length) throw new Error("ต้องมี Output อย่างน้อย 1 ตัว");
     if (inputs.length > maxInputs) throw new Error(`รองรับ Truth Table สูงสุด ${maxInputs} inputs`);
@@ -228,12 +254,16 @@
       const result = evaluateCircuit(project, overrides);
       rows.push({
         inputs: inputValues,
-        outputs: outputs.map((node) => result.values[node.id]),
+        outputs: outputs.map((output) => {
+          if (output.port === null) return result.values[output.nodeId];
+          const wire = incoming.get(`${output.nodeId}:in${output.port}`);
+          return wire ? result.values[wire.from.node] : null;
+        }),
       });
     }
     return {
       inputs: inputs.map((node) => ({ id: node.id, label: node.label || "Input" })),
-      outputs: outputs.map((node) => ({ id: node.id, label: node.label || "Output" })),
+      outputs: outputs.map((output) => ({ id: output.id, label: output.label })),
       rows,
     };
   }

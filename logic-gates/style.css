@@ -288,6 +288,12 @@ button {
   color: #d8ccff;
 }
 
+.seven-seg-symbol {
+  color: var(--logic-one);
+  background: #151323;
+  text-shadow: 0 0 10px rgba(55, 212, 182, 0.55);
+}
+
 .drag-hint,
 .helper-copy,
 .muted-copy,
@@ -552,6 +558,48 @@ kbd {
 .logic-node.output-node .node-body {
   fill: #1b1c35;
   stroke: #625889;
+}
+
+.logic-node.seven-segment-node .node-body {
+  fill: #11101b;
+  stroke: #4c5268;
+}
+
+.seven-segment-bar {
+  fill: rgba(127, 146, 173, 0.12);
+  stroke: rgba(127, 146, 173, 0.22);
+  stroke-width: 1;
+  pointer-events: none;
+  transition: fill 120ms ease, filter 120ms ease, opacity 120ms ease;
+}
+
+.seven-segment-bar.signal-one {
+  fill: var(--logic-one);
+  stroke: #b9fff2;
+  filter: drop-shadow(0 0 7px rgba(55, 212, 182, 0.7));
+}
+
+.seven-segment-bar.signal-zero {
+  fill: rgba(127, 146, 173, 0.13);
+}
+
+.seven-segment-bar.signal-x {
+  fill: var(--logic-unknown);
+  stroke: #fff0b8;
+  opacity: 0.72;
+}
+
+.seven-segment-bar.segment-open {
+  fill: rgba(127, 146, 173, 0.06);
+  stroke-dasharray: 3 3;
+}
+
+.segment-port-label {
+  fill: var(--logic-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  pointer-events: none;
 }
 
 .node-label,

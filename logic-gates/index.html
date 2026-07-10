@@ -79,6 +79,9 @@
           <button class="component-button" type="button" draggable="true" data-component="CONST1">
             <span class="component-symbol">1</span><span>ค่าคงที่ 1</span>
           </button>
+          <button class="component-button" type="button" draggable="true" data-component="SEVEN_SEG">
+            <span class="component-symbol seven-seg-symbol">8</span><span>7 Segment</span>
+          </button>
         </div>
 
         <p class="section-label">Logic Gates</p>
@@ -122,12 +125,14 @@
           <button type="button" data-preset="full-adder"><strong>Full Adder</strong><span>A, B และ Carry in</span></button>
           <button type="button" data-preset="mux"><strong>2:1 Multiplexer</strong><span>เลือก D₀ หรือ D₁</span></button>
           <button type="button" data-preset="majority"><strong>Majority Vote</strong><span>อย่างน้อย 2 จาก 3</span></button>
+          <button type="button" data-preset="seven-segment-tester"><strong>7-Segment Tester</strong><span>สวิตช์ a–g ต่อเข้าจอโดยตรง</span></button>
+          <button type="button" data-preset="seven-segment-decoder"><strong>BCD Decoder Starter</strong><span>Input 4-bit และจอสำหรับสร้าง Decoder</span></button>
         </div>
 
         <details class="shortcut-help">
           <summary>คีย์ลัดและวิธีใช้</summary>
           <p><kbd>V</kbd> เลือก · <kbd>W</kbd> ต่อสาย · <kbd>Delete</kbd> ลบ · <kbd>Ctrl/Cmd+Z</kbd> Undo · <kbd>Ctrl/Cmd+D</kbd> Duplicate · <kbd>F</kbd> Fit</p>
-          <p>ดับเบิลคลิก Input เพื่อสลับ 0/1 และลากจากวงกลมขวาไปยังวงกลมซ้ายเพื่อต่อสาย</p>
+          <p>คลิก Input เพื่อสลับ 0/1 และลากจากวงกลมขวาไปยังวงกลมซ้ายเพื่อต่อสาย</p>
         </details>
       </aside>
 
