@@ -56,8 +56,9 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
 @media(max-width:1150px){.workspace{grid-template-columns:1fr}.panel{overflow:visible}.canvas-shell{min-height:560px}}
 @media(max-width:780px){.topbar{align-items:flex-start;flex-direction:column}.top-actions select{max-width:100%}}
 </style>
+<link rel="stylesheet" href="../css/simulator-shell.css" />
 </head>
-<body>
+<body data-simulator="automata">
 <a class="skip-link" href="#automata-workspace">Skip to automata workspace</a>
 <header class="site-header">
   <nav class="site-nav container" aria-label="Primary navigation">
@@ -564,5 +565,6 @@ if(auto){try{restore(auto)}catch{preset('ends01')}}else preset('ends01');
 setTool('select');
 })();
 </script>
+<script src="../js/simulator-shell.js"></script>
 </body>
 </html>

@@ -8,9 +8,11 @@ Visual Learning Tools is a static website for interactive Computer Engineering l
 visual-learning/
 ├── index.html
 ├── css/
-│   └── style.css
+│   ├── style.css
+│   └── simulator-shell.css
 ├── js/
-│   └── main.js
+│   ├── main.js
+│   └── simulator-shell.js
 ├── assets/
 ├── automata/
 │   └── index.html
@@ -109,6 +111,8 @@ node --test logic-gates/logic-engine.test.js
 ```
 
 The tests cover circuit evaluation, truth-table generation, Boolean minimization, equation parsing, and combinational-loop detection.
+
+All three simulators share a focus-first shell with an auto-hiding top bar, collapsible tool/analysis panels, Focus Mode, progressive disclosure for advanced controls, and consistent shortcuts.
 
 ## Planned Tools
 

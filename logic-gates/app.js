@@ -21,6 +21,7 @@
   let spacePressed = false;
   let toastTimer = null;
   let saveTimer = null;
+  let lastInputToggleAt = 0;
   let currentEvaluation = { values: {}, validation: { valid: true, errors: [], warnings: [] } };
   let lastCircuitTable = null;
   let currentTruthRow = -1;
@@ -303,6 +304,27 @@
 
       if (["INPUT", "OUTPUT", "CONST0", "CONST1"].includes(node.type)) {
         const value = currentEvaluation.values[node.id];
+        if (node.type === "INPUT") {
+          const toggleHit = svgElement("rect", {
+            x: -25,
+            y: -3,
+            width: 50,
+            height: 29,
+            rx: 8,
+            class: "input-toggle-hit",
+            role: "button",
+            "aria-label": `สลับค่า ${node.label}`,
+          });
+          toggleHit.addEventListener("pointerdown", (event) => event.stopPropagation());
+          toggleHit.addEventListener("click", (event) => {
+            event.stopPropagation();
+            const now = Date.now();
+            if (now - lastInputToggleAt < 220) return;
+            lastInputToggleAt = now;
+            toggleInput(node.id);
+          });
+          group.append(toggleHit);
+        }
         const valueText = svgElement("text", {
           x: 0,
           y: 18,
@@ -506,7 +528,7 @@
     const node = nodeById(nodeId);
     if (!node || node.type === "OUTPUT") return;
     wireState = { nodeId, start: portPosition(node, "out"), end: portPosition(node, "out") };
-    setTool("wire");
+    setStatus("ลากไปยัง input port ที่ต้องการ");
     renderWirePreview();
   }
 

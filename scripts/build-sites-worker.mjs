@@ -6,7 +6,9 @@ const outputDirectory = path.join(root, "dist", "server");
 const sourceFiles = [
   "index.html",
   "css/style.css",
+  "css/simulator-shell.css",
   "js/main.js",
+  "js/simulator-shell.js",
   "automata/index.html",
   "vectors/index.html",
   "logic-gates/index.html",
