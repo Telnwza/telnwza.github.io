@@ -17,7 +17,11 @@ visual-learning/
 ├── vectors/
 │   └── index.html
 └── logic-gates/
-    └── index.html
+    ├── index.html
+    ├── style.css
+    ├── logic-engine.js
+    ├── logic-engine.test.js
+    └── app.js
 ```
 
 ## Run Locally
@@ -44,6 +48,8 @@ The site uses relative links so it works at URLs such as:
 ```text
 https://username.github.io/repository-name/
 ```
+
+An optional `scripts/build-sites-worker.mjs` build packages the same static files into a self-contained worker for OpenAI Sites deployment. It does not change the GitHub Pages workflow.
 
 ## Add a New Visualizer
 
@@ -92,10 +98,20 @@ This keeps the site compatible with GitHub Pages project URLs and direct browser
 
 - Automata Studio: DFA, NFA, epsilon-NFA, PDA, and Turing Machine creation and simulation.
 - Vector Addition Visualizer: 2D and 3D vector addition, resultant vectors, magnitude, ordering, import/export, and local browser saving.
+- Logic Gates Lab: drag-and-drop combinational circuits, live signal simulation, circuit-to-truth-table analysis, Boolean equation parsing and minimization, truth-table-to-circuit synthesis, presets, autosave, and JSON/image/table export.
+
+## Logic Gates Lab Tests
+
+Run the pure logic-engine tests with Node.js:
+
+```sh
+node --test logic-gates/logic-engine.test.js
+```
+
+The tests cover circuit evaluation, truth-table generation, Boolean minimization, equation parsing, and combinational-loop detection.
 
 ## Planned Tools
 
-- Logic Gates Lab
 - Embedded Systems visualizers
 - Programming and algorithm visualizers
 

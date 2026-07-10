@@ -1,10 +1,12 @@
-# Visual Learning Tools Report
+# Visual Learning Tools — Development Report
 
-## What Was Created
+## ภาพรวมโครงการ
 
-This project was organized as a static website that collects multiple interactive learning visualizers for Computer Engineering topics. It uses only HTML, CSS, and JavaScript, so it can run locally in a browser and deploy directly with GitHub Pages.
+Visual Learning Tools เป็นเว็บไซต์แบบ Static สำหรับเรียนรู้หัวข้อ Computer Engineering ผ่านเครื่องมือแบบโต้ตอบ ทำงานด้วย HTML, CSS และ JavaScript โดยไม่ต้องมี backend และสามารถนำไปเผยแพร่บน GitHub Pages ได้
 
-## Current Project Structure
+การพัฒนารอบนี้เปลี่ยนหน้า `Logic Gates Lab` จาก placeholder ให้เป็นเครื่องมือสร้างและวิเคราะห์วงจร Combinational Logic ที่ใช้งานได้จริง พร้อมเชื่อมโยงวงจร, Truth Table และสมการ Boolean เข้าด้วยกัน
+
+## โครงสร้างโปรเจกต์ปัจจุบัน
 
 ```text
 visual-learning/
@@ -13,264 +15,288 @@ visual-learning/
 │   └── style.css
 ├── js/
 │   └── main.js
-├── assets/
 ├── automata/
 │   └── index.html
 ├── vectors/
 │   └── index.html
 ├── logic-gates/
-│   └── index.html
+│   ├── index.html
+│   ├── style.css
+│   ├── app.js
+│   ├── logic-engine.js
+│   └── logic-engine.test.js
+├── scripts/
+│   └── build-sites-worker.mjs
+├── .openai/
+│   └── hosting.json
 ├── README.md
-├── report.md
-└── .gitignore
+└── report.md
 ```
 
-## Work Completed
+## งานที่ทำในรอบนี้
 
-1. Created the main dashboard page at `index.html`.
-2. Added a dark theme shared stylesheet at `css/style.css`.
-3. Added dashboard logic at `js/main.js`.
-4. Moved `automata_studio_dark.html` into `automata/index.html`.
-5. Copied `vector_addition_visualizer_v3.html` into `vectors/index.html`.
-6. Created a placeholder page for `logic-gates/index.html`.
-7. Added shared navigation to the dashboard and visualizer pages.
-8. Added search and category filtering on the dashboard.
-9. Added a Recently Added section.
-10. Added `README.md` with project instructions.
-11. Added `.gitignore` for common local, OS, and editor files.
-12. Checked JavaScript syntax and static routes.
+### 1. Circuit Builder
 
-## Available Visualizers
+- สร้างพื้นที่วาดวงจรด้วย SVG
+- เพิ่มอุปกรณ์โดยคลิกหรือ Drag and Drop จาก Component Library
+- รองรับ Input, Output, Constant 0, Constant 1
+- รองรับ AND, OR, NOT, NAND, NOR, XOR และ XNOR
+- ปรับจำนวน input ของ gate ได้ตั้งแต่ 2–6 inputs
+- ลากย้ายอุปกรณ์และเปิด/ปิด Snap to Grid ได้
+- ต่อสายจาก output port ไป input port
+- สายหนึ่งเส้นสามารถแตกออกไปหลายปลายทางได้
+- ถ้าต่อสายใหม่เข้า input port เดิม ระบบจะแทนที่สายเดิม
+- เลือกและลบ gate หรือสายได้
+- Duplicate gate ได้
+- เปลี่ยนชื่อ Input, Output และ Gate ได้
 
-- Automata Studio
-- Vector Addition Visualizer
+### 2. Live Simulation
 
-## Planned Visualizers
+- คำนวณค่าทุก gate แบบสดเมื่อเปลี่ยน Input
+- ดับเบิลคลิก Input เพื่อสลับค่า 0/1
+- แสดงค่า 0, 1 หรือ X บน gate และสาย
+- ใช้ X สำหรับค่าที่ไม่ทราบ เช่น input port ที่ยังไม่ได้ต่อ
+- ใช้สีช่วยแยกสัญญาณ 0, 1 และ X โดยยังมีตัวเลขกำกับ
+- เปิด/ปิดการแสดงค่าบนสายได้
+- ตรวจ Combinational Loop และแสดงข้อผิดพลาด
+- ตรวจสายหรือ input port ที่ยังต่อไม่สมบูรณ์
 
-- Logic Gates Lab
-- Embedded Systems visualizers
-- Programming visualizers
-- More Mathematics visualizers
+### 3. Circuit → Truth Table
 
-## How To Use Locally
+- สร้าง Truth Table จากวงจรอัตโนมัติ
+- รองรับหลาย Output ในวงจรเดียว
+- รองรับสูงสุด 6 Inputs หรือ 64 แถว
+- คลิกแถวใน Truth Table เพื่อส่งค่า Input ของแถวนั้นกลับไปยังวงจร
+- เดินดูทีละแถวด้วยปุ่ม Previous/Next
+- Highlight แถวที่กำลังจำลอง
+- Export Truth Table เป็น CSV
+- Copy Truth Table เป็น Markdown
 
-Open the project folder:
+### 4. Circuit → Boolean Expression
 
-```sh
-cd visual-learning
-```
+- ไล่โครงสร้างวงจรย้อนจาก Output เพื่อสร้างสมการ Boolean
+- แสดงสมการของแต่ละ Output แยกจากกัน
+- สร้าง Truth Table ของวงจรแล้วใช้ผลลัพธ์เพื่อย่อสมการ
+- แสดงสมการแบบย่อในรูป SOP
+- รองรับสัญลักษณ์ AND (`·`), OR (`+`), NOT (`¬`), XOR (`⊕`) และ XNOR (`⊙`)
 
-Option 1: Open directly in a browser:
+### 5. Truth Table → Circuit
+
+- กำหนดชื่อตัวแปรได้ 1–6 ตัว
+- กำหนดชื่อ Output ได้
+- กรอก Output โดยคลิกเพื่อวนค่า 0 → 1 → X
+- รองรับ Don't Care (`X`)
+- แสดง Canonical SOP
+- แสดง Simplified SOP และ Simplified POS
+- แสดงรายการ Minterm และ Don't Care
+- สร้างวงจรจากสมการ SOP ที่ย่อแล้ว
+- ใช้ XOR/XNOR gate โดยตรงเมื่อระบบตรวจพบรูปแบบมาตรฐานสองตัวแปร
+- สร้าง NOT gate ร่วมกันเมื่อหลายพจน์ใช้ตัวแปรกลับค่าเดียวกัน
+- แบ่ง OR gate เป็นหลายระดับอัตโนมัติเมื่อมีพจน์จำนวนมาก
+- จัดตำแหน่งวงจรเบื้องต้นและ Fit ให้พอดีกับหน้าจอ
+
+### 6. Boolean Equation Calculator
+
+- รับสมการ Boolean จากผู้ใช้
+- รองรับ AND ด้วย `·`, `&`, `*` หรือคำว่า `AND`
+- รองรับ OR ด้วย `+`, `|` หรือคำว่า `OR`
+- รองรับ NOT ด้วย `¬`, `!`, `~`, apostrophe (`'`) หรือคำว่า `NOT`
+- รองรับ XOR ด้วย `⊕`, `^` หรือคำว่า `XOR`
+- รองรับ XNOR ด้วย `⊙` หรือคำว่า `XNOR`
+- รองรับวงเล็บและลำดับความสำคัญของ operator
+- คำนวณ Truth Table จากสมการ
+- ย่อเป็น SOP/POS
+- สร้างวงจรจากผลลัพธ์ของสมการได้
+
+ตัวอย่างสมการที่รองรับ:
 
 ```text
-index.html
+(A · ¬B) + (¬A · B)
+A' * B + A * B'
+(A XOR B) AND C
+NOT A OR B
 ```
 
-Option 2: Run a local static server:
+### 7. Preset Circuits
+
+เพิ่มวงจรตัวอย่างสำหรับเริ่มเรียนรู้ทันที:
+
+- Half Adder
+- Full Adder
+- 2:1 Multiplexer
+- 3-input Majority Vote
+
+### 8. Quality-of-Life Functions
+
+- Undo/Redo สูงสุด 100 สถานะ
+- Autosave ลง `localStorage`
+- Restore งานล่าสุดเมื่อเปิดหน้าใหม่
+- Save ลง browser ด้วยตนเอง
+- Import/Export โปรเจกต์เป็น JSON
+- Export ภาพวงจรเป็น SVG
+- Export ภาพวงจรเป็น PNG
+- Zoom In/Out ด้วยปุ่มหรือล้อเมาส์
+- Pan ด้วย Space + Drag หรือ Middle Mouse
+- Fit Circuit to Screen
+- Snap to Grid
+- Keyboard shortcuts
+- ตั้งชื่อโปรเจกต์ก่อน Export
+- แสดงสถานะการบันทึกและข้อความแจ้งเตือนแบบ Toast
+- Responsive layout สำหรับจอแคบ
+
+## รูปแบบข้อมูลโปรเจกต์
+
+ไฟล์ JSON ใช้ `schemaVersion` เพื่อเปิดทางให้ migration ในอนาคต:
+
+```json
+{
+  "schemaVersion": 1,
+  "name": "Half Adder",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "INPUT",
+      "label": "A",
+      "x": 100,
+      "y": 190,
+      "value": 0,
+      "inputCount": 0
+    }
+  ],
+  "wires": [
+    {
+      "id": "wire_1",
+      "from": { "node": "node_1", "port": "out" },
+      "to": { "node": "node_2", "port": "in0" }
+    }
+  ]
+}
+```
+
+## สถาปัตยกรรม
+
+### `logic-engine.js`
+
+ส่วนคำนวณที่ไม่ผูกกับ DOM เพื่อให้ทดสอบแยกได้ ประกอบด้วย:
+
+- Three-valued gate evaluation: 0, 1 และ unknown
+- Circuit graph evaluation
+- Circuit validation และ cycle detection
+- Circuit expression generation
+- Circuit truth-table generation
+- Boolean expression tokenizer/parser/evaluator
+- Quine–McCluskey minimization
+- Prime implicant selection
+- SOP/POS และ canonical form generation
+
+ไฟล์นี้ export ได้ทั้งแบบ Browser global (`window.LogicEngine`) และ CommonJS สำหรับ Node.js tests
+
+### `app.js`
+
+จัดการ UI และ interaction ได้แก่:
+
+- Project state และ history
+- SVG rendering
+- Drag, Drop, Wire, Zoom และ Pan
+- Autosave และ Import/Export
+- Truth Table UI
+- Equation calculator UI
+- Circuit synthesis และ auto-layout
+- Presets และ keyboard shortcuts
+
+### `style.css`
+
+กำหนด layout สามส่วน ได้แก่ Component Library, Circuit Canvas และ Analysis Panel โดยใช้ visual language เดียวกับ dashboard เดิม รวมถึง responsive rules สำหรับ tablet และ mobile
+
+## Algorithm ที่ใช้ย่อสมการ
+
+ระบบใช้แนวทาง Quine–McCluskey:
+
+1. แปลงแถวที่ Output เป็น 1 และ Don't Care เป็น bit patterns
+2. รวมพจน์ที่ต่างกันหนึ่ง bit
+3. หา Prime Implicants
+4. หา Essential Prime Implicants
+5. เลือก cover ที่ใช้จำนวนพจน์และ literal ต่ำ
+6. แปลงผลเป็น SOP
+7. ทำกระบวนการเดียวกันกับแถว Output = 0 เพื่อสร้าง POS
+
+ระบบจำกัดไว้ที่ 6 ตัวแปรเพื่อควบคุมจำนวนแถวและเวลาในการคำนวณให้เหมาะกับการใช้งานใน browser
+
+## การอัปเดต Dashboard
+
+- เปลี่ยนสถานะ Logic Gates Lab จาก `coming soon` เป็น `available`
+- เพิ่ม Logic Gates Lab ใน Recently Added
+- ปรับคำอธิบายและ tags ให้ครอบคลุม Boolean Algebra และ circuit synthesis
+
+## การเผยแพร่
+
+โครงสร้าง Static และ relative paths สำหรับ GitHub Pages ยังคงทำงานเหมือนเดิม และเพิ่ม build script แยกต่างหากสำหรับรวมไฟล์เว็บชุดเดียวกันเป็น self-contained worker สำหรับ OpenAI Sites โดยไม่เปลี่ยน source pages หรือบังคับให้ workflow เดิมต้องใช้ package manager
+
+## การทดสอบ
+
+เพิ่ม automated tests ที่ `logic-gates/logic-engine.test.js` และรันด้วย:
+
+```sh
+node --test logic-gates/logic-engine.test.js
+```
+
+กรณีที่ทดสอบ:
+
+1. การจำลอง Half Adder
+2. การสร้าง Half Adder Truth Table
+3. การตรวจจับและย่อ XOR
+4. การย่อสมการที่มี Don't Care
+5. การ parse สมการหลายรูปแบบ
+6. การประเมินสมการและสร้าง Truth Table
+7. การตรวจ Combinational Loop
+
+นอกจากนี้ได้ทำ randomized equivalence check กับฟังก์ชัน 1–4 ตัวแปร โดยเปรียบเทียบค่าจากสมการที่ย่อแล้วกับ Truth Table ต้นฉบับ รวมถึงกรณีที่มี Don't Care
+
+การตรวจเชิง Static ที่ทำ:
+
+- ตรวจ syntax ของ `logic-engine.js`
+- ตรวจ syntax ของ `app.js`
+- ตรวจว่า DOM ID ทุกตัวที่ JavaScript อ้างถึงมีอยู่จริงใน HTML
+- ตรวจ relative paths เพื่อให้ทำงานบน GitHub Pages project URL
+
+## วิธีใช้งาน
+
+เปิดไฟล์ `index.html` โดยตรง หรือรัน static server:
 
 ```sh
 python3 -m http.server 8000
 ```
 
-Then open:
+แล้วเปิด:
 
 ```text
-http://localhost:8000
+http://localhost:8000/logic-gates/
 ```
 
-## How The Dashboard Works
+ขั้นตอนพื้นฐาน:
 
-The dashboard page is `index.html`.
+1. ลาก Input, Gate และ Output ลง Canvas
+2. ลากจาก output port ด้านขวาไป input port ด้านซ้าย
+3. ดับเบิลคลิก Input เพื่อสลับค่า
+4. ดูค่า Output, สาย และสมการในแท็บวิเคราะห์
+5. กดสร้าง Truth Table แล้วคลิกแต่ละแถวเพื่อทดลองกับวงจร
 
-The visualizer card data is stored in `js/main.js` inside the `tools` array:
+## ข้อจำกัดปัจจุบัน
 
-```js
-const tools = [
-  {
-    title: "Automata Studio",
-    description: "Create and simulate DFA, NFA, PDA, and Turing Machines.",
-    category: "Automata",
-    path: "./automata/",
-    tags: ["DFA", "NFA", "PDA", "Turing Machine", "Simulation"],
-    status: "available",
-    recentlyAdded: true,
-  }
-];
-```
+- รองรับเฉพาะ Combinational Logic ยังไม่มี Clock, Flip-Flop, Register หรือ Sequential Simulation
+- Truth Table และการย่อสมการจำกัดสูงสุด 6 inputs
+- Auto-layout เน้นวงจรที่สร้างจาก Truth Table; วงจรที่ผู้ใช้สร้างเองยังไม่มีปุ่มจัดเรียงอัตโนมัติเต็มรูปแบบ
+- การเดินสายใช้เส้นโค้งและยังไม่มี obstacle-avoiding auto-router
+- ยังไม่มี multi-select, group และ custom reusable component
+- งานถูกเก็บใน browser เครื่องปัจจุบันเท่านั้น เนื่องจากไม่มี backend
+- ลิงก์ GitHub ใน navigation ยังเป็น placeholder `https://github.com/`
 
-The dashboard automatically renders cards from this array. Search and category filtering are handled in the same file.
+## แนวทางพัฒนาต่อ
 
-## How To Add A New Visualizer
-
-Create a new folder for the visualizer:
-
-```sh
-mkdir my-new-tool
-```
-
-Create an `index.html` file inside it:
-
-```text
-my-new-tool/index.html
-```
-
-Use relative paths for shared files:
-
-```html
-<link rel="stylesheet" href="../css/style.css">
-<a href="../">Back to dashboard</a>
-<a href="../#tools">Tools</a>
-```
-
-Do not use root-relative paths like:
-
-```html
-<a href="/automata/">
-```
-
-Root-relative paths can break on GitHub Pages project URLs.
-
-## How To Add A New Dashboard Card
-
-Open:
-
-```text
-js/main.js
-```
-
-Add a new object to the `tools` array:
-
-```js
-{
-  title: "Logic Gates Lab",
-  description: "Build digital circuits from gates and inspect truth tables interactively.",
-  category: "Digital Systems",
-  path: "./logic-gates/",
-  tags: ["Logic Gates", "Truth Tables", "Circuits"],
-  status: "available",
-  recentlyAdded: true,
-}
-```
-
-Supported current categories:
-
-```js
-[
-  "Mathematics",
-  "Digital Systems",
-  "Automata",
-  "Embedded Systems",
-  "Programming"
-]
-```
-
-If you need a new category, add it to the `categories` array in `js/main.js`.
-
-## How To Push To GitHub
-
-If `visual-learning` should be its own GitHub repository, run these commands from inside the folder:
-
-```sh
-cd visual-learning
-git init
-git add .
-git commit -m "Create visual learning tools static site"
-git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
-git push -u origin main
-```
-
-Replace:
-
-```text
-YOUR-USERNAME
-YOUR-REPOSITORY
-```
-
-with your real GitHub username and repository name.
-
-## How To Deploy With GitHub Pages
-
-1. Push the project to GitHub.
-2. Open the repository on GitHub.
-3. Go to `Settings`.
-4. Go to `Pages`.
-5. Under `Build and deployment`, choose `Deploy from a branch`.
-6. Select branch `main`.
-7. Select folder `/root`.
-8. Click `Save`.
-
-GitHub will publish the site at a URL similar to:
-
-```text
-https://YOUR-USERNAME.github.io/YOUR-REPOSITORY/
-```
-
-## Important GitHub Pages Path Rule
-
-Always use relative paths:
-
-```html
-<a href="./automata/">Automata Studio</a>
-<a href="../">Back to dashboard</a>
-<script src="./js/main.js"></script>
-<link rel="stylesheet" href="./css/style.css">
-```
-
-Avoid absolute paths beginning with `/`:
-
-```html
-<a href="/automata/">
-<script src="/js/main.js"></script>
-```
-
-This project must work at:
-
-```text
-https://username.github.io/repository-name/
-```
-
-not only at:
-
-```text
-https://username.github.io/
-```
-
-## Testing Done
-
-The following checks were run:
-
-- Dashboard JavaScript syntax check.
-- Automata Studio embedded JavaScript syntax check.
-- Vector Visualizer embedded JavaScript syntax check.
-- Search for broken root-relative paths.
-- Local HTTP route check for dashboard and visualizer routes.
-
-Checked routes included:
-
-```text
-/
-/automata/
-/vectors/
-/logic-gates/
-/css/style.css
-/js/main.js
-```
-
-## Known Limitations
-
-- The GitHub navigation link currently points to `https://github.com/`. Replace it with the real repository URL after creating the GitHub repository.
-- `logic-gates/index.html` is currently a placeholder.
-- No backend exists, by design.
-- No build step exists, by design.
-- Browser-based visual testing was not automated with Playwright or Puppeteer because those tools were not installed.
-
-## Recommended Next Steps
-
-1. Create a GitHub repository.
-2. Push the `visual-learning` folder as the repository content.
-3. Replace the generic GitHub links with the actual repository URL.
-4. Enable GitHub Pages.
-5. Add the real Logic Gates visualizer.
-6. Continue adding visualizers as separate folders.
-7. Keep all links relative for GitHub Pages compatibility.
+1. เพิ่ม K-map แบบ interactive และ highlight กลุ่มที่ใช้ย่อสมการ
+2. เพิ่ม multi-select, align และ distribute
+3. เพิ่ม custom component/subcircuit
+4. เพิ่ม NAND-only และ NOR-only synthesis
+5. เพิ่ม Verilog/VHDL export
+6. เพิ่ม challenge mode และ circuit equivalence checker สำหรับการบ้าน
+7. เพิ่ม sequential circuit simulator เป็น visualizer แยกหรือ advanced mode

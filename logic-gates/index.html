@@ -1,16 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Logic Gates Lab | Visual Learning Tools</title>
-  <meta name="description" content="Placeholder page for the Logic Gates Lab.">
+  <meta name="description" content="สร้างและจำลองวงจร Logic Gate วิเคราะห์ Truth Table และย่อสมการ Boolean แบบโต้ตอบ">
   <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./logic-engine.js" defer></script>
+  <script src="./app.js" defer></script>
 </head>
 <body>
-  <a class="skip-link" href="#content">Skip to content</a>
+  <a class="skip-link" href="#logic-workspace">ข้ามไปพื้นที่สร้างวงจร</a>
   <header class="site-header">
-    <nav class="site-nav container" aria-label="Primary navigation">
+    <nav class="site-nav container" aria-label="เมนูหลัก">
       <a class="brand-link" href="../" aria-label="Visual Learning Tools home">
         <span class="brand-mark" aria-hidden="true">VL</span>
         <span>Visual Learning Tools</span>
@@ -24,24 +27,234 @@
     </nav>
   </header>
 
-  <main class="placeholder-main container" id="content">
-    <section class="placeholder-panel">
-      <span class="coming-soon">Coming Soon</span>
-      <p class="eyebrow">Digital Systems</p>
-      <h1>Logic Gates Lab</h1>
-      <p class="hero-description">
-        This page will host an interactive digital systems visualizer for logic gates,
-        truth tables, and simple combinational circuits.
-      </p>
-      <p><a class="primary-link" href="../">Back to dashboard</a></p>
-    </section>
-  </main>
+  <div class="logic-app">
+    <header class="lab-topbar">
+      <div class="lab-heading">
+        <p class="lab-kicker">Digital Systems</p>
+        <h1>Logic Gates Lab</h1>
+        <p>ต่อวงจร ทดลองค่า และเชื่อมโยง Gate ↔ Truth Table ↔ Boolean Expression</p>
+      </div>
+      <div class="project-actions" aria-label="จัดการโปรเจกต์">
+        <label class="project-name-label" for="projectName">ชื่อโปรเจกต์</label>
+        <input id="projectName" class="compact-input" value="Half Adder" autocomplete="off">
+        <button id="undoBtn" type="button">Undo</button>
+        <button id="redoBtn" type="button">Redo</button>
+        <button id="saveBtn" type="button">บันทึก</button>
+        <button id="importBtn" type="button">Import</button>
+        <button id="exportJsonBtn" type="button">JSON</button>
+        <button id="exportSvgBtn" type="button">SVG</button>
+        <button id="exportPngBtn" type="button">PNG</button>
+        <input id="importFile" type="file" accept="application/json,.json" hidden>
+      </div>
+    </header>
 
-  <footer class="site-footer">
-    <div class="container footer-content">
-      <p>Static placeholder page. No backend required.</p>
-      <a href="../">Back to dashboard</a>
-    </div>
-  </footer>
+    <main class="logic-workspace" id="logic-workspace">
+      <aside class="lab-panel component-panel" aria-labelledby="components-title">
+        <div class="panel-heading-row">
+          <div>
+            <p class="panel-kicker">Build</p>
+            <h2 id="components-title">อุปกรณ์และเครื่องมือ</h2>
+          </div>
+          <span class="save-state" id="saveState">บันทึกอัตโนมัติ</span>
+        </div>
+
+        <div class="tool-switcher" aria-label="โหมดการทำงาน">
+          <button id="selectTool" class="active" type="button" aria-pressed="true">เลือก / ลาก</button>
+          <button id="wireTool" type="button" aria-pressed="false">ต่อสาย</button>
+        </div>
+
+        <p class="section-label">Input / Output</p>
+        <div class="component-grid">
+          <button class="component-button" type="button" draggable="true" data-component="INPUT">
+            <span class="component-symbol input-symbol">0</span><span>Input</span>
+          </button>
+          <button class="component-button" type="button" draggable="true" data-component="OUTPUT">
+            <span class="component-symbol output-symbol">Y</span><span>Output</span>
+          </button>
+          <button class="component-button" type="button" draggable="true" data-component="CONST0">
+            <span class="component-symbol">0</span><span>ค่าคงที่ 0</span>
+          </button>
+          <button class="component-button" type="button" draggable="true" data-component="CONST1">
+            <span class="component-symbol">1</span><span>ค่าคงที่ 1</span>
+          </button>
+        </div>
+
+        <p class="section-label">Logic Gates</p>
+        <div class="component-grid gate-grid">
+          <button class="component-button" type="button" draggable="true" data-component="AND"><span class="component-symbol">&amp;</span><span>AND</span></button>
+          <button class="component-button" type="button" draggable="true" data-component="OR"><span class="component-symbol">≥1</span><span>OR</span></button>
+          <button class="component-button" type="button" draggable="true" data-component="NOT"><span class="component-symbol">1</span><span>NOT</span></button>
+          <button class="component-button" type="button" draggable="true" data-component="NAND"><span class="component-symbol">&amp;°</span><span>NAND</span></button>
+          <button class="component-button" type="button" draggable="true" data-component="NOR"><span class="component-symbol">≥1°</span><span>NOR</span></button>
+          <button class="component-button" type="button" draggable="true" data-component="XOR"><span class="component-symbol">=1</span><span>XOR</span></button>
+          <button class="component-button" type="button" draggable="true" data-component="XNOR"><span class="component-symbol">=1°</span><span>XNOR</span></button>
+        </div>
+        <p class="drag-hint">คลิกเพื่อเพิ่มกลางจอ หรือลากไปวางในตำแหน่งที่ต้องการ</p>
+
+        <section id="inspector" class="inspector" aria-labelledby="inspector-title" hidden>
+          <div class="panel-heading-row compact-heading">
+            <h3 id="inspector-title">อุปกรณ์ที่เลือก</h3>
+            <span id="selectedType" class="type-badge">—</span>
+          </div>
+          <label for="nodeLabel">ชื่อ</label>
+          <input id="nodeLabel" autocomplete="off">
+          <div id="inputCountField" hidden>
+            <label for="nodeInputCount">จำนวน Input</label>
+            <select id="nodeInputCount">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
+          </div>
+          <div class="inspector-actions">
+            <button id="duplicateBtn" type="button">Duplicate</button>
+            <button id="deleteBtn" class="danger-button" type="button">ลบ</button>
+          </div>
+        </section>
+
+        <p class="section-label">ตัวอย่างพร้อมใช้</p>
+        <div class="preset-list">
+          <button type="button" data-preset="half-adder"><strong>Half Adder</strong><span>Sum และ Carry</span></button>
+          <button type="button" data-preset="full-adder"><strong>Full Adder</strong><span>A, B และ Carry in</span></button>
+          <button type="button" data-preset="mux"><strong>2:1 Multiplexer</strong><span>เลือก D₀ หรือ D₁</span></button>
+          <button type="button" data-preset="majority"><strong>Majority Vote</strong><span>อย่างน้อย 2 จาก 3</span></button>
+        </div>
+
+        <details class="shortcut-help">
+          <summary>คีย์ลัดและวิธีใช้</summary>
+          <p><kbd>V</kbd> เลือก · <kbd>W</kbd> ต่อสาย · <kbd>Delete</kbd> ลบ · <kbd>Ctrl/Cmd+Z</kbd> Undo · <kbd>Ctrl/Cmd+D</kbd> Duplicate · <kbd>F</kbd> Fit</p>
+          <p>ดับเบิลคลิก Input เพื่อสลับ 0/1 และลากจากวงกลมขวาไปยังวงกลมซ้ายเพื่อต่อสาย</p>
+        </details>
+      </aside>
+
+      <section class="lab-panel canvas-panel" aria-labelledby="canvas-title">
+        <div class="canvas-toolbar">
+          <div class="canvas-title-group">
+            <h2 id="canvas-title">Circuit Canvas</h2>
+            <span class="mode-badge" id="modeBadge">โหมดเลือก / ลาก</span>
+          </div>
+          <div class="canvas-actions" aria-label="ควบคุมพื้นที่วงจร">
+            <button id="zoomOutBtn" type="button" aria-label="Zoom out">−</button>
+            <span id="zoomLabel" aria-live="polite">100%</span>
+            <button id="zoomInBtn" type="button" aria-label="Zoom in">+</button>
+            <button id="fitBtn" type="button">Fit</button>
+            <label class="check-control"><input id="snapToggle" type="checkbox" checked> Snap</label>
+            <label class="check-control"><input id="signalToggle" type="checkbox" checked> แสดงค่า</label>
+            <button id="clearBtn" class="danger-button" type="button">ล้าง</button>
+          </div>
+        </div>
+
+        <div class="canvas-shell" id="canvasShell">
+          <svg id="circuitCanvas" viewBox="0 0 1000 620" role="img" aria-labelledby="circuitCanvasTitle circuitCanvasDesc">
+            <title id="circuitCanvasTitle">พื้นที่สร้างวงจร Logic Gate</title>
+            <desc id="circuitCanvasDesc">ลากอุปกรณ์ ต่อสาย และทดลองค่า input เพื่อดูผลลัพธ์ของวงจร</desc>
+            <defs>
+              <pattern id="smallGrid" width="24" height="24" patternUnits="userSpaceOnUse">
+                <path d="M 24 0 L 0 0 0 24" class="small-grid-line"></path>
+              </pattern>
+              <pattern id="grid" width="120" height="120" patternUnits="userSpaceOnUse">
+                <rect width="120" height="120" fill="url(#smallGrid)"></rect>
+                <path d="M 120 0 L 0 0 0 120" class="large-grid-line"></path>
+              </pattern>
+            </defs>
+            <rect id="gridBackground" class="grid-background" x="-5000" y="-5000" width="10000" height="10000"></rect>
+            <g id="wireLayer"></g>
+            <g id="wirePreviewLayer"></g>
+            <g id="nodeLayer"></g>
+          </svg>
+          <div id="canvasEmpty" class="canvas-empty" hidden>
+            <strong>เริ่มสร้างวงจร</strong>
+            <span>ลาก Input และ Gate จากด้านซ้ายมาวางที่นี่</span>
+          </div>
+        </div>
+        <div class="canvas-statusbar">
+          <span id="statusText">พร้อมใช้งาน</span>
+          <span id="countText">0 gates · 0 wires</span>
+        </div>
+      </section>
+
+      <aside class="lab-panel analysis-panel" aria-labelledby="analysis-title">
+        <div class="analysis-tabs" role="tablist" aria-label="วิเคราะห์วงจร">
+          <button id="analysisTab" class="active" type="button" role="tab" aria-selected="true" data-tab="analysis">วิเคราะห์</button>
+          <button id="synthesisTab" type="button" role="tab" aria-selected="false" data-tab="synthesis">Table → Gate</button>
+          <button id="equationTab" type="button" role="tab" aria-selected="false" data-tab="equation">สมการ</button>
+        </div>
+
+        <section id="tab-analysis" class="tab-panel" role="tabpanel" aria-labelledby="analysisTab">
+          <div class="panel-heading-row">
+            <div>
+              <p class="panel-kicker">Live result</p>
+              <h2 id="analysis-title">Circuit Analyzer</h2>
+            </div>
+            <span id="validityBadge" class="validity-badge">กำลังตรวจ</span>
+          </div>
+
+          <div id="outputSummary" class="output-summary" aria-live="polite"></div>
+          <div id="validationBox" class="message-box">เพิ่มอุปกรณ์เพื่อเริ่มวิเคราะห์</div>
+
+          <h3>Boolean Expression</h3>
+          <div id="expressionList" class="expression-list"><p class="muted-copy">ต่อสายเข้า Output เพื่อดูสมการ</p></div>
+
+          <div class="action-row">
+            <button id="truthTableBtn" class="primary-button" type="button">สร้าง Truth Table</button>
+            <button id="stepPrevBtn" type="button" aria-label="แถวก่อนหน้า">←</button>
+            <button id="stepNextBtn" type="button" aria-label="แถวถัดไป">→</button>
+          </div>
+          <div class="export-row">
+            <button id="exportCsvBtn" type="button">CSV</button>
+            <button id="copyMarkdownBtn" type="button">Copy Markdown</button>
+          </div>
+          <div id="circuitTableWrap" class="table-wrap"></div>
+        </section>
+
+        <section id="tab-synthesis" class="tab-panel" role="tabpanel" aria-labelledby="synthesisTab" hidden>
+          <p class="panel-kicker">Synthesis</p>
+          <h2>Truth Table → Circuit</h2>
+          <p class="helper-copy">กำหนดตัวแปร 1–6 ตัว แล้วคลิกค่า Output เพื่อวน 0 → 1 → X โดย X คือ Don’t Care</p>
+          <label for="synthVariables">ชื่อตัวแปร คั่นด้วย comma</label>
+          <input id="synthVariables" value="A, B" autocomplete="off">
+          <label for="synthOutput">ชื่อ Output</label>
+          <input id="synthOutput" value="Y" autocomplete="off">
+          <button id="buildEditableTableBtn" type="button">สร้างตารางสำหรับกรอก</button>
+          <div id="editableTableWrap" class="table-wrap"></div>
+
+          <div id="synthesisResult" class="formula-result" hidden>
+            <div><span>Canonical SOP</span><code id="canonicalSop">—</code></div>
+            <div><span>Simplified SOP</span><code id="simplifiedSop">—</code></div>
+            <div><span>Simplified POS</span><code id="simplifiedPos">—</code></div>
+            <p id="mintermInfo" class="helper-copy"></p>
+          </div>
+          <div class="stack-actions">
+            <button id="calculateTableBtn" class="primary-button" type="button">คำนวณและย่อสมการ</button>
+            <button id="generateCircuitBtn" type="button">สร้างวงจรจากตาราง</button>
+          </div>
+          <p id="synthesisError" class="error-copy" aria-live="polite"></p>
+        </section>
+
+        <section id="tab-equation" class="tab-panel" role="tabpanel" aria-labelledby="equationTab" hidden>
+          <p class="panel-kicker">Boolean calculator</p>
+          <h2>คำนวณสมการ Boolean</h2>
+          <p class="helper-copy">รองรับ AND: <code>· &amp; *</code>, OR: <code>+ |</code>, NOT: <code>¬ ! '</code>, XOR: <code>⊕ ^</code> และวงเล็บ</p>
+          <label for="equationInput">สมการ</label>
+          <textarea id="equationInput" rows="4">(A · ¬B) + (¬A · B)</textarea>
+          <div class="stack-actions">
+            <button id="analyzeEquationBtn" class="primary-button" type="button">คำนวณสมการ</button>
+            <button id="equationToCircuitBtn" type="button">สร้างวงจรจากสมการ</button>
+          </div>
+          <p id="equationError" class="error-copy" aria-live="polite"></p>
+          <div id="equationResult" class="formula-result" hidden>
+            <div><span>ตัวแปร</span><code id="equationVariables">—</code></div>
+            <div><span>Simplified SOP</span><code id="equationSop">—</code></div>
+            <div><span>Simplified POS</span><code id="equationPos">—</code></div>
+          </div>
+          <div id="equationTableWrap" class="table-wrap"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

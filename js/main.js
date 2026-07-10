@@ -28,12 +28,12 @@ const tools = [
   },
   {
     title: "Logic Gates Lab",
-    description: "Build digital circuits from gates and inspect truth tables interactively.",
+    description: "Build and simulate digital circuits, inspect truth tables, simplify Boolean equations, and synthesize gates from a truth table.",
     category: "Digital Systems",
     path: "./logic-gates/",
-    tags: ["Logic Gates", "Truth Tables", "Circuits"],
-    status: "coming soon",
-    recentlyAdded: false,
+    tags: ["Logic Gates", "Truth Tables", "Boolean Algebra", "Circuits"],
+    status: "available",
+    recentlyAdded: true,
   },
 ];
 

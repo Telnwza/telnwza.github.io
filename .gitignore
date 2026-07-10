@@ -24,6 +24,7 @@ temp/
 .cache/
 .parcel-cache/
 node_modules/
+dist/
 
 # Python local server/cache artifacts
 __pycache__/
