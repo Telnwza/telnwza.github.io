@@ -54,6 +54,8 @@ visual-learning/
 - Automata แสดง State/Transition inspector เฉพาะเมื่อเลือกวัตถุที่เกี่ยวข้อง
 - Presets, gate ขั้นสูง และตัวเลือกการแสดงผลถูกพับด้วย progressive disclosure
 
+การแก้ไขเพิ่มเติม: ขยายพื้นที่กดของ Logic Gate Input จากเฉพาะตัวเลขเป็นตัวอุปกรณ์ทั้งก้อน พร้อมแยก click ออกจาก drag เพื่อให้การลาก Input ไม่เปลี่ยนค่าโดยไม่ตั้งใจ ทดสอบการคลิกจริงกับ Half Adder แล้ว โดย `A=1, B=0` ให้ `Sum=1, Carry=0` และ `A=1, B=1` ให้ `Sum=0, Carry=1`
+
 ### 1. Circuit Builder
 
 - สร้างพื้นที่วาดวงจรด้วย SVG

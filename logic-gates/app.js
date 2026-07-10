@@ -290,10 +290,6 @@
         class: "node-body",
       });
       body.addEventListener("pointerdown", (event) => startNodeDrag(event, node));
-      body.addEventListener("dblclick", (event) => {
-        event.stopPropagation();
-        if (node.type === "INPUT") toggleInput(node.id);
-      });
       group.append(body);
 
       const label = svgElement("text", { x: 0, y: -8, class: "node-label" });
@@ -318,11 +314,9 @@
           toggleHit.addEventListener("pointerdown", (event) => event.stopPropagation());
           toggleHit.addEventListener("click", (event) => {
             event.stopPropagation();
-            const now = Date.now();
-            if (now - lastInputToggleAt < 220) return;
-            lastInputToggleAt = now;
-            toggleInput(node.id);
+            requestInputToggle(node.id);
           });
+          toggleHit.addEventListener("dblclick", (event) => event.stopPropagation());
           group.append(toggleHit);
         }
         const valueText = svgElement("text", {
@@ -512,14 +506,18 @@
 
   function finishNodeDrag() {
     if (!dragState) return;
-    if (dragState.moved) {
+    const finishedDrag = dragState;
+    const node = nodeById(finishedDrag.id);
+    dragState = null;
+    if (finishedDrag.moved) {
       invalidateAnalysis();
       markChanged("ย้ายอุปกรณ์แล้ว");
       render();
+    } else if (node?.type === "INPUT") {
+      requestInputToggle(node.id);
     } else {
       render();
     }
-    dragState = null;
   }
 
   function startWire(event, nodeId) {
@@ -585,6 +583,13 @@
     currentTruthRow = -1;
     render();
     setStatus(`${node.label} = ${node.value}`);
+  }
+
+  function requestInputToggle(id) {
+    const now = Date.now();
+    if (now - lastInputToggleAt < 220) return;
+    lastInputToggleAt = now;
+    toggleInput(id);
   }
 
   function deleteSelection() {
