@@ -53,19 +53,32 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid 
 .modal{width:min(560px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
 .modal h2{margin:0 0 12px;font-size:16px}
 .equation-modal{width:min(760px,94vw);max-height:90vh;overflow:auto}
-.equation-modal textarea{min-height:210px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.55;tab-size:2}
+.equation-modal textarea{min-height:94px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:16px;line-height:1.55;tab-size:2}
 .equation-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .equation-heading p{margin:3px 0 12px;color:var(--muted);font-size:12px}
-.equation-preview{min-height:92px;white-space:pre-wrap}
-.equation-syntax{margin-top:10px;border:1px solid var(--line);border-radius:8px;background:#0b1220}
-.equation-syntax summary{padding:8px 10px;color:#bfdbfe;cursor:pointer;font-size:12px}
-.equation-syntax .small{padding:0 10px 10px;white-space:pre-wrap;line-height:1.55}
-.equation-actions{display:flex;justify-content:space-between;gap:8px;margin-top:12px}
-.equation-actions>div{display:flex;gap:8px}
+.equation-section-title{margin:14px 0 7px;color:var(--muted);font-size:12px;font-weight:700}
+.equation-examples{display:flex;gap:6px;flex-wrap:wrap}
+.equation-examples button{padding:5px 8px;color:#bfdbfe;background:#0b1f3a;font-size:12px}
+.equation-guide{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.equation-guide div{min-width:0;padding:8px;background:#0b1220;border:1px solid var(--line);border-radius:8px}
+.equation-guide code{display:block;margin-bottom:3px;color:#bfdbfe;font-size:15px;font-weight:800}
+.equation-guide span{display:block;color:var(--muted);font-size:11px;line-height:1.35}
+.equation-feedback{min-height:44px;margin-top:12px;display:flex;align-items:center}
+.equation-feedback.ready{color:#bbf7d0;border-color:#166534;background:#071b14}
+.equation-feedback.bad{color:#fecaca;border-color:#7f1d1d;background:#210b10}
+.equation-feedback.warn{color:#fde68a;border-color:#92400e;background:#211407}
+.equation-primary-action{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+.equation-primary-action .small{margin:0;line-height:1.4}
+.equation-primary-action button{min-width:170px}
+.equation-advanced{margin-top:14px;border:1px solid var(--line);border-radius:9px;background:#0d1627}
+.equation-advanced>summary{padding:10px 12px;color:#bfdbfe;cursor:pointer;font-size:12px;font-weight:700}
+.equation-advanced-body{padding:0 12px 12px}
+.equation-advanced-body textarea{min-height:210px;font-size:13px}
+.equation-code-help{margin:8px 0 0;padding:9px;white-space:pre-wrap;color:var(--muted);background:#0b1220;border:1px solid var(--line);border-radius:8px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 button:disabled{opacity:.48;cursor:not-allowed}
 kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 5px;font-size:11px}
 @media(max-width:1150px){.workspace{grid-template-columns:1fr}.panel{overflow:visible}.canvas-shell{min-height:560px}}
-@media(max-width:780px){.topbar{align-items:flex-start;flex-direction:column}.top-actions select{max-width:100%}.equation-actions{align-items:stretch;flex-direction:column}.equation-actions>div{display:grid;grid-template-columns:1fr 1fr}}
+@media(max-width:780px){.topbar{align-items:flex-start;flex-direction:column}.top-actions select{max-width:100%}.equation-guide{grid-template-columns:repeat(2,minmax(0,1fr))}.equation-primary-action{align-items:stretch;flex-direction:column}.equation-primary-action button{width:100%}}
 </style>
 <link rel="stylesheet" href="../css/simulator-shell.css" />
 </head>
@@ -117,7 +130,7 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
         <button id="addTool">เพิ่ม State</button>
         <button id="connectTool">โยงเส้น</button>
         <button id="deleteTool">ลบ</button>
-        <button id="equationBtn" class="primary">สมการ → รูป</button>
+        <button id="equationBtn" class="primary">Regex → Automata</button>
       </div>
       <div class="help">
         ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state<br>
@@ -247,47 +260,64 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
   <div class="modal equation-modal" role="dialog" aria-modal="true" aria-labelledby="equationModalTitle">
     <div class="equation-heading">
       <div>
-        <h2 id="equationModalTitle">สร้าง Automata จากสมการ</h2>
-        <p>สร้างเป็น state diagram แล้วลากหรือแก้ transition ต่อบน canvas ได้ทันที</p>
+        <h2 id="equationModalTitle">สร้าง Automata จาก Regex</h2>
+        <p>พิมพ์รูปแบบของคำที่ต้องการ แล้วระบบจะสร้าง ε-NFA ให้ทันที</p>
       </div>
       <button id="closeEquation" aria-label="ปิด">ปิด</button>
     </div>
 
-    <div class="row">
-      <div>
-        <label for="equationKind">รูปแบบ Input</label>
-        <select id="equationKind">
-          <option value="regex">Regular Expression → ε-NFA</option>
-          <option value="transitions">Transition equations → DFA/NFA</option>
-        </select>
-      </div>
-      <div>
-        <label>ผลลัพธ์</label>
-        <div id="equationOutputType" class="result">ε-NFA ด้วย Thompson’s construction</div>
-      </div>
+    <label for="regexInput">Regular Expression (Regex)</label>
+    <textarea id="regexInput" spellcheck="false" aria-describedby="regexFeedback" placeholder="เช่น (0|1)*01"></textarea>
+
+    <div class="equation-section-title">ลองกดตัวอย่าง</div>
+    <div class="equation-examples" id="regexExamples">
+      <button type="button" data-regex="(0|1)*01">ลงท้ายด้วย 01</button>
+      <button type="button" data-regex="(0|1)*001(0|1)*">มี 001 อยู่ข้างใน</button>
+      <button type="button" data-regex="a*b">a หลายตัว แล้วตามด้วย b</button>
+      <button type="button" data-regex="(a|b)+">มี a หรือ b อย่างน้อย 1 ตัว</button>
     </div>
 
-    <div style="margin-top:10px">
-      <label id="equationInputLabel" for="equationInput">Regular Expression</label>
-      <textarea id="equationInput" spellcheck="false" placeholder="เช่น (0|1)*01"></textarea>
+    <div class="equation-section-title">เครื่องหมายแต่ละตัวหมายถึงอะไร</div>
+    <div class="equation-guide" aria-label="คู่มือสัญลักษณ์ Regular Expression">
+      <div><code>a</code><span>ตัวอักษรที่ต้องการอ่าน</span></div>
+      <div><code>ab</code><span>a แล้วตามด้วย b</span></div>
+      <div><code>a|b</code><span>a หรือ b</span></div>
+      <div><code>a*</code><span>a จำนวน 0 ครั้งขึ้นไป</span></div>
+      <div><code>a+</code><span>a อย่างน้อย 1 ครั้ง</span></div>
+      <div><code>a?</code><span>มี a หรือไม่มีก็ได้</span></div>
+      <div><code>(ab)</code><span>จัดกลุ่มก่อนคำนวณ</span></div>
+      <div><code>ε</code><span>คำว่าง ไม่อ่านตัวอักษร</span></div>
     </div>
 
-    <details class="equation-syntax">
-      <summary>ดูรูปแบบที่รองรับ</summary>
-      <div id="equationSyntaxHelp" class="small"></div>
+    <div id="regexFeedback" class="result equation-feedback" aria-live="polite">พิมพ์ Regex หรือเลือกตัวอย่างด้านบน</div>
+    <div class="equation-primary-action">
+      <p id="equationReplaceNotice" class="small"></p>
+      <button id="generateRegex" class="primary" disabled>สร้าง ε-NFA</button>
+    </div>
+
+    <details id="transitionAdvanced" class="equation-advanced">
+      <summary>ขั้นสูง: สร้างจาก Transition equations</summary>
+      <div class="equation-advanced-body">
+        <p class="small">เหมาะเมื่อมีนิยาม DFA/NFA เป็น δ(q, symbol) อยู่แล้ว</p>
+        <label for="transitionInput">Formal definition และ transitions</label>
+        <textarea id="transitionInput" spellcheck="false" aria-describedby="transitionFeedback" placeholder="type: DFA&#10;alphabet: 0,1&#10;start: q0&#10;final: q1&#10;&#10;δ(q0,0) = q0&#10;δ(q0,1) = q1"></textarea>
+        <div class="equation-examples" style="margin-top:8px">
+          <button id="transitionExample" type="button">ใส่ตัวอย่าง DFA</button>
+        </div>
+        <div class="equation-code-help">type: DFA หรือ NFA
+alphabet: 0,1
+start: q0
+final: q1,q2
+δ(q0,0) = q1
+NFA หลายปลายทาง: δ(q0,0) = {q0,q1}
+Epsilon transition: δ(q0,eps) = q1</div>
+        <div id="transitionFeedback" class="result equation-feedback" aria-live="polite">ใส่นิยามด้านบนเพื่อดูผลลัพธ์</div>
+        <div class="equation-primary-action">
+          <p class="small">ระบบรองรับ DFA, NFA และ ε-NFA</p>
+          <button id="generateTransitions" class="primary" disabled>สร้างจาก Transitions</button>
+        </div>
+      </div>
     </details>
-
-    <h3>Preview</h3>
-    <div id="equationPreview" class="result equation-preview">ใส่สมการแล้วกด “ตรวจสมการ”</div>
-    <div id="equationReplaceNotice" class="small" style="margin-top:8px"></div>
-
-    <div class="equation-actions">
-      <button id="equationExample">ใส่ตัวอย่าง</button>
-      <div>
-        <button id="checkEquation">ตรวจสมการ</button>
-        <button id="generateEquation" class="primary" disabled>สร้าง Automata</button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -298,7 +328,7 @@ const $=id=>document.getElementById(id);
 const svg=$('canvas'), viewport=$('viewport'), statesLayer=$('statesLayer'), edgesLayer=$('edgesLayer');
 
 let states=[],edges=[],selected=null,tool='select',connectFrom=null,drag=null,counter=0;
-let history=[],future=[],sim=null,equationPreviewModel=null;
+let history=[],future=[],sim=null;
 const EPS=['ε','eps','epsilon','λ'];
 
 function type(){return $('machineType').value}
@@ -434,9 +464,7 @@ $('confirmEdge').onclick=()=>{const p=window.pendingEdge,label=$('modalEdgeLabel
 $('cancelEdge').onclick=()=>{$('edgeModal').style.display='none';window.pendingEdge=null};
 $('edgeModal').onclick=e=>{if(e.target===$('edgeModal'))$('cancelEdge').click()};
 
-const equationExamples={
-  regex:'(0|1)*01',
-  transitions:`type: DFA
+const transitionExample=`type: DFA
 alphabet: 0,1
 start: q0
 final: q2
@@ -446,85 +474,82 @@ final: q2
 δ(q1,0) = q1
 δ(q1,1) = q2
 δ(q2,0) = q1
-δ(q2,1) = q0`
-};
-const equationHelp={
-  regex:`ใช้ | สำหรับ OR, เขียนติดกันสำหรับ concatenation
-* = ซ้ำ 0 ครั้งขึ้นไป, + = ซ้ำอย่างน้อย 1 ครั้ง, ? = มีหรือไม่มีก็ได้
-รองรับวงเล็บ, ε, λ, eps และ escape operator ด้วย \\ เช่น \\?`,
-  transitions:`ส่วนหัว: type, alphabet, start และ final
-Transition: δ(q0,0) = q1
-NFA หลายปลายทาง: δ(q0,0) = {q0,q1}
-ใช้ eps หรือ ε สำหรับ epsilon transition และใช้ # สำหรับ comment`
-};
-function equationKind(){return $('equationKind').value}
-function syncEquationMode(){
-  const isRegex=equationKind()==='regex';
-  $('equationInputLabel').textContent=isRegex?'Regular Expression':'Formal definition และ Transition equations';
-  $('equationInput').placeholder=isRegex?'เช่น (0|1)*01':'เช่น type: DFA\\nstart: q0\\nfinal: q1\\nδ(q0,0) = q1';
-  $('equationOutputType').textContent=isRegex?'ε-NFA ด้วย Thompson’s construction':'DFA หรือ NFA ตาม type ที่ระบุ';
-  $('equationSyntaxHelp').textContent=equationHelp[equationKind()];
-  equationPreviewModel=null;$('generateEquation').disabled=true;
-  $('equationPreview').textContent='ใส่สมการแล้วกด “ตรวจสมการ”'
-}
-function parseEquationInput(){
-  return equationKind()==='regex'
-    ? AutomataEquation.regexToNfa($('equationInput').value)
-    : AutomataEquation.parseTransitionEquations($('equationInput').value,{defaultType:type()==='NFA'?'NFA':'DFA'})
-}
+δ(q2,1) = q0`;
 function equationErrorText(error){
-  let text='Error: '+error.message;
-  if(error.line)text+=`\nบรรทัด ${error.line}`;
-  if(error.column)text+=`\nตำแหน่งตัวอักษร ${error.column}`;
+  let where='';
+  if(error.line)where=`บรรทัด ${error.line}: `;
+  else if(error.column)where=`ตำแหน่ง ${error.column}: `;
+  let text='✕ '+where+error.message;
   if(error.sourceLine)text+=`\n${error.sourceLine}`;
   return text
 }
-function previewEquation(){
-  try{
-    const model=parseEquationInput(),warningCount=model.warnings?.length||0;
-    equationPreviewModel=model;
-    $('generateEquation').disabled=false;
-    let text=`✓ Syntax ถูกต้อง
-Type: ${model.type==='NFA'&&model.sourceKind==='regex'?'ε-NFA':model.type}
-Alphabet: {${model.alphabet.join(', ')||'∅'}}
-States: ${model.states.length}
-Initial: ${model.initial}
-Final: {${model.finals.join(', ')||'∅'}}
-Transitions: ${model.transitions.length}`;
-    if(warningCount){
-      const shown=model.warnings.slice(0,6);
-      text+=`\n\nคำเตือน:\n${shown.map(x=>'• '+x).join('\n')}`;
-      if(warningCount>shown.length)text+=`\n• และอีก ${warningCount-shown.length} รายการ`
-    }
-    $('equationPreview').textContent=text;
-    $('equationPreview').classList.toggle('warn',warningCount>0)
-  }catch(error){
-    equationPreviewModel=null;$('generateEquation').disabled=true;
-    $('equationPreview').textContent=equationErrorText(error);
-    $('equationPreview').classList.remove('warn');
-    $('equationPreview').classList.add('bad')
+function setEquationFeedback(id,message,state=''){
+  const element=$(id);
+  element.textContent=message;
+  element.classList.remove('ready','bad','warn');
+  if(state)element.classList.add(state)
+}
+function validateRegex(){
+  const input=$('regexInput').value.trim();
+  if(!input){
+    $('generateRegex').disabled=true;
+    setEquationFeedback('regexFeedback','พิมพ์ Regex หรือเลือกตัวอย่างด้านบน');
+    return null
   }
-  if(equationPreviewModel)$('equationPreview').classList.remove('bad')
+  try{
+    const model=AutomataEquation.regexToNfa(input);
+    $('generateRegex').disabled=false;
+    setEquationFeedback(
+      'regexFeedback',
+      `✓ พร้อมสร้าง ε-NFA · ${model.states.length} states · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
+      'ready'
+    );
+    return model
+  }catch(error){
+    $('generateRegex').disabled=true;
+    setEquationFeedback('regexFeedback',equationErrorText(error),'bad');
+    return null
+  }
+}
+function validateTransitions(){
+  const input=$('transitionInput').value.trim();
+  if(!input){
+    $('generateTransitions').disabled=true;
+    setEquationFeedback('transitionFeedback','ใส่นิยามด้านบน หรือกด “ใส่ตัวอย่าง DFA”');
+    return null
+  }
+  try{
+    const model=AutomataEquation.parseTransitionEquations(input,{defaultType:type()==='NFA'?'NFA':'DFA'});
+    $('generateTransitions').disabled=false;
+    const warningCount=model.warnings?.length||0;
+    const summary=`✓ พร้อมสร้าง ${model.type} · ${model.states.length} states · ${model.transitions.length} transitions`;
+    const warning=warningCount?`\nคำเตือน: ${model.warnings.slice(0,3).join(' · ')}${warningCount>3?` · และอีก ${warningCount-3} รายการ`:''}`:'';
+    setEquationFeedback('transitionFeedback',summary+warning,warningCount?'warn':'ready');
+    return model
+  }catch(error){
+    $('generateTransitions').disabled=true;
+    setEquationFeedback('transitionFeedback',equationErrorText(error),'bad');
+    return null
+  }
 }
 function closeEquationModal(){
   $('equationModal').style.display='none'
 }
 function openEquationModal(){
-  if(!$('equationInput').value.trim())$('equationInput').value=equationExamples[equationKind()];
+  if(!$('regexInput').value.trim())$('regexInput').value='(0|1)*01';
   $('equationReplaceNotice').textContent=states.length
-    ? `งานปัจจุบัน (${states.length} states) จะถูกแทนที่ และสามารถกด Undo เพื่อย้อนกลับได้`
-    :'Diagram ที่สร้างจะถูกวางและจัดตำแหน่งให้อัตโนมัติ';
+    ? `จะแทนที่งานปัจจุบัน ${states.length} states · กด Undo ย้อนกลับได้`
+    :'ระบบจะจัดตำแหน่ง diagram ให้อัตโนมัติ';
   $('equationModal').style.display='flex';
-  previewEquation();
-  $('equationInput').focus()
+  validateRegex();
+  $('regexInput').focus()
 }
 function nextStateCounter(names){
   const numbered=names.map(name=>/^q(\d+)$/.exec(name)).filter(Boolean).map(match=>+match[1]+1);
   return Math.max(names.length,...numbered,0)
 }
-function generateFromEquation(){
-  previewEquation();if(!equationPreviewModel)return;
-  const model=equationPreviewModel;
+function generateEquationModel(model){
+  if(!model)return;
   const positions=AutomataEquation.layoutAutomaton(model,1000,620);
   const ids=new Map(model.states.map(name=>[name,uid('g')]));
   const generatedEdges=AutomataEquation.mergeParallelTransitions(model.transitions);
@@ -542,24 +567,31 @@ function generateFromEquation(){
     counter=nextStateCounter(model.states);selected=null;connectFrom=null;sim=null
   });
   closeEquationModal();
-  $('status').textContent=`สร้าง ${model.type==='NFA'&&model.sourceKind==='regex'?'ε-NFA':model.type} จากสมการแล้ว`
+  $('status').textContent=model.sourceKind==='regex'
+    ?'สร้าง ε-NFA จาก Regex แล้ว'
+    :`สร้าง ${model.type} จาก Transition equations แล้ว`
 }
 $('equationBtn').onclick=openEquationModal;
 $('closeEquation').onclick=closeEquationModal;
 $('equationModal').onclick=event=>{if(event.target===$('equationModal'))closeEquationModal()};
-$('equationKind').onchange=syncEquationMode;
-$('equationInput').oninput=()=>{
-  equationPreviewModel=null;$('generateEquation').disabled=true;
-  $('equationPreview').classList.remove('bad','warn');
-  $('equationPreview').textContent='สมการเปลี่ยนแล้ว กด “ตรวจสมการ” เพื่ออัปเดต Preview'
+$('regexInput').oninput=validateRegex;
+$('transitionInput').oninput=validateTransitions;
+document.querySelectorAll('[data-regex]').forEach(button=>button.onclick=()=>{
+  $('regexInput').value=button.dataset.regex;
+  validateRegex();$('regexInput').focus()
+});
+$('transitionExample').onclick=()=>{
+  $('transitionInput').value=transitionExample;
+  validateTransitions();$('transitionInput').focus()
 };
-$('equationExample').onclick=()=>{
-  $('equationInput').value=equationExamples[equationKind()];
-  previewEquation();$('equationInput').focus()
+$('transitionAdvanced').ontoggle=()=>{
+  if($('transitionAdvanced').open&&!$('transitionInput').value.trim()){
+    $('transitionInput').value=transitionExample;
+    validateTransitions()
+  }
 };
-$('checkEquation').onclick=previewEquation;
-$('generateEquation').onclick=generateFromEquation;
-syncEquationMode();
+$('generateRegex').onclick=()=>generateEquationModel(validateRegex());
+$('generateTransitions').onclick=()=>generateEquationModel(validateTransitions());
 
 ['select','add','connect','delete'].forEach(t=>$(t+'Tool').onclick=()=>setTool(t));
 $('clearBtn').onclick=()=>commit(()=>{states=[];edges=[];selected=null;counter=0});
