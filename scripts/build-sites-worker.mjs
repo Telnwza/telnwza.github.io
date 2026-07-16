@@ -10,6 +10,7 @@ const sourceFiles = [
   "js/main.js",
   "js/simulator-shell.js",
   "automata/index.html",
+  "automata/automata-equation.js",
   "vectors/index.html",
   "logic-gates/index.html",
   "logic-gates/style.css",

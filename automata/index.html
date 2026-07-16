@@ -49,12 +49,23 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid 
 .chips{display:flex;gap:6px;flex-wrap:wrap}.chip{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#0b1220;border:1px solid var(--line);padding:4px 7px;border-radius:7px;font-size:12px}
 .tabs{display:flex;gap:6px;margin-bottom:10px}.tab{flex:1}.tab.active{background:#1d4ed8}
 .hidden{display:none!important}
-.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.58);display:none;align-items:center;justify-content:center;z-index:50}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.58);display:none;align-items:center;justify-content:center;z-index:150}
 .modal{width:min(560px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
 .modal h2{margin:0 0 12px;font-size:16px}
+.equation-modal{width:min(760px,94vw);max-height:90vh;overflow:auto}
+.equation-modal textarea{min-height:210px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.55;tab-size:2}
+.equation-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.equation-heading p{margin:3px 0 12px;color:var(--muted);font-size:12px}
+.equation-preview{min-height:92px;white-space:pre-wrap}
+.equation-syntax{margin-top:10px;border:1px solid var(--line);border-radius:8px;background:#0b1220}
+.equation-syntax summary{padding:8px 10px;color:#bfdbfe;cursor:pointer;font-size:12px}
+.equation-syntax .small{padding:0 10px 10px;white-space:pre-wrap;line-height:1.55}
+.equation-actions{display:flex;justify-content:space-between;gap:8px;margin-top:12px}
+.equation-actions>div{display:flex;gap:8px}
+button:disabled{opacity:.48;cursor:not-allowed}
 kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 5px;font-size:11px}
 @media(max-width:1150px){.workspace{grid-template-columns:1fr}.panel{overflow:visible}.canvas-shell{min-height:560px}}
-@media(max-width:780px){.topbar{align-items:flex-start;flex-direction:column}.top-actions select{max-width:100%}}
+@media(max-width:780px){.topbar{align-items:flex-start;flex-direction:column}.top-actions select{max-width:100%}.equation-actions{align-items:stretch;flex-direction:column}.equation-actions>div{display:grid;grid-template-columns:1fr 1fr}}
 </style>
 <link rel="stylesheet" href="../css/simulator-shell.css" />
 </head>
@@ -106,6 +117,7 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
         <button id="addTool">เพิ่ม State</button>
         <button id="connectTool">โยงเส้น</button>
         <button id="deleteTool">ลบ</button>
+        <button id="equationBtn" class="primary">สมการ → รูป</button>
       </div>
       <div class="help">
         ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state<br>
@@ -231,13 +243,62 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
   </div>
 </div>
 
+<div id="equationModal" class="modal-backdrop">
+  <div class="modal equation-modal" role="dialog" aria-modal="true" aria-labelledby="equationModalTitle">
+    <div class="equation-heading">
+      <div>
+        <h2 id="equationModalTitle">สร้าง Automata จากสมการ</h2>
+        <p>สร้างเป็น state diagram แล้วลากหรือแก้ transition ต่อบน canvas ได้ทันที</p>
+      </div>
+      <button id="closeEquation" aria-label="ปิด">ปิด</button>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="equationKind">รูปแบบ Input</label>
+        <select id="equationKind">
+          <option value="regex">Regular Expression → ε-NFA</option>
+          <option value="transitions">Transition equations → DFA/NFA</option>
+        </select>
+      </div>
+      <div>
+        <label>ผลลัพธ์</label>
+        <div id="equationOutputType" class="result">ε-NFA ด้วย Thompson’s construction</div>
+      </div>
+    </div>
+
+    <div style="margin-top:10px">
+      <label id="equationInputLabel" for="equationInput">Regular Expression</label>
+      <textarea id="equationInput" spellcheck="false" placeholder="เช่น (0|1)*01"></textarea>
+    </div>
+
+    <details class="equation-syntax">
+      <summary>ดูรูปแบบที่รองรับ</summary>
+      <div id="equationSyntaxHelp" class="small"></div>
+    </details>
+
+    <h3>Preview</h3>
+    <div id="equationPreview" class="result equation-preview">ใส่สมการแล้วกด “ตรวจสมการ”</div>
+    <div id="equationReplaceNotice" class="small" style="margin-top:8px"></div>
+
+    <div class="equation-actions">
+      <button id="equationExample">ใส่ตัวอย่าง</button>
+      <div>
+        <button id="checkEquation">ตรวจสมการ</button>
+        <button id="generateEquation" class="primary" disabled>สร้าง Automata</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="./automata-equation.js"></script>
 <script>
 (()=>{
 const $=id=>document.getElementById(id);
 const svg=$('canvas'), viewport=$('viewport'), statesLayer=$('statesLayer'), edgesLayer=$('edgesLayer');
 
 let states=[],edges=[],selected=null,tool='select',connectFrom=null,drag=null,counter=0;
-let history=[],future=[],sim=null;
+let history=[],future=[],sim=null,equationPreviewModel=null;
 const EPS=['ε','eps','epsilon','λ'];
 
 function type(){return $('machineType').value}
@@ -373,6 +434,133 @@ $('confirmEdge').onclick=()=>{const p=window.pendingEdge,label=$('modalEdgeLabel
 $('cancelEdge').onclick=()=>{$('edgeModal').style.display='none';window.pendingEdge=null};
 $('edgeModal').onclick=e=>{if(e.target===$('edgeModal'))$('cancelEdge').click()};
 
+const equationExamples={
+  regex:'(0|1)*01',
+  transitions:`type: DFA
+alphabet: 0,1
+start: q0
+final: q2
+
+δ(q0,0) = q1
+δ(q0,1) = q0
+δ(q1,0) = q1
+δ(q1,1) = q2
+δ(q2,0) = q1
+δ(q2,1) = q0`
+};
+const equationHelp={
+  regex:`ใช้ | สำหรับ OR, เขียนติดกันสำหรับ concatenation
+* = ซ้ำ 0 ครั้งขึ้นไป, + = ซ้ำอย่างน้อย 1 ครั้ง, ? = มีหรือไม่มีก็ได้
+รองรับวงเล็บ, ε, λ, eps และ escape operator ด้วย \\ เช่น \\?`,
+  transitions:`ส่วนหัว: type, alphabet, start และ final
+Transition: δ(q0,0) = q1
+NFA หลายปลายทาง: δ(q0,0) = {q0,q1}
+ใช้ eps หรือ ε สำหรับ epsilon transition และใช้ # สำหรับ comment`
+};
+function equationKind(){return $('equationKind').value}
+function syncEquationMode(){
+  const isRegex=equationKind()==='regex';
+  $('equationInputLabel').textContent=isRegex?'Regular Expression':'Formal definition และ Transition equations';
+  $('equationInput').placeholder=isRegex?'เช่น (0|1)*01':'เช่น type: DFA\\nstart: q0\\nfinal: q1\\nδ(q0,0) = q1';
+  $('equationOutputType').textContent=isRegex?'ε-NFA ด้วย Thompson’s construction':'DFA หรือ NFA ตาม type ที่ระบุ';
+  $('equationSyntaxHelp').textContent=equationHelp[equationKind()];
+  equationPreviewModel=null;$('generateEquation').disabled=true;
+  $('equationPreview').textContent='ใส่สมการแล้วกด “ตรวจสมการ”'
+}
+function parseEquationInput(){
+  return equationKind()==='regex'
+    ? AutomataEquation.regexToNfa($('equationInput').value)
+    : AutomataEquation.parseTransitionEquations($('equationInput').value,{defaultType:type()==='NFA'?'NFA':'DFA'})
+}
+function equationErrorText(error){
+  let text='Error: '+error.message;
+  if(error.line)text+=`\nบรรทัด ${error.line}`;
+  if(error.column)text+=`\nตำแหน่งตัวอักษร ${error.column}`;
+  if(error.sourceLine)text+=`\n${error.sourceLine}`;
+  return text
+}
+function previewEquation(){
+  try{
+    const model=parseEquationInput(),warningCount=model.warnings?.length||0;
+    equationPreviewModel=model;
+    $('generateEquation').disabled=false;
+    let text=`✓ Syntax ถูกต้อง
+Type: ${model.type==='NFA'&&model.sourceKind==='regex'?'ε-NFA':model.type}
+Alphabet: {${model.alphabet.join(', ')||'∅'}}
+States: ${model.states.length}
+Initial: ${model.initial}
+Final: {${model.finals.join(', ')||'∅'}}
+Transitions: ${model.transitions.length}`;
+    if(warningCount){
+      const shown=model.warnings.slice(0,6);
+      text+=`\n\nคำเตือน:\n${shown.map(x=>'• '+x).join('\n')}`;
+      if(warningCount>shown.length)text+=`\n• และอีก ${warningCount-shown.length} รายการ`
+    }
+    $('equationPreview').textContent=text;
+    $('equationPreview').classList.toggle('warn',warningCount>0)
+  }catch(error){
+    equationPreviewModel=null;$('generateEquation').disabled=true;
+    $('equationPreview').textContent=equationErrorText(error);
+    $('equationPreview').classList.remove('warn');
+    $('equationPreview').classList.add('bad')
+  }
+  if(equationPreviewModel)$('equationPreview').classList.remove('bad')
+}
+function closeEquationModal(){
+  $('equationModal').style.display='none'
+}
+function openEquationModal(){
+  if(!$('equationInput').value.trim())$('equationInput').value=equationExamples[equationKind()];
+  $('equationReplaceNotice').textContent=states.length
+    ? `งานปัจจุบัน (${states.length} states) จะถูกแทนที่ และสามารถกด Undo เพื่อย้อนกลับได้`
+    :'Diagram ที่สร้างจะถูกวางและจัดตำแหน่งให้อัตโนมัติ';
+  $('equationModal').style.display='flex';
+  previewEquation();
+  $('equationInput').focus()
+}
+function nextStateCounter(names){
+  const numbered=names.map(name=>/^q(\d+)$/.exec(name)).filter(Boolean).map(match=>+match[1]+1);
+  return Math.max(names.length,...numbered,0)
+}
+function generateFromEquation(){
+  previewEquation();if(!equationPreviewModel)return;
+  const model=equationPreviewModel;
+  const positions=AutomataEquation.layoutAutomaton(model,1000,620);
+  const ids=new Map(model.states.map(name=>[name,uid('g')]));
+  const generatedEdges=AutomataEquation.mergeParallelTransitions(model.transitions);
+  commit(()=>{
+    $('machineType').value=model.type;
+    $('alphabet').value=model.alphabet.join(',');
+    states=model.states.map(name=>({
+      id:ids.get(name),name,
+      x:positions[name]?.x||500,y:positions[name]?.y||310,
+      initial:name===model.initial,final:model.finals.includes(name)
+    }));
+    edges=generatedEdges.map(edge=>({
+      id:uid('e'),from:ids.get(edge.from),to:ids.get(edge.to),label:edge.label
+    }));
+    counter=nextStateCounter(model.states);selected=null;connectFrom=null;sim=null
+  });
+  closeEquationModal();
+  $('status').textContent=`สร้าง ${model.type==='NFA'&&model.sourceKind==='regex'?'ε-NFA':model.type} จากสมการแล้ว`
+}
+$('equationBtn').onclick=openEquationModal;
+$('closeEquation').onclick=closeEquationModal;
+$('equationModal').onclick=event=>{if(event.target===$('equationModal'))closeEquationModal()};
+$('equationKind').onchange=syncEquationMode;
+$('equationInput').oninput=()=>{
+  equationPreviewModel=null;$('generateEquation').disabled=true;
+  $('equationPreview').classList.remove('bad','warn');
+  $('equationPreview').textContent='สมการเปลี่ยนแล้ว กด “ตรวจสมการ” เพื่ออัปเดต Preview'
+};
+$('equationExample').onclick=()=>{
+  $('equationInput').value=equationExamples[equationKind()];
+  previewEquation();$('equationInput').focus()
+};
+$('checkEquation').onclick=previewEquation;
+$('generateEquation').onclick=generateFromEquation;
+syncEquationMode();
+
 ['select','add','connect','delete'].forEach(t=>$(t+'Tool').onclick=()=>setTool(t));
 $('clearBtn').onclick=()=>commit(()=>{states=[];edges=[];selected=null;counter=0});
 $('alphabet').onchange=()=>{snapshot();render()};
@@ -380,10 +568,11 @@ $('maxLen').onchange=refreshAnalysis;
 $('machineType').onchange=()=>{sim=null;snapshot();render()};
 
 window.addEventListener('keydown',ev=>{
-  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault();ev.shiftKey?redo():undo()}
-  else if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='y'){ev.preventDefault();redo()}
-  else if(ev.key==='Delete'&&selected){commit(removeSelected)}
-  else if(ev.key==='Escape'){connectFrom=null;setTool('select');$('edgeModal').style.display='none'}
+  const editing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)||document.activeElement?.isContentEditable;
+  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'&&!editing){ev.preventDefault();ev.shiftKey?redo():undo()}
+  else if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='y'&&!editing){ev.preventDefault();redo()}
+  else if(ev.key==='Delete'&&selected&&!editing){commit(removeSelected)}
+  else if(ev.key==='Escape'){connectFrom=null;setTool('select');$('edgeModal').style.display='none';closeEquationModal()}
 });
 
 function undo(){if(!history.length)return;future.push(JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value}));restore(history.pop())}
