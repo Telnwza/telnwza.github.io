@@ -98,7 +98,7 @@ This keeps the site compatible with GitHub Pages project URLs and direct browser
 
 ## Current Available Tools
 
-- Automata Studio: DFA, NFA, epsilon-NFA, PDA, and Turing Machine creation and simulation, including Regular Expression to minimal DFA generation, optional Thompson epsilon-NFA output, and DFA/NFA generation from transition equations.
+- Automata Studio: DFA, NFA, epsilon-NFA, PDA, and Turing Machine creation and simulation, including Regular Expression output as a minimal DFA, compact epsilon-free NFA, or Thompson epsilon-NFA, plus DFA/NFA generation from transition equations.
 - Vector Addition Visualizer: 2D and 3D vector addition, resultant vectors, magnitude, ordering, import/export, and local browser saving.
 - Logic Gates Lab: drag-and-drop combinational circuits, live signal simulation, circuit-to-truth-table analysis, Boolean equation parsing and minimization, truth-table-to-circuit synthesis, presets, autosave, and JSON/image/table export.
 
@@ -120,7 +120,7 @@ Run the Regular Expression and transition-equation parser tests with Node.js:
 node --test automata/automata-equation.test.js
 ```
 
-The tests cover Thompson epsilon-NFA generation, subset construction, minimal DFA generation, Regular Expression syntax errors, DFA/NFA transition definitions, parallel-transition merging, and automatic state layout.
+The tests cover Thompson epsilon-NFA generation, compact position-NFA construction, subset construction, minimal DFA generation, language equivalence, Regular Expression syntax errors, DFA/NFA transition definitions, parallel-transition merging, and automatic state layout.
 
 All three simulators share a focus-first shell with an auto-hiding top bar, collapsible tool/analysis panels, Focus Mode, progressive disclosure for advanced controls, and consistent shortcuts.
 

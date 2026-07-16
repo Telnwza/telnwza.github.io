@@ -10,6 +10,7 @@ const {
   parseTransitionEquations,
   regexToMinimalDfa,
   regexToNfa,
+  regexToPositionNfa,
 } = require("./automata-equation.js");
 
 function runDfa(model, input) {
@@ -109,6 +110,28 @@ test("creates the three-state minimal DFA for binary strings ending in 01", () =
   samples.forEach((accepted, input) => assert.equal(runDfa(model, input), accepted, input));
 });
 
+test("creates a compact epsilon-free position NFA", () => {
+  const model = regexToPositionNfa("(0|1)*01");
+
+  assert.equal(model.type, "NFA");
+  assert.equal(model.states.length, 5);
+  assert.equal(model.transitions.some(({ label }) => label === EPSILON), false);
+  assert.equal(runNfa(model, "01"), true);
+  assert.equal(runNfa(model, "1101"), true);
+  assert.equal(runNfa(model, "010"), false);
+});
+
+test("position NFA accepts epsilon when the regex is nullable", () => {
+  const epsilon = regexToPositionNfa("ε");
+  const optional = regexToPositionNfa("a?");
+
+  assert.deepEqual(epsilon.states, ["q0"]);
+  assert.deepEqual(epsilon.finals, ["q0"]);
+  assert.equal(runNfa(optional, ""), true);
+  assert.equal(runNfa(optional, "a"), true);
+  assert.equal(runNfa(optional, "aa"), false);
+});
+
 test("minimizes star and epsilon expressions to one state", () => {
   const star = regexToMinimalDfa("a*");
   const epsilon = regexToMinimalDfa("ε");
@@ -150,6 +173,20 @@ test("minimal DFAs preserve the Thompson NFA language", () => {
       assert.equal(
         runDfa(minimal, input),
         runNfa(nfa, input),
+        `${expression} on ${input || "ε"}`,
+      );
+    });
+  });
+});
+
+test("position NFAs preserve the Thompson NFA language", () => {
+  ["(0|1)*01", "(a|b)+", "a?b*", "(ab|ba)*", "ε|ab"].forEach((expression) => {
+    const thompson = regexToNfa(expression);
+    const position = regexToPositionNfa(expression);
+    stringsUpTo(thompson.alphabet, 4).forEach((input) => {
+      assert.equal(
+        runNfa(position, input),
+        runNfa(thompson, input),
         `${expression} on ${input || "ε"}`,
       );
     });

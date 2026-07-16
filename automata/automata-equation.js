@@ -182,14 +182,17 @@
     return ast;
   }
 
-  function regexToNfa(source) {
+  function parseRegexExpression(source) {
     const expression = String(source || "").trim();
     if (!expression) throw new EquationSyntaxError("กรุณาใส่ Regular Expression");
     if (expression.length > 500) {
       throw new EquationSyntaxError("Regular Expression ยาวเกิน 500 ตัวอักษร");
     }
+    return { expression, ast: parseRegexAst(expression) };
+  }
 
-    const ast = parseRegexAst(expression);
+  function regexToNfa(source) {
+    const { expression, ast } = parseRegexExpression(source);
     const transitions = [];
     const alphabet = [];
     const alphabetSet = new Set();
@@ -284,6 +287,113 @@
       transitions,
       warnings: [],
       expression,
+    };
+  }
+
+  function regexToPositionNfa(source) {
+    const { expression, ast } = parseRegexExpression(source);
+    const symbols = new Map();
+    const follow = new Map();
+    const alphabet = [];
+    const alphabetSet = new Set();
+    let positionCounter = 0;
+
+    function union(left, right) {
+      return new Set([...left, ...right]);
+    }
+
+    function addFollow(fromPositions, toPositions) {
+      fromPositions.forEach((from) => {
+        if (!follow.has(from)) follow.set(from, new Set());
+        const destinations = follow.get(from);
+        toPositions.forEach((to) => destinations.add(to));
+      });
+    }
+
+    function analyze(node) {
+      if (node.type === "literal") {
+        const position = ++positionCounter;
+        symbols.set(position, node.value);
+        follow.set(position, new Set());
+        if (!alphabetSet.has(node.value)) {
+          alphabetSet.add(node.value);
+          alphabet.push(node.value);
+        }
+        return {
+          nullable: false,
+          first: new Set([position]),
+          last: new Set([position]),
+        };
+      }
+
+      if (node.type === "epsilon") {
+        return { nullable: true, first: new Set(), last: new Set() };
+      }
+
+      if (node.type === "union") {
+        const left = analyze(node.left);
+        const right = analyze(node.right);
+        return {
+          nullable: left.nullable || right.nullable,
+          first: union(left.first, right.first),
+          last: union(left.last, right.last),
+        };
+      }
+
+      if (node.type === "concat") {
+        const left = analyze(node.left);
+        const right = analyze(node.right);
+        addFollow(left.last, right.first);
+        return {
+          nullable: left.nullable && right.nullable,
+          first: left.nullable ? union(left.first, right.first) : left.first,
+          last: right.nullable ? union(left.last, right.last) : right.last,
+        };
+      }
+
+      if (["star", "plus", "optional"].includes(node.type)) {
+        const child = analyze(node.child);
+        if (node.type === "star" || node.type === "plus") {
+          addFollow(child.last, child.first);
+        }
+        return {
+          nullable: node.type === "plus" ? child.nullable : true,
+          first: child.first,
+          last: child.last,
+        };
+      }
+
+      throw new EquationSyntaxError("ไม่สามารถสร้าง NFA จาก Regular Expression นี้ได้");
+    }
+
+    const analysis = analyze(ast);
+    const transitions = [];
+    analysis.first.forEach((position) => {
+      transitions.push({ from: "q0", to: `q${position}`, label: symbols.get(position) });
+    });
+    follow.forEach((destinations, from) => {
+      destinations.forEach((to) => {
+        transitions.push({ from: `q${from}`, to: `q${to}`, label: symbols.get(to) });
+      });
+    });
+
+    const finals = [...analysis.last].map((position) => `q${position}`);
+    if (analysis.nullable) finals.unshift("q0");
+
+    return {
+      sourceKind: "position-nfa",
+      type: "NFA",
+      alphabet,
+      states: Array.from({ length: positionCounter + 1 }, (_, index) => `q${index}`),
+      initial: "q0",
+      finals,
+      transitions,
+      warnings: [],
+      expression,
+      optimization: {
+        literalPositions: positionCounter,
+        positionStates: positionCounter + 1,
+      },
     };
   }
 
@@ -795,5 +905,6 @@
     parseTransitionEquations,
     regexToMinimalDfa,
     regexToNfa,
+    regexToPositionNfa,
   };
 });
