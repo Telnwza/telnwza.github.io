@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   EPSILON,
+  compareLanguages,
   determinizeNfa,
   layoutAutomaton,
   mergeParallelTransitions,
@@ -191,6 +192,56 @@ test("position NFAs preserve the Thompson NFA language", () => {
       );
     });
   });
+});
+
+test("proves an NFA and equivalent regex recognize the same language", () => {
+  const drawnNfa = regexToPositionNfa("(0|1)*01");
+  const regexModel = regexToNfa("(0|1)*01");
+  const result = compareLanguages(drawnNfa, regexModel);
+
+  assert.equal(result.equivalent, true);
+  assert.equal(result.counterexample, null);
+  assert.deepEqual(result.alphabet, ["0", "1"]);
+});
+
+test("returns the shortest counterexample when languages differ", () => {
+  const ends01 = regexToPositionNfa("(0|1)*01");
+  const ends0 = regexToPositionNfa("(0|1)*0");
+  const result = compareLanguages(ends01, ends0);
+
+  assert.equal(result.equivalent, false);
+  assert.equal(result.counterexample, "0");
+  assert.equal(result.leftAccepted, false);
+  assert.equal(result.rightAccepted, true);
+});
+
+test("uses epsilon as the counterexample when initial acceptance differs", () => {
+  const acceptsEpsilon = regexToPositionNfa("a*");
+  const requiresA = regexToPositionNfa("a+");
+  const result = compareLanguages(acceptsEpsilon, requiresA);
+
+  assert.equal(result.equivalent, false);
+  assert.equal(result.counterexample, "");
+  assert.equal(result.leftAccepted, true);
+  assert.equal(result.rightAccepted, false);
+});
+
+test("compares over the union alphabet and expands grouped labels", () => {
+  const groupedDfa = {
+    type: "DFA",
+    alphabet: ["a", "b"],
+    states: ["q0"],
+    initial: "q0",
+    finals: ["q0"],
+    transitions: [{ from: "q0", to: "q0", label: "a,b" }],
+  };
+  const equivalentRegex = regexToNfa("(a|b)*");
+  const differentAlphabet = regexToNfa("a*");
+
+  assert.equal(compareLanguages(groupedDfa, equivalentRegex).equivalent, true);
+  const mismatch = compareLanguages(groupedDfa, differentAlphabet);
+  assert.equal(mismatch.equivalent, false);
+  assert.equal(mismatch.counterexample, "b");
 });
 
 test("reports an unmatched parenthesis with a useful column", () => {

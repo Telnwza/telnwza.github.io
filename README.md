@@ -98,7 +98,7 @@ This keeps the site compatible with GitHub Pages project URLs and direct browser
 
 ## Current Available Tools
 
-- Automata Studio: DFA, NFA, epsilon-NFA, PDA, and Turing Machine creation and simulation, including Regular Expression output as a minimal DFA, compact epsilon-free NFA, or Thompson epsilon-NFA, plus DFA/NFA generation from transition equations.
+- Automata Studio: DFA, NFA, epsilon-NFA, PDA, and Turing Machine creation and simulation, including Regular Expression output as a minimal DFA, compact epsilon-free NFA, or Thompson epsilon-NFA, DFA/NFA generation from transition equations, and exact Canvas automata-to-Regex language equivalence checking with shortest counterexamples.
 - Vector Addition Visualizer: 2D and 3D vector addition, resultant vectors, magnitude, ordering, import/export, and local browser saving.
 - Logic Gates Lab: drag-and-drop combinational circuits, live signal simulation, circuit-to-truth-table analysis, Boolean equation parsing and minimization, truth-table-to-circuit synthesis, presets, autosave, and JSON/image/table export.
 
@@ -121,6 +121,16 @@ node --test automata/automata-equation.test.js
 ```
 
 The tests cover Thompson epsilon-NFA generation, compact position-NFA construction, subset construction, minimal DFA generation, language equivalence, Regular Expression syntax errors, DFA/NFA transition definitions, parallel-transition merging, and automatic state layout.
+
+### Check a Drawn Automaton Against a Regex
+
+1. Open Automata Studio and choose DFA or NFA.
+2. Draw the states and transitions, then mark exactly one Initial state and any Final states.
+3. Open the `ตรวจ Regex` analysis tab.
+4. Enter a Regular Expression such as `(0|1)*01`.
+5. Select `ตรวจคำตอบ`.
+
+The checker proves equivalence over all strings. When the languages differ, it reports the shortest counterexample and whether the drawn automaton and the Regular Expression accept or reject it.
 
 All three simulators share a focus-first shell with an auto-hiding top bar, collapsible tool/analysis panels, Focus Mode, progressive disclosure for advanced controls, and consistent shortcuts.
 

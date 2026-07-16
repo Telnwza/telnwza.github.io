@@ -79,6 +79,12 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid 
 .equation-advanced-body{padding:0 12px 12px}
 .equation-advanced-body textarea{min-height:210px;font-size:13px}
 .equation-code-help{margin:8px 0 0;padding:9px;white-space:pre-wrap;color:var(--muted);background:#0b1220;border:1px solid var(--line);border-radius:8px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.compare-guide{margin:8px 0 12px;padding:9px 10px;color:#bfdbfe;background:#0b1f3a;border:1px solid #1e3a8a;border-radius:8px;font-size:12px;line-height:1.5}
+.compare-guide ol{margin:5px 0 0;padding-left:20px}
+.compare-result{margin-top:10px}
+.compare-result.match{color:#bbf7d0;border-color:#166534;background:#071b14}
+.compare-result.mismatch{color:#fecaca;border-color:#7f1d1d;background:#210b10}
+.compare-result.error{color:#fde68a;border-color:#92400e;background:#211407}
 button:disabled{opacity:.48;cursor:not-allowed}
 kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 5px;font-size:11px}
 @media(max-width:1150px){.workspace{grid-template-columns:1fr}.panel{overflow:visible}.canvas-shell{min-height:560px}}
@@ -208,6 +214,7 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
     <aside class="panel">
       <div class="tabs">
         <button class="tab active" data-tab="simulate">จำลอง</button>
+        <button class="tab" data-tab="compare">ตรวจ Regex</button>
         <button class="tab" data-tab="formal">สมการ</button>
         <button class="tab" data-tab="members">สมาชิก</button>
       </div>
@@ -227,6 +234,29 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
 
         <h3>Validation</h3>
         <div id="validation" class="result">ยังไม่ได้ตรวจ</div>
+      </section>
+
+      <section id="tab-compare" class="hidden">
+        <h2>ตรวจรูปกับ Regular Expression</h2>
+        <div class="compare-guide">
+          ใช้ตรวจว่า DFA, NFA หรือ ε-NFA ที่วาดยอมรับภาษาเดียวกับ Regex หรือไม่
+          <ol>
+            <li>วาด Automata และกำหนด Initial/Final state</li>
+            <li>ใส่ Regex ที่ต้องการ</li>
+            <li>กด “ตรวจคำตอบ”</li>
+          </ol>
+        </div>
+        <label for="compareRegexInput">Regular Expression ที่ต้องการเทียบ</label>
+        <input id="compareRegexInput" spellcheck="false" placeholder="เช่น (0|1)*01">
+        <div class="equation-examples" style="margin-top:8px">
+          <button type="button" data-compare-regex="(0|1)*01">ลงท้ายด้วย 01</button>
+          <button type="button" data-compare-regex="(0|1)*001(0|1)*">มี 001</button>
+          <button type="button" data-compare-regex="a*b">a* แล้วตามด้วย b</button>
+        </div>
+        <button id="compareRegexBtn" class="primary" style="width:100%;margin-top:10px">ตรวจคำตอบ</button>
+        <div id="compareRegexResult" class="result compare-result" aria-live="polite">ยังไม่ได้ตรวจ</div>
+        <button id="tryCounterexampleBtn" class="hidden" style="width:100%;margin-top:8px">ลองรัน Counterexample บนรูปที่วาด</button>
+        <p class="small" style="margin-top:10px">ระบบตรวจเชิงคณิตศาสตร์ทุกสตริง หากไม่ตรงจะแสดงสตริงสั้นที่สุดที่ให้ผลต่างกัน</p>
       </section>
 
       <section id="tab-formal" class="hidden">
@@ -342,7 +372,7 @@ const $=id=>document.getElementById(id);
 const svg=$('canvas'), viewport=$('viewport'), statesLayer=$('statesLayer'), edgesLayer=$('edgesLayer');
 
 let states=[],edges=[],selected=null,tool='select',connectFrom=null,drag=null,counter=0;
-let history=[],future=[],sim=null;
+let history=[],future=[],sim=null,lastCounterexample=null,lastComparisonSignature=null;
 const EPS=['ε','eps','epsilon','λ'];
 
 function type(){return $('machineType').value}
@@ -403,6 +433,7 @@ function render(){
   for(const e of edges)drawEdge(e);
   for(const s of states)drawState(s);
   syncInspector();refreshAnalysis();
+  if(lastComparisonSignature&&lastComparisonSignature!==languageSignature())resetCompareResult();
   $('countInfo').textContent=`${states.length} states, ${edges.length} transitions`;
 }
 function drawEdge(e){
@@ -767,6 +798,104 @@ function runCurrent(){
 $('runBtn').onclick=runCurrent;
 $('stepBtn').onclick=()=>{runCurrent();$('status').textContent='Step mode แบบละเอียดจะเพิ่มในเวอร์ชันถัดไป; ตอนนี้แสดง trace ทุก step แล้ว'};
 
+function canvasLanguageModel(){
+  if(type()!=='DFA'&&type()!=='NFA')throw new Error('ตรวจได้เฉพาะ DFA, NFA และ ε-NFA เท่านั้น');
+  if(!states.length)throw new Error('ยังไม่มี state บน Canvas');
+  const initial=states.filter(state=>state.initial);
+  if(initial.length!==1)throw new Error('ต้องกำหนด Initial state ให้มีเพียง 1 state');
+  const transitions=[],symbols=[...alphabet()],symbolSet=new Set(symbols);
+  for(const edge of edges){
+    const labels=parseFAEdge(edge.label);
+    if(!labels.length)throw new Error('มี transition ที่ยังไม่ได้ใส่ label');
+    for(const rawLabel of labels){
+      const label=EPS.includes(rawLabel)?AutomataEquation.EPSILON:rawLabel;
+      if(label!==AutomataEquation.EPSILON&&Array.from(label).length!==1){
+        throw new Error(`Transition "${rawLabel}" ต้องเป็นอักขระเดียว`);
+      }
+      if(label!==AutomataEquation.EPSILON&&!symbolSet.has(label)){
+        symbolSet.add(label);symbols.push(label)
+      }
+      transitions.push({from:edge.from,to:edge.to,label})
+    }
+  }
+  return{
+    sourceKind:'canvas',
+    type:type(),
+    alphabet:symbols,
+    states:states.map(state=>state.id),
+    initial:initial[0].id,
+    finals:states.filter(state=>state.final).map(state=>state.id),
+    transitions
+  }
+}
+function languageSignature(){
+  return JSON.stringify({
+    type:type(),alphabet:$('alphabet').value,
+    states:states.map(({id,initial,final})=>({id,initial,final})),
+    edges:edges.map(({from,to,label})=>({from,to,label}))
+  })
+}
+function resetCompareResult(){
+  lastCounterexample=null;
+  lastComparisonSignature=null;
+  $('tryCounterexampleBtn').classList.add('hidden');
+  $('compareRegexResult').classList.remove('match','mismatch','error');
+  $('compareRegexResult').textContent='Regex หรือรูปเปลี่ยนแล้ว กด “ตรวจคำตอบ” อีกครั้ง'
+}
+function compareCanvasWithRegex(){
+  const resultBox=$('compareRegexResult');
+  resultBox.classList.remove('match','mismatch','error');
+  $('tryCounterexampleBtn').classList.add('hidden');
+  lastCounterexample=null;
+  try{
+    const expression=$('compareRegexInput').value.trim();
+    if(!expression)throw new Error('กรุณาใส่ Regular Expression ที่ต้องการเทียบ');
+    const canvasModel=canvasLanguageModel();
+    const regexModel=AutomataEquation.regexToPositionNfa(expression);
+    const result=AutomataEquation.compareLanguages(canvasModel,regexModel);
+    lastComparisonSignature=languageSignature();
+    const alphabetText=result.alphabet.join(', ')||'∅';
+    if(result.equivalent){
+      resultBox.classList.add('match');
+      resultBox.textContent=`✓ ตรงกัน
+รูปที่วาดและ Regex ยอมรับภาษาเดียวกันสำหรับทุกสตริง
+Alphabet: {${alphabetText}}
+ตรวจแล้ว ${result.exploredPairs} state pairs
+รูปที่วาดเมื่อแปลงเป็น DFA: ${result.leftDfaStates} states
+Regex เมื่อแปลงเป็น DFA: ${result.rightDfaStates} states`;
+      $('status').textContent='รูปที่วาดตรงกับ Regular Expression'
+    }else{
+      const word=result.counterexample===''?'ε':result.counterexample;
+      resultBox.classList.add('mismatch');
+      resultBox.textContent=`✕ ไม่ตรงกัน
+ตัวอย่างสั้นที่สุดที่ให้ผลต่างกัน: ${word}
+รูปที่วาด: ${result.leftAccepted?'ACCEPT':'REJECT'}
+Regex: ${result.rightAccepted?'ACCEPT':'REJECT'}
+Alphabet: {${alphabetText}}`;
+      lastCounterexample=result.counterexample;
+      $('tryCounterexampleBtn').textContent=`ลองรัน ${word} บนรูปที่วาด`;
+      $('tryCounterexampleBtn').classList.remove('hidden');
+      $('status').textContent=`ไม่ตรงกัน พบ counterexample: ${word}`
+    }
+  }catch(error){
+    resultBox.classList.add('error');
+    resultBox.textContent='ตรวจไม่ได้: '+error.message;
+    $('status').textContent='ยังตรวจ Regex ไม่สำเร็จ'
+  }
+}
+$('compareRegexBtn').onclick=compareCanvasWithRegex;
+$('compareRegexInput').oninput=resetCompareResult;
+document.querySelectorAll('[data-compare-regex]').forEach(button=>button.onclick=()=>{
+  $('compareRegexInput').value=button.dataset.compareRegex;
+  resetCompareResult();$('compareRegexInput').focus()
+});
+$('tryCounterexampleBtn').onclick=()=>{
+  if(lastCounterexample===null)return;
+  $('testInput').value=lastCounterexample;
+  document.querySelector('.tab[data-tab="simulate"]').click();
+  runCurrent()
+};
+
 function allStrings(A,n){const out=[''];let lv=[''];for(let k=1;k<=n;k++){const nx=[];for(const p of lv)for(const c of A)nx.push(p+c);out.push(...nx);lv=nx}return out}
 function refreshAnalysis(){
   const A=alphabet(),Q=states.map(s=>s.name),F=states.filter(s=>s.final).map(s=>s.name),init=states.find(s=>s.initial);
@@ -820,7 +949,7 @@ document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>preset(b.dat
 
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
-  ['simulate','formal','members'].forEach(t=>$('tab-'+t).classList.toggle('hidden',b.dataset.tab!==t))
+  ['simulate','compare','formal','members'].forEach(t=>$('tab-'+t).classList.toggle('hidden',b.dataset.tab!==t))
 });
 
 $('saveBtn').onclick=()=>{localStorage.setItem('automataStudioSave',JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value}));$('status').textContent='บันทึกใน browser แล้ว'};

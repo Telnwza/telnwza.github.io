@@ -636,6 +636,133 @@
     return minimizeDfa(dfa);
   }
 
+  function compareLanguages(leftModel, rightModel, options = {}) {
+    function expandedModel(model, side) {
+      if (!model || !Array.isArray(model.states) || !model.states.length) {
+        throw new EquationSyntaxError(`${side} ยังไม่มี state`);
+      }
+      if (!model.initial || !model.states.includes(model.initial)) {
+        throw new EquationSyntaxError(`${side} ไม่มี Initial state ที่ถูกต้อง`);
+      }
+
+      const transitions = [];
+      const alphabet = [];
+      const alphabetSet = new Set();
+      const addSymbol = (symbol) => {
+        const normalized = normalizeEpsilon(symbol);
+        if (!normalized || normalized === EPSILON || alphabetSet.has(normalized)) return;
+        if (Array.from(normalized).length !== 1 || normalized === ",") {
+          throw new EquationSyntaxError(
+            `${side} ใช้สัญลักษณ์ "${normalized}" ที่ไม่ใช่อักขระเดียว`,
+          );
+        }
+        alphabetSet.add(normalized);
+        alphabet.push(normalized);
+      };
+
+      (model.alphabet || []).forEach(addSymbol);
+      (model.transitions || []).forEach(({ from, to, label }) => {
+        if (!model.states.includes(from) || !model.states.includes(to)) {
+          throw new EquationSyntaxError(`${side} มี transition ที่อ้างถึง state ที่ไม่มีอยู่`);
+        }
+        String(label || "")
+          .split(",")
+          .map((item) => normalizeEpsilon(item))
+          .filter(Boolean)
+          .forEach((symbol) => {
+            if (symbol !== EPSILON) addSymbol(symbol);
+            transitions.push({ from, to, label: symbol });
+          });
+      });
+
+      return {
+        ...model,
+        type: model.type === "DFA" ? "DFA" : "NFA",
+        alphabet,
+        transitions,
+        finals: (model.finals || []).filter((state) => model.states.includes(state)),
+      };
+    }
+
+    const left = expandedModel(leftModel, "Automata A");
+    const right = expandedModel(rightModel, "Automata B");
+    const alphabet = [];
+    const alphabetSet = new Set();
+    [...left.alphabet, ...right.alphabet].forEach((symbol) => {
+      if (!alphabetSet.has(symbol)) {
+        alphabetSet.add(symbol);
+        alphabet.push(symbol);
+      }
+    });
+
+    const maxDfaStates = Number(options.maxDfaStates || 512);
+    const leftDfa = determinizeNfa({ ...left, alphabet }, { maxStates: maxDfaStates });
+    const rightDfa = determinizeNfa({ ...right, alphabet }, { maxStates: maxDfaStates });
+    const leftFinals = new Set(leftDfa.finals);
+    const rightFinals = new Set(rightDfa.finals);
+    const leftTransitions = new Map(
+      leftDfa.transitions.map(({ from, to, label }) => [`${from}\u0000${label}`, to]),
+    );
+    const rightTransitions = new Map(
+      rightDfa.transitions.map(({ from, to, label }) => [`${from}\u0000${label}`, to]),
+    );
+
+    const startKey = `${leftDfa.initial}\u0001${rightDfa.initial}`;
+    const queue = [{
+      left: leftDfa.initial,
+      right: rightDfa.initial,
+      word: "",
+    }];
+    let queueIndex = 0;
+    const seen = new Set([startKey]);
+    const maxPairs = Number(options.maxPairs || 100000);
+
+    while (queueIndex < queue.length) {
+      const current = queue[queueIndex++];
+      const leftAccepted = leftFinals.has(current.left);
+      const rightAccepted = rightFinals.has(current.right);
+      if (leftAccepted !== rightAccepted) {
+        return {
+          equivalent: false,
+          counterexample: current.word,
+          leftAccepted,
+          rightAccepted,
+          alphabet,
+          exploredPairs: seen.size,
+          leftDfaStates: leftDfa.states.length,
+          rightDfaStates: rightDfa.states.length,
+        };
+      }
+
+      alphabet.forEach((symbol) => {
+        const nextLeft = leftTransitions.get(`${current.left}\u0000${symbol}`);
+        const nextRight = rightTransitions.get(`${current.right}\u0000${symbol}`);
+        const key = `${nextLeft}\u0001${nextRight}`;
+        if (seen.has(key)) return;
+        if (seen.size >= maxPairs) {
+          throw new EquationSyntaxError(
+            `การเปรียบเทียบซับซ้อนเกินขีดจำกัด ${maxPairs} state pairs`,
+          );
+        }
+        seen.add(key);
+        queue.push({
+          left: nextLeft,
+          right: nextRight,
+          word: current.word + symbol,
+        });
+      });
+    }
+
+    return {
+      equivalent: true,
+      counterexample: null,
+      alphabet,
+      exploredPairs: seen.size,
+      leftDfaStates: leftDfa.states.length,
+      rightDfaStates: rightDfa.states.length,
+    };
+  }
+
   function splitList(value) {
     const cleaned = String(value || "")
       .trim()
@@ -898,6 +1025,7 @@
   return {
     EPSILON,
     EquationSyntaxError,
+    compareLanguages,
     layoutAutomaton,
     mergeParallelTransitions,
     determinizeNfa,
