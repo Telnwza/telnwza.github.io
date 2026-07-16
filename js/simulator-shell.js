@@ -21,7 +21,7 @@
       defaultRight: false,
       tips: [
         "ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state ได้ทันที",
-        "กด Regex → Automata แล้วเลือกตัวอย่าง เพื่อสร้าง ε-NFA โดยไม่ต้องวาดเอง",
+        "กด Regex → Automata แล้วเลือกตัวอย่าง เพื่อสร้าง Minimal DFA ที่ใช้ state น้อยสุด",
         "เลือก state หรือ transition แล้วตัวแก้ไขที่เกี่ยวข้องจึงจะแสดง",
         "กด Shift ค้างแล้วเลือก state สองตัวเพื่อสร้าง transition",
       ],

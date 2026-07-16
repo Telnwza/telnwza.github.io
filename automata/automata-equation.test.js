@@ -3,11 +3,72 @@ const assert = require("node:assert/strict");
 
 const {
   EPSILON,
+  determinizeNfa,
   layoutAutomaton,
   mergeParallelTransitions,
+  minimizeDfa,
   parseTransitionEquations,
+  regexToMinimalDfa,
   regexToNfa,
 } = require("./automata-equation.js");
+
+function runDfa(model, input) {
+  const transitions = new Map(
+    model.transitions.map(({ from, to, label }) => [`${from}\u0000${label}`, to]),
+  );
+  let state = model.initial;
+  for (const symbol of input) {
+    state = transitions.get(`${state}\u0000${symbol}`);
+    if (state === undefined) return false;
+  }
+  return model.finals.includes(state);
+}
+
+function runNfa(model, input) {
+  const transitions = new Map();
+  model.transitions.forEach(({ from, to, label }) => {
+    const key = `${from}\u0000${label}`;
+    if (!transitions.has(key)) transitions.set(key, []);
+    transitions.get(key).push(to);
+  });
+  function closure(inputStates) {
+    const stack = [...inputStates];
+    const seen = new Set(inputStates);
+    while (stack.length) {
+      const state = stack.pop();
+      (transitions.get(`${state}\u0000${EPSILON}`) || []).forEach((to) => {
+        if (!seen.has(to)) {
+          seen.add(to);
+          stack.push(to);
+        }
+      });
+    }
+    return seen;
+  }
+  let current = closure([model.initial]);
+  for (const symbol of input) {
+    const next = new Set();
+    current.forEach((state) => {
+      (transitions.get(`${state}\u0000${symbol}`) || []).forEach((to) => next.add(to));
+    });
+    current = closure(next);
+  }
+  return [...current].some((state) => model.finals.includes(state));
+}
+
+function stringsUpTo(alphabet, maxLength) {
+  const output = [""];
+  let level = [""];
+  for (let length = 1; length <= maxLength; length += 1) {
+    const next = [];
+    level.forEach((prefix) => {
+      alphabet.forEach((symbol) => next.push(prefix + symbol));
+    });
+    output.push(...next);
+    level = next;
+  }
+  return output;
+}
 
 test("converts a regular expression to a Thompson epsilon-NFA", () => {
   const model = regexToNfa("(0|1)*01");
@@ -25,6 +86,74 @@ test("supports plus, optional, escaped operators, and epsilon", () => {
 
   assert.deepEqual(model.alphabet, ["a", "?"]);
   assert.ok(model.transitions.some((transition) => transition.label === EPSILON));
+});
+
+test("creates the three-state minimal DFA for binary strings ending in 01", () => {
+  const model = regexToMinimalDfa("(0|1)*01");
+
+  assert.equal(model.type, "DFA");
+  assert.equal(model.states.length, 3);
+  assert.equal(model.optimization.thompsonStates, 12);
+  assert.ok(model.optimization.subsetStates >= model.states.length);
+  assert.equal(model.optimization.minimizedStates, 3);
+  assert.equal(model.transitions.length, 6);
+
+  const samples = new Map([
+    ["", false],
+    ["01", true],
+    ["101", true],
+    ["0101", true],
+    ["010", false],
+    ["11", false],
+  ]);
+  samples.forEach((accepted, input) => assert.equal(runDfa(model, input), accepted, input));
+});
+
+test("minimizes star and epsilon expressions to one state", () => {
+  const star = regexToMinimalDfa("a*");
+  const epsilon = regexToMinimalDfa("ε");
+
+  assert.equal(star.states.length, 1);
+  assert.equal(star.finals.length, 1);
+  assert.equal(runDfa(star, ""), true);
+  assert.equal(runDfa(star, "aaaa"), true);
+  assert.equal(epsilon.states.length, 1);
+  assert.equal(runDfa(epsilon, ""), true);
+});
+
+test("adds and preserves the required dead state in a complete minimal DFA", () => {
+  const model = regexToMinimalDfa("a|b");
+
+  assert.equal(model.states.length, 3);
+  assert.equal(model.transitions.length, 6);
+  assert.equal(runDfa(model, "a"), true);
+  assert.equal(runDfa(model, "b"), true);
+  assert.equal(runDfa(model, "aa"), false);
+});
+
+test("determinizes and minimizes a transition model independently", () => {
+  const nfa = regexToNfa("(a|b)*a");
+  const dfa = determinizeNfa(nfa);
+  const minimized = minimizeDfa(dfa);
+
+  assert.equal(dfa.type, "DFA");
+  assert.equal(minimized.states.length, 2);
+  assert.equal(runDfa(minimized, "bba"), true);
+  assert.equal(runDfa(minimized, "bbb"), false);
+});
+
+test("minimal DFAs preserve the Thompson NFA language", () => {
+  ["(0|1)*01", "(a|b)+", "a?b*", "(ab|ba)*"].forEach((expression) => {
+    const nfa = regexToNfa(expression);
+    const minimal = regexToMinimalDfa(expression);
+    stringsUpTo(nfa.alphabet, 4).forEach((input) => {
+      assert.equal(
+        runDfa(minimal, input),
+        runNfa(nfa, input),
+        `${expression} on ${input || "ε"}`,
+      );
+    });
+  });
 });
 
 test("reports an unmatched parenthesis with a useful column", () => {

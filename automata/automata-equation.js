@@ -287,6 +287,245 @@
     };
   }
 
+  function determinizeNfa(model, options = {}) {
+    const maxStates = Number(options.maxStates || 256);
+    const stateOrder = new Map(model.states.map((state, index) => [state, index]));
+    const transitionMap = new Map();
+
+    model.transitions.forEach(({ from, to, label }) => {
+      const key = `${from}\u0000${label}`;
+      if (!transitionMap.has(key)) transitionMap.set(key, []);
+      transitionMap.get(key).push(to);
+    });
+
+    function epsilonClosure(inputStates) {
+      const stack = [...inputStates];
+      const seen = new Set(inputStates);
+      while (stack.length) {
+        const state = stack.pop();
+        (transitionMap.get(`${state}\u0000${EPSILON}`) || []).forEach((destination) => {
+          if (!seen.has(destination)) {
+            seen.add(destination);
+            stack.push(destination);
+          }
+        });
+      }
+      return [...seen].sort((a, b) => (stateOrder.get(a) ?? 0) - (stateOrder.get(b) ?? 0));
+    }
+
+    function subsetKey(subset) {
+      return subset.join("\u0001");
+    }
+
+    const subsets = [];
+    const namesByKey = new Map();
+    const queue = [];
+
+    function addSubset(subset) {
+      const key = subsetKey(subset);
+      if (namesByKey.has(key)) return namesByKey.get(key);
+      if (subsets.length >= maxStates) {
+        throw new EquationSyntaxError(
+          `Regex นี้สร้าง DFA มากเกินขีดจำกัด ${maxStates} states กรุณาลดความซับซ้อน`,
+        );
+      }
+      const name = `d${subsets.length}`;
+      const item = { name, states: subset };
+      subsets.push(item);
+      namesByKey.set(key, name);
+      queue.push(item);
+      return name;
+    }
+
+    const startSubset = epsilonClosure([model.initial]);
+    const initial = addSubset(startSubset);
+    const transitions = [];
+
+    while (queue.length) {
+      const current = queue.shift();
+      model.alphabet.forEach((symbol) => {
+        const destinations = new Set();
+        current.states.forEach((state) => {
+          (transitionMap.get(`${state}\u0000${symbol}`) || [])
+            .forEach((destination) => destinations.add(destination));
+        });
+        const nextSubset = epsilonClosure([...destinations]);
+        const to = addSubset(nextSubset);
+        transitions.push({ from: current.name, to, label: symbol });
+      });
+    }
+
+    const finalSet = new Set(model.finals);
+    return {
+      sourceKind: model.sourceKind,
+      type: "DFA",
+      alphabet: [...model.alphabet],
+      states: subsets.map(({ name }) => name),
+      initial,
+      finals: subsets
+        .filter(({ states }) => states.some((state) => finalSet.has(state)))
+        .map(({ name }) => name),
+      transitions,
+      warnings: [],
+      expression: model.expression,
+      optimization: {
+        thompsonStates: model.states.length,
+        subsetStates: subsets.length,
+      },
+    };
+  }
+
+  function minimizeDfa(model) {
+    if (model.type !== "DFA") {
+      throw new EquationSyntaxError("ต้องแปลงเป็น DFA ก่อนจึงจะลดจำนวน state ได้");
+    }
+
+    const states = [...model.states];
+    const stateSet = new Set(states);
+    const transitionMap = new Map();
+
+    model.transitions.forEach(({ from, to, label }) => {
+      const key = `${from}\u0000${label}`;
+      if (transitionMap.has(key) && transitionMap.get(key) !== to) {
+        throw new EquationSyntaxError(`DFA มี transition ซ้ำที่ δ(${from},${label})`);
+      }
+      transitionMap.set(key, to);
+      stateSet.add(from);
+      stateSet.add(to);
+    });
+
+    let sinkName = "__sink__";
+    while (stateSet.has(sinkName)) sinkName += "_";
+    let needsSink = false;
+    [...stateSet].forEach((state) => {
+      model.alphabet.forEach((symbol) => {
+        if (!transitionMap.has(`${state}\u0000${symbol}`)) needsSink = true;
+      });
+    });
+    if (needsSink) {
+      stateSet.add(sinkName);
+      model.alphabet.forEach((symbol) => {
+        transitionMap.set(`${sinkName}\u0000${symbol}`, sinkName);
+      });
+      [...stateSet].forEach((state) => {
+        model.alphabet.forEach((symbol) => {
+          const key = `${state}\u0000${symbol}`;
+          if (!transitionMap.has(key)) transitionMap.set(key, sinkName);
+        });
+      });
+    }
+
+    const reachable = new Set([model.initial]);
+    const queue = [model.initial];
+    while (queue.length) {
+      const state = queue.shift();
+      model.alphabet.forEach((symbol) => {
+        const destination = transitionMap.get(`${state}\u0000${symbol}`);
+        if (destination !== undefined && !reachable.has(destination)) {
+          reachable.add(destination);
+          queue.push(destination);
+        }
+      });
+    }
+
+    const finalSet = new Set(model.finals.filter((state) => reachable.has(state)));
+    const accepting = [...reachable].filter((state) => finalSet.has(state));
+    const rejecting = [...reachable].filter((state) => !finalSet.has(state));
+    let partitions = [accepting, rejecting].filter((partition) => partition.length);
+
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const partitionIndex = new Map();
+      partitions.forEach((partition, index) => {
+        partition.forEach((state) => partitionIndex.set(state, index));
+      });
+      const refined = [];
+
+      partitions.forEach((partition) => {
+        const groups = new Map();
+        partition.forEach((state) => {
+          const signature = model.alphabet.map((symbol) => {
+            const destination = transitionMap.get(`${state}\u0000${symbol}`);
+            return partitionIndex.get(destination);
+          }).join(",");
+          if (!groups.has(signature)) groups.set(signature, []);
+          groups.get(signature).push(state);
+        });
+        if (groups.size > 1) changed = true;
+        refined.push(...groups.values());
+      });
+      partitions = refined;
+    }
+
+    const blockOf = new Map();
+    partitions.forEach((partition, index) => {
+      partition.forEach((state) => blockOf.set(state, index));
+    });
+    const initialBlock = blockOf.get(model.initial);
+    const orderedBlocks = [];
+    const seenBlocks = new Set([initialBlock]);
+    const blockQueue = [initialBlock];
+
+    while (blockQueue.length) {
+      const block = blockQueue.shift();
+      orderedBlocks.push(block);
+      const representative = partitions[block][0];
+      model.alphabet.forEach((symbol) => {
+        const destination = transitionMap.get(`${representative}\u0000${symbol}`);
+        const destinationBlock = blockOf.get(destination);
+        if (!seenBlocks.has(destinationBlock)) {
+          seenBlocks.add(destinationBlock);
+          blockQueue.push(destinationBlock);
+        }
+      });
+    }
+
+    partitions.forEach((_, index) => {
+      if (!seenBlocks.has(index)) orderedBlocks.push(index);
+    });
+
+    const nameByBlock = new Map(
+      orderedBlocks.map((block, index) => [block, `q${index}`]),
+    );
+    const minimizedTransitions = [];
+    orderedBlocks.forEach((block) => {
+      const representative = partitions[block][0];
+      model.alphabet.forEach((symbol) => {
+        const destination = transitionMap.get(`${representative}\u0000${symbol}`);
+        minimizedTransitions.push({
+          from: nameByBlock.get(block),
+          to: nameByBlock.get(blockOf.get(destination)),
+          label: symbol,
+        });
+      });
+    });
+
+    return {
+      sourceKind: "minimal-dfa",
+      type: "DFA",
+      alphabet: [...model.alphabet],
+      states: orderedBlocks.map((block) => nameByBlock.get(block)),
+      initial: nameByBlock.get(initialBlock),
+      finals: orderedBlocks
+        .filter((block) => partitions[block].some((state) => finalSet.has(state)))
+        .map((block) => nameByBlock.get(block)),
+      transitions: minimizedTransitions,
+      warnings: [],
+      expression: model.expression,
+      optimization: {
+        ...(model.optimization || {}),
+        minimizedStates: orderedBlocks.length,
+      },
+    };
+  }
+
+  function regexToMinimalDfa(source, options = {}) {
+    const nfa = regexToNfa(source);
+    const dfa = determinizeNfa(nfa, options);
+    return minimizeDfa(dfa);
+  }
+
   function splitList(value) {
     const cleaned = String(value || "")
       .trim()
@@ -551,7 +790,10 @@
     EquationSyntaxError,
     layoutAutomaton,
     mergeParallelTransitions,
+    determinizeNfa,
+    minimizeDfa,
     parseTransitionEquations,
+    regexToMinimalDfa,
     regexToNfa,
   };
 });

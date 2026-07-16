@@ -63,6 +63,11 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid 
 .equation-guide div{min-width:0;padding:8px;background:#0b1220;border:1px solid var(--line);border-radius:8px}
 .equation-guide code{display:block;margin-bottom:3px;color:#bfdbfe;font-size:15px;font-weight:800}
 .equation-guide span{display:block;color:var(--muted);font-size:11px;line-height:1.35}
+.equation-output-choice{margin-top:12px;padding:10px;background:#0b1f3a;border:1px solid #1e3a8a;border-radius:9px}
+.equation-output-choice label{display:flex;align-items:flex-start;gap:9px;margin:0;color:#e5e7eb;font-size:13px;cursor:pointer}
+.equation-output-choice input{width:auto;margin:3px 0 0;accent-color:var(--accent2)}
+.equation-output-choice strong,.equation-output-choice span{display:block}
+.equation-output-choice span{margin-top:2px;color:#bfdbfe;font-size:11px;line-height:1.4}
 .equation-feedback{min-height:44px;margin-top:12px;display:flex;align-items:center}
 .equation-feedback.ready{color:#bbf7d0;border-color:#166534;background:#071b14}
 .equation-feedback.bad{color:#fecaca;border-color:#7f1d1d;background:#210b10}
@@ -261,7 +266,7 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
     <div class="equation-heading">
       <div>
         <h2 id="equationModalTitle">สร้าง Automata จาก Regex</h2>
-        <p>พิมพ์รูปแบบของคำที่ต้องการ แล้วระบบจะสร้าง ε-NFA ให้ทันที</p>
+        <p>พิมพ์รูปแบบของคำที่ต้องการ แล้วระบบจะสร้าง DFA ที่ใช้ state น้อยสุด</p>
       </div>
       <button id="closeEquation" aria-label="ปิด">ปิด</button>
     </div>
@@ -289,10 +294,20 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
       <div><code>ε</code><span>คำว่าง ไม่อ่านตัวอักษร</span></div>
     </div>
 
+    <div class="equation-output-choice">
+      <label for="minimizeRegex">
+        <input id="minimizeRegex" type="checkbox" checked>
+        <span>
+          <strong>ใช้ state น้อยสุด (แนะนำ)</strong>
+          <span>สร้าง Minimal DFA โดยแปลง NFA → DFA แล้วรวม state ที่ทำงานเหมือนกัน</span>
+        </span>
+      </label>
+    </div>
+
     <div id="regexFeedback" class="result equation-feedback" aria-live="polite">พิมพ์ Regex หรือเลือกตัวอย่างด้านบน</div>
     <div class="equation-primary-action">
       <p id="equationReplaceNotice" class="small"></p>
-      <button id="generateRegex" class="primary" disabled>สร้าง ε-NFA</button>
+      <button id="generateRegex" class="primary" disabled>สร้าง Minimal DFA</button>
     </div>
 
     <details id="transitionAdvanced" class="equation-advanced">
@@ -491,19 +506,37 @@ function setEquationFeedback(id,message,state=''){
 }
 function validateRegex(){
   const input=$('regexInput').value.trim();
+  const minimize=$('minimizeRegex').checked;
+  $('generateRegex').textContent=minimize?'สร้าง Minimal DFA':'สร้าง ε-NFA';
   if(!input){
     $('generateRegex').disabled=true;
     setEquationFeedback('regexFeedback','พิมพ์ Regex หรือเลือกตัวอย่างด้านบน');
     return null
   }
   try{
-    const model=AutomataEquation.regexToNfa(input);
+    const nfa=AutomataEquation.regexToNfa(input);
+    const minimal=AutomataEquation.minimizeDfa(AutomataEquation.determinizeNfa(nfa));
+    const model=minimize?minimal:nfa;
     $('generateRegex').disabled=false;
-    setEquationFeedback(
-      'regexFeedback',
-      `✓ พร้อมสร้าง ε-NFA · ${model.states.length} states · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
-      'ready'
-    );
+    if(minimize){
+      const reduced=nfa.states.length-minimal.states.length;
+      const comparison=reduced>0
+        ?`ลดจาก ${nfa.states.length} เหลือ ${minimal.states.length} states (ลด ${reduced})`
+        :minimal.states.length===nfa.states.length
+          ?`ใช้ ${minimal.states.length} states เท่ากับ ε-NFA`
+          :`Minimal DFA ใช้ ${minimal.states.length} states · ε-NFA ใช้ ${nfa.states.length}`;
+      setEquationFeedback(
+        'regexFeedback',
+        `✓ พร้อมสร้าง Minimal DFA · ${comparison} · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
+        'ready'
+      )
+    }else{
+      setEquationFeedback(
+        'regexFeedback',
+        `✓ พร้อมสร้าง ε-NFA · ${nfa.states.length} states · เหมาะสำหรับดูขั้นตอน Thompson`,
+        'ready'
+      )
+    }
     return model
   }catch(error){
     $('generateRegex').disabled=true;
@@ -567,14 +600,17 @@ function generateEquationModel(model){
     counter=nextStateCounter(model.states);selected=null;connectFrom=null;sim=null
   });
   closeEquationModal();
-  $('status').textContent=model.sourceKind==='regex'
-    ?'สร้าง ε-NFA จาก Regex แล้ว'
-    :`สร้าง ${model.type} จาก Transition equations แล้ว`
+  $('status').textContent=model.sourceKind==='minimal-dfa'
+    ?`สร้าง Minimal DFA ${model.states.length} states จาก Regex แล้ว`
+    :model.sourceKind==='regex'
+      ?'สร้าง ε-NFA จาก Regex แล้ว'
+      :`สร้าง ${model.type} จาก Transition equations แล้ว`
 }
 $('equationBtn').onclick=openEquationModal;
 $('closeEquation').onclick=closeEquationModal;
 $('equationModal').onclick=event=>{if(event.target===$('equationModal'))closeEquationModal()};
 $('regexInput').oninput=validateRegex;
+$('minimizeRegex').onchange=validateRegex;
 $('transitionInput').oninput=validateTransitions;
 document.querySelectorAll('[data-regex]').forEach(button=>button.onclick=()=>{
   $('regexInput').value=button.dataset.regex;
