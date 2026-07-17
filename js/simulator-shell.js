@@ -8,6 +8,7 @@
     automata: {
       title: "Automata Studio",
       subtitle: "DFA · NFA · PDA · Turing Machine",
+      fixedHeader: true,
       root: ".app",
       workspace: "main.workspace",
       left: "main.workspace > aside:first-of-type",
@@ -82,7 +83,7 @@
   const storageKey = `visualLearningShell:${simulator}`;
   const initialState = readState();
   let state = {
-    headerMode: initialState.headerMode === "always" ? "always" : "auto",
+    headerMode: definition.fixedHeader || initialState.headerMode === "always" ? "always" : "auto",
     leftOpen: typeof initialState.leftOpen === "boolean" ? initialState.leftOpen : definition.defaultLeft,
     rightOpen: typeof initialState.rightOpen === "boolean" ? initialState.rightOpen : definition.defaultRight,
     focus: false,
@@ -153,7 +154,8 @@
   helpButton.type = "button";
   const dashboardLink = create("a", "", "กลับ Dashboard");
   dashboardLink.href = "../";
-  menuPanel.append(separator, modeLabel, modeSelect, helpButton, dashboardLink);
+  if (definition.fixedHeader) menuPanel.append(separator, helpButton, dashboardLink);
+  else menuPanel.append(separator, modeLabel, modeSelect, helpButton, dashboardLink);
 
   const scrim = create("button", "sim-panel-scrim");
   scrim.type = "button";
@@ -209,6 +211,14 @@
   hotZone.addEventListener("pointerenter", showHeader);
   hotZone.addEventListener("click", showHeader);
   canvasRegion.addEventListener("pointerdown", () => queueHide(260), { passive: true });
+  if (simulator === "automata") {
+    const canvasShell = canvasRegion.querySelector(".canvas-shell");
+    canvasShell?.addEventListener("pointermove", (event) => {
+      const bounds = canvasShell.getBoundingClientRect();
+      canvasShell.style.setProperty("--canvas-x", `${event.clientX - bounds.left}px`);
+      canvasShell.style.setProperty("--canvas-y", `${event.clientY - bounds.top}px`);
+    }, { passive: true });
+  }
 
   document.addEventListener("pointermove", (event) => {
     if (event.clientY <= 16) showHeader();

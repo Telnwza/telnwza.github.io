@@ -1,141 +1,98 @@
-const categories = [
-  "All",
-  "Mathematics",
-  "Digital Systems",
-  "Automata",
-  "Embedded Systems",
-  "Programming",
-];
-
 const tools = [
   {
+    number: "01",
     title: "Automata Studio",
-    description: "Create and simulate DFA, NFA, PDA, and Turing Machines.",
+    description: "Build, test, and inspect DFA, NFA, PDA, and Turing Machines.",
     category: "Automata",
     path: "./automata/",
-    tags: ["DFA", "NFA", "PDA", "Turing Machine", "Simulation"],
-    status: "available",
-    recentlyAdded: true,
+    topics: ["DFA", "NFA", "PDA", "Turing Machine", "Simulation"],
   },
   {
-    title: "Vector Addition Visualizer",
-    description: "Explore 2D and 3D vector addition, resultant vectors, magnitude, and head-to-tail geometry.",
+    number: "02",
+    title: "Logic Gates Lab",
+    description: "Compose digital circuits and trace their truth tables and Boolean behavior.",
+    category: "Digital systems",
+    path: "./logic-gates/",
+    topics: ["Logic Gates", "Truth Tables", "Boolean Algebra", "Circuits"],
+  },
+  {
+    number: "03",
+    title: "Vector Addition",
+    description: "Explore magnitude, direction, and composition across two and three dimensions.",
     category: "Mathematics",
     path: "./vectors/",
-    tags: ["Vectors", "2D", "3D", "Resultant", "Geometry"],
-    status: "available",
-    recentlyAdded: true,
-  },
-  {
-    title: "Logic Gates Lab",
-    description: "Build and simulate digital circuits, inspect truth tables, simplify Boolean equations, and synthesize gates from a truth table.",
-    category: "Digital Systems",
-    path: "./logic-gates/",
-    tags: ["Logic Gates", "Truth Tables", "Boolean Algebra", "Circuits"],
-    status: "available",
-    recentlyAdded: true,
+    topics: ["Vectors", "2D", "3D", "Resultant", "Geometry"],
   },
 ];
 
-const state = {
-  query: "",
-  category: "All",
-};
-
-const els = {
-  search: document.querySelector("#tool-search"),
-  filters: document.querySelector("#category-filters"),
-  toolsGrid: document.querySelector("#tools-grid"),
-  recentTools: document.querySelector("#recent-tools"),
-  count: document.querySelector("#tool-count"),
-  empty: document.querySelector("#empty-state"),
-};
+const searchInput = document.querySelector("#tool-search");
+const toolsGrid = document.querySelector("#tools-grid");
+const emptyState = document.querySelector("#empty-state");
+const searchStatus = document.querySelector("#search-status");
 
 function normalize(value) {
   return value.toLowerCase().trim();
 }
 
-function statusLabel(status) {
-  return status === "available" ? "Available" : "Coming Soon";
+function matchesSearch(tool, query) {
+  const searchable = [tool.title, tool.description, tool.category, ...tool.topics].join(" ");
+  return normalize(searchable).includes(normalize(query));
 }
 
-function toolMatches(tool) {
-  const query = normalize(state.query);
-  const inCategory = state.category === "All" || tool.category === state.category;
-  const searchable = normalize([
-    tool.title,
-    tool.description,
-    tool.category,
-    tool.status,
-    ...tool.tags,
-  ].join(" "));
-
-  return inCategory && (!query || searchable.includes(query));
-}
-
-function renderTags(tags) {
-  return tags.map((tag) => `<li class="tag">${tag}</li>`).join("");
-}
-
-function renderCard(tool) {
-  const availableClass = tool.status === "available" ? " available" : "";
-
+function renderTool(tool) {
   return `
-    <article class="tool-card">
-      <div class="card-topline">
-        <span class="category-pill">${tool.category}</span>
-        <span class="status-pill${availableClass}">${statusLabel(tool.status)}</span>
-      </div>
-      <div>
-        <h3>${tool.title}</h3>
-        <p class="card-description">${tool.description}</p>
-      </div>
-      <ul class="tag-list" aria-label="${tool.title} tags">
-        ${renderTags(tool.tags)}
-      </ul>
-      <a class="tool-link" href="${tool.path}">Open Tool</a>
-    </article>
+    <a class="tool-row" href="${tool.path}" data-number="${tool.number}">
+      <span class="tool-number">${tool.number}</span>
+      <span class="tool-main">
+        <span class="tool-category">${tool.category}</span>
+        <strong>${tool.title}</strong>
+        <span class="tool-description">${tool.description}</span>
+      </span>
+      <span class="tool-topics" aria-label="Topics: ${tool.topics.join(", ")}">
+        ${tool.topics.slice(0, 3).map((topic) => `<span>${topic}</span>`).join("")}
+      </span>
+      <span class="tool-open">Open <span aria-hidden="true">→</span></span>
+    </a>
   `;
 }
 
-function renderFilters() {
-  els.filters.innerHTML = categories.map((category) => `
-    <button class="filter-button" type="button" data-category="${category}" aria-pressed="${category === state.category}">
-      ${category}
-    </button>
-  `).join("");
-
-  els.filters.querySelectorAll("button").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.category = button.dataset.category;
-      render();
+function addRowInteractions() {
+  toolsGrid.querySelectorAll(".tool-row").forEach((row) => {
+    row.addEventListener("pointermove", (event) => {
+      const bounds = row.getBoundingClientRect();
+      row.style.setProperty("--pointer-x", `${event.clientX - bounds.left}px`);
+      row.style.setProperty("--pointer-y", `${event.clientY - bounds.top}px`);
     });
   });
 }
 
-function renderToolGrid() {
-  const filtered = tools.filter(toolMatches);
-  els.toolsGrid.innerHTML = filtered.map(renderCard).join("");
-  els.count.textContent = `${filtered.length} of ${tools.length} tools shown`;
-  els.empty.hidden = filtered.length > 0;
-}
-
-function renderRecentlyAdded() {
-  const recent = tools.filter((tool) => tool.recentlyAdded);
-  els.recentTools.innerHTML = recent.length
-    ? recent.map(renderCard).join("")
-    : '<p class="empty-state">No recently added tools yet.</p>';
-}
-
 function render() {
-  renderFilters();
-  renderToolGrid();
-  renderRecentlyAdded();
+  const query = searchInput.value;
+  const filteredTools = tools.filter((tool) => matchesSearch(tool, query));
+  toolsGrid.innerHTML = filteredTools.map(renderTool).join("");
+  emptyState.hidden = filteredTools.length > 0;
+  searchStatus.textContent = query
+    ? `${filteredTools.length} workbench${filteredTools.length === 1 ? "" : "es"} found`
+    : `Showing all ${tools.length} workbenches`;
+  addRowInteractions();
 }
 
-els.search.addEventListener("input", (event) => {
-  state.query = event.target.value;
-  renderToolGrid();
+searchInput.addEventListener("input", render);
+
+document.addEventListener("keydown", (event) => {
+  const active = document.activeElement;
+  const isEditing = active && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName);
+
+  if (event.key === "/" && !isEditing) {
+    event.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  }
+
+  if (event.altKey && /^[1-3]$/.test(event.key) && !isEditing) {
+    const tool = tools[Number(event.key) - 1];
+    if (tool) window.location.href = tool.path;
+  }
 });
 
 render();

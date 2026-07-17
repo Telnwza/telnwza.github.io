@@ -7,6 +7,7 @@ const sourceFiles = [
   "index.html",
   "css/style.css",
   "css/simulator-shell.css",
+  "css/automata-notebook.css",
   "js/main.js",
   "js/simulator-shell.js",
   "automata/index.html",
