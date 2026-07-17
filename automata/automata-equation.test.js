@@ -83,11 +83,30 @@ test("converts a regular expression to a Thompson epsilon-NFA", () => {
   assert.notEqual(model.initial, model.finals[0]);
 });
 
-test("supports plus, optional, escaped operators, and epsilon", () => {
+test("supports plus, optional, escaped operators, and legacy epsilon", () => {
   const model = regexToNfa("(a+|ε)\\?");
 
   assert.deepEqual(model.alphabet, ["a", "?"]);
   assert.ok(model.transitions.some((transition) => transition.label === EPSILON));
+});
+
+test("supports classroom braces, comma union, explicit dots, and implicit concatenation", () => {
+  const classroom = regexToNfa("{a,b.a*.{a,b}.a}*");
+  const legacy = regexToNfa("(a*|ba*(a|b)a)*");
+  const explicit = regexToNfa("a.b");
+  const implicit = regexToNfa("ab");
+
+  assert.equal(compareLanguages(classroom, legacy).equivalent, true);
+  assert.equal(compareLanguages(explicit, implicit).equivalent, true);
+  assert.deepEqual(classroom.alphabet, ["a", "b"]);
+});
+
+test("accepts lambda spellings for the empty word", () => {
+  ["λ", "lambda", "lamda", "ε", "epsilon", "eps"].forEach((expression) => {
+    const model = regexToPositionNfa(expression);
+    assert.equal(runNfa(model, ""), true, expression);
+    assert.deepEqual(model.alphabet, [], expression);
+  });
 });
 
 test("creates the three-state minimal DFA for binary strings ending in 01", () => {
@@ -251,8 +270,8 @@ test("reports an unmatched parenthesis with a useful column", () => {
   );
 });
 
-test("rejects comma because canvas transition labels use it as a separator", () => {
-  assert.throws(() => regexToNfa("a,b"), /comma/);
+test("uses comma as union but still rejects an escaped literal comma", () => {
+  assert.equal(compareLanguages(regexToNfa("a,b"), regexToNfa("a|b")).equivalent, true);
   assert.throws(() => regexToNfa("a\\,b"), /comma/);
 });
 

@@ -98,7 +98,7 @@ This keeps the site compatible with GitHub Pages project URLs and direct browser
 
 ## Current Available Tools
 
-- Automata Studio: DFA, NFA, epsilon-NFA, PDA, and Turing Machine creation and simulation, including Regular Expression output as a minimal DFA, compact epsilon-free NFA, or Thompson epsilon-NFA, DFA/NFA generation from transition equations, and exact Canvas automata-to-Regex language equivalence checking with shortest counterexamples.
+- Automata Studio: DFA, NFA, lambda-NFA, PDA, and Turing Machine creation and simulation, including classroom Regular Expression notation, output as a minimal DFA, compact lambda-free NFA, or Thompson lambda-NFA, DFA/NFA generation from transition equations, and exact Canvas automata-to-Regex language equivalence checking with shortest counterexamples.
 - Vector Addition Visualizer: 2D and 3D vector addition, resultant vectors, magnitude, ordering, import/export, and local browser saving.
 - Logic Gates Lab: drag-and-drop combinational circuits, live signal simulation, circuit-to-truth-table analysis, Boolean equation parsing and minimization, truth-table-to-circuit synthesis, presets, autosave, and JSON/image/table export.
 
@@ -120,17 +120,27 @@ Run the Regular Expression and transition-equation parser tests with Node.js:
 node --test automata/automata-equation.test.js
 ```
 
-The tests cover Thompson epsilon-NFA generation, compact position-NFA construction, subset construction, minimal DFA generation, language equivalence, Regular Expression syntax errors, DFA/NFA transition definitions, parallel-transition merging, and automatic state layout.
+The tests cover classroom and legacy Regular Expression notation, lambda spellings, Thompson lambda-NFA generation, compact position-NFA construction, subset construction, minimal DFA generation, language equivalence, syntax errors, DFA/NFA transition definitions, parallel-transition merging, and automatic state layout.
 
 ### Check a Drawn Automaton Against a Regex
 
 1. Open Automata Studio and choose DFA or NFA.
 2. Draw the states and transitions, then mark exactly one Initial state and any Final states.
 3. Open the `ตรวจ Regex` analysis tab.
-4. Enter a Regular Expression such as `(0|1)*01`.
+4. Enter a Regular Expression such as `{0,1}*.0.1`.
 5. Select `ตรวจคำตอบ`.
 
 The checker proves equivalence over all strings. When the languages differ, it reports the shortest counterexample and whether the drawn automaton and the Regular Expression accept or reject it.
+
+### Classroom Regular Expression Notation
+
+- `{a,b}` means `a` or `b`.
+- `a.b` and `ab` both mean `a` followed by `b`.
+- `a*` means zero or more repetitions.
+- `λ`, `lambda`, and `lamda` mean the empty word.
+- Legacy notation such as `(a|b)`, `ε`, `epsilon`, and `eps` remains supported.
+
+For example, `{a,b.a*.{a,b}.a}*` is accepted as the classroom-style equivalent of `(a*|ba*(a|b)a)*`.
 
 All three simulators share a focus-first shell with an auto-hiding top bar, collapsible tool/analysis panels, Focus Mode, progressive disclosure for advanced controls, and consistent shortcuts.
 

@@ -5,8 +5,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const EPSILON = "ε";
-  const EPSILON_WORDS = new Set(["ε", "λ", "eps", "epsilon"]);
+  const EPSILON = "λ";
+  const EPSILON_WORDS = new Set(["ε", "λ", "eps", "epsilon", "lambda", "lamda"]);
 
   class EquationSyntaxError extends Error {
     constructor(message, details = {}) {
@@ -50,7 +50,36 @@
         continue;
       }
 
-      if ("()|*+?".includes(char)) {
+      if (char === "(" || char === "{") {
+        tokens.push({
+          type: "open",
+          value: char,
+          closing: char === "(" ? ")" : "}",
+          column: index + 1,
+        });
+        index += 1;
+        continue;
+      }
+
+      if (char === ")" || char === "}") {
+        tokens.push({ type: "close", value: char, column: index + 1 });
+        index += 1;
+        continue;
+      }
+
+      if (char === "|" || char === ",") {
+        tokens.push({ type: "union", value: char, column: index + 1 });
+        index += 1;
+        continue;
+      }
+
+      if (char === ".") {
+        tokens.push({ type: "concat", value: char, column: index + 1 });
+        index += 1;
+        continue;
+      }
+
+      if ("*+?".includes(char)) {
         tokens.push({ type: char, value: char, column: index + 1 });
         index += 1;
         continue;
@@ -63,7 +92,7 @@
       }
 
       const rest = source.slice(index);
-      const epsilonWord = rest.match(/^(epsilon|eps)(?![\p{L}\p{N}_])/iu);
+      const epsilonWord = rest.match(/^(epsilon|lambda|lamda|eps)(?![\p{L}\p{N}_])/iu);
       if (epsilonWord) {
         tokens.push({ type: "epsilon", value: EPSILON, column: index + 1 });
         index += epsilonWord[0].length;
@@ -71,11 +100,6 @@
       }
 
       const literal = String.fromCodePoint(source.codePointAt(index));
-      if (literal === ",") {
-        throw new EquationSyntaxError("ไม่รองรับ comma เป็นสัญลักษณ์ เพราะใช้คั่น transition labels", {
-          column: index + 1,
-        });
-      }
       tokens.push({ type: "literal", value: literal, column: index + 1 });
       index += literal.length;
     }
@@ -101,10 +125,12 @@
 
     function parseUnion() {
       let node = parseConcatenation();
-      while (peek().type === "|") {
-        take("|");
-        if (peek().type === "|" || peek().type === ")" || peek().type === "eof") {
-          throw new EquationSyntaxError("ด้านขวาของ | ต้องมีนิพจน์", { column: peek().column });
+      while (peek().type === "union") {
+        const operator = take("union");
+        if (peek().type === "union" || peek().type === "close" || peek().type === "eof") {
+          throw new EquationSyntaxError(`ด้านขวาของ ${operator.value} ต้องมีนิพจน์`, {
+            column: peek().column,
+          });
         }
         node = { type: "union", left: node, right: parseConcatenation() };
       }
@@ -113,11 +139,25 @@
 
     function parseConcatenation() {
       const nodes = [];
-      while (!["|", ")", "eof"].includes(peek().type)) {
+      while (!["union", "close", "eof"].includes(peek().type)) {
+        if (peek().type === "concat") {
+          const separator = take("concat");
+          if (!nodes.length) {
+            throw new EquationSyntaxError("ด้านซ้ายของ . ต้องมีนิพจน์", {
+              column: separator.column,
+            });
+          }
+          if (["concat", "union", "close", "eof", "*", "+", "?"].includes(peek().type)) {
+            throw new EquationSyntaxError("ด้านขวาของ . ต้องมีนิพจน์", {
+              column: peek().column,
+            });
+          }
+          continue;
+        }
         nodes.push(parseRepetition());
       }
       if (!nodes.length) {
-        throw new EquationSyntaxError("ต้องมีสัญลักษณ์หรือ ε ในตำแหน่งนี้", {
+        throw new EquationSyntaxError("ต้องมีสัญลักษณ์หรือ λ ในตำแหน่งนี้", {
           column: peek().column,
         });
       }
@@ -154,18 +194,24 @@
         take("epsilon");
         return { type: "epsilon" };
       }
-      if (peek().type === "(") {
-        const opening = take("(");
-        if (peek().type === ")") {
+      if (peek().type === "open") {
+        const opening = take("open");
+        if (peek().type === "close") {
           throw new EquationSyntaxError("วงเล็บว่างไม่ใช่ Regular Expression", {
             column: opening.column,
           });
         }
         const node = parseUnion();
-        if (peek().type !== ")") {
+        if (peek().type !== "close") {
           throw new EquationSyntaxError("ยังไม่ได้ปิดวงเล็บ", { column: opening.column });
         }
-        take(")");
+        const closing = take("close");
+        if (closing.value !== opening.closing) {
+          throw new EquationSyntaxError(
+            `เปิดด้วย ${opening.value} แต่ปิดด้วย ${closing.value}`,
+            { column: closing.column },
+          );
+        }
         return node;
       }
       throw new EquationSyntaxError(`ไม่รู้จักสัญลักษณ์ "${peek().value}"`, {
@@ -877,7 +923,7 @@
 
     alphabet.forEach((symbol) => {
       if (normalizeEpsilon(symbol) === EPSILON) {
-        throw new EquationSyntaxError("ไม่ต้องใส่ ε ใน alphabet");
+        throw new EquationSyntaxError("ไม่ต้องใส่ λ ใน alphabet");
       }
       if (Array.from(symbol).length !== 1 || symbol === ",") {
         throw new EquationSyntaxError(`สัญลักษณ์ "${symbol}" ต้องเป็นอักขระเดียวและห้ามเป็น comma`);
@@ -898,7 +944,7 @@
         );
       }
       if (headers.type === "DFA" && transition.label === EPSILON) {
-        throw new EquationSyntaxError("DFA ไม่สามารถมี ε-transition", {
+        throw new EquationSyntaxError("DFA ไม่สามารถมี λ-transition", {
           line: transition.line,
         });
       }

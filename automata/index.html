@@ -117,7 +117,7 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
     <div class="top-actions">
       <select id="machineType" style="width:auto">
         <option value="DFA">DFA</option>
-        <option value="NFA">NFA / ε-NFA</option>
+        <option value="NFA">NFA / λ-NFA</option>
         <option value="PDA">Pushdown Automaton</option>
         <option value="TM">Turing Machine</option>
       </select>
@@ -239,7 +239,7 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
       <section id="tab-compare" class="hidden">
         <h2>ตรวจรูปกับ Regular Expression</h2>
         <div class="compare-guide">
-          ใช้ตรวจว่า DFA, NFA หรือ ε-NFA ที่วาดยอมรับภาษาเดียวกับ Regex หรือไม่
+          ใช้ตรวจว่า DFA, NFA หรือ λ-NFA ที่วาดยอมรับภาษาเดียวกับ Regex หรือไม่
           <ol>
             <li>วาด Automata และกำหนด Initial/Final state</li>
             <li>ใส่ Regex ที่ต้องการ</li>
@@ -247,11 +247,11 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
           </ol>
         </div>
         <label for="compareRegexInput">Regular Expression ที่ต้องการเทียบ</label>
-        <input id="compareRegexInput" spellcheck="false" placeholder="เช่น (0|1)*01">
+        <input id="compareRegexInput" spellcheck="false" placeholder="เช่น {0,1}*.0.1">
         <div class="equation-examples" style="margin-top:8px">
-          <button type="button" data-compare-regex="(0|1)*01">ลงท้ายด้วย 01</button>
-          <button type="button" data-compare-regex="(0|1)*001(0|1)*">มี 001</button>
-          <button type="button" data-compare-regex="a*b">a* แล้วตามด้วย b</button>
+          <button type="button" data-compare-regex="{0,1}*.0.1">ลงท้ายด้วย 01</button>
+          <button type="button" data-compare-regex="{0,1}*.0.0.1.{0,1}*">มี 001</button>
+          <button type="button" data-compare-regex="a*.b">a* แล้วตามด้วย b</button>
         </div>
         <button id="compareRegexBtn" class="primary" style="width:100%;margin-top:10px">ตรวจคำตอบ</button>
         <div id="compareRegexResult" class="result compare-result" aria-live="polite">ยังไม่ได้ตรวจ</div>
@@ -295,40 +295,42 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
     <div class="equation-heading">
       <div>
         <h2 id="equationModalTitle">สร้าง Automata จาก Regex</h2>
-        <p>พิมพ์รูปแบบของคำ แล้วเลือกสร้างเป็น DFA, NFA หรือ ε-NFA</p>
+        <p>พิมพ์รูปแบบของคำ แล้วเลือกสร้างเป็น DFA, NFA หรือ λ-NFA</p>
       </div>
       <button id="closeEquation" aria-label="ปิด">ปิด</button>
     </div>
 
     <label for="regexInput">Regular Expression (Regex)</label>
-    <textarea id="regexInput" spellcheck="false" aria-describedby="regexFeedback" placeholder="เช่น (0|1)*01"></textarea>
+    <textarea id="regexInput" spellcheck="false" aria-describedby="regexFeedback" placeholder="เช่น {0,1}*.0.1"></textarea>
 
     <div class="equation-section-title">ลองกดตัวอย่าง</div>
     <div class="equation-examples" id="regexExamples">
-      <button type="button" data-regex="(0|1)*01">ลงท้ายด้วย 01</button>
-      <button type="button" data-regex="(0|1)*001(0|1)*">มี 001 อยู่ข้างใน</button>
-      <button type="button" data-regex="a*b">a หลายตัว แล้วตามด้วย b</button>
-      <button type="button" data-regex="(a|b)+">มี a หรือ b อย่างน้อย 1 ตัว</button>
+      <button type="button" data-regex="{0,1}*.0.1">ลงท้ายด้วย 01</button>
+      <button type="button" data-regex="{0,1}*.0.0.1.{0,1}*">มี 001 อยู่ข้างใน</button>
+      <button type="button" data-regex="a*.b">a หลายตัว แล้วตามด้วย b</button>
+      <button type="button" data-regex="{a,b}+">มี a หรือ b อย่างน้อย 1 ตัว</button>
+      <button type="button" data-regex="{a,b.a*.{a,b}.a}*">ตัวอย่างแบบในชั้นเรียน</button>
     </div>
 
     <div class="equation-section-title">เครื่องหมายแต่ละตัวหมายถึงอะไร</div>
     <div class="equation-guide" aria-label="คู่มือสัญลักษณ์ Regular Expression">
       <div><code>a</code><span>ตัวอักษรที่ต้องการอ่าน</span></div>
-      <div><code>ab</code><span>a แล้วตามด้วย b</span></div>
-      <div><code>a|b</code><span>a หรือ b</span></div>
+      <div><code>a.b หรือ ab</code><span>a แล้วตามด้วย b</span></div>
+      <div><code>{a,b}</code><span>a หรือ b</span></div>
       <div><code>a*</code><span>a จำนวน 0 ครั้งขึ้นไป</span></div>
       <div><code>a+</code><span>a อย่างน้อย 1 ครั้ง</span></div>
       <div><code>a?</code><span>มี a หรือไม่มีก็ได้</span></div>
-      <div><code>(ab)</code><span>จัดกลุ่มก่อนคำนวณ</span></div>
-      <div><code>ε</code><span>คำว่าง ไม่อ่านตัวอักษร</span></div>
+      <div><code>{a.b}</code><span>จัดกลุ่มก่อนคำนวณ</span></div>
+      <div><code>λ</code><span>คำว่าง; พิมพ์ lambda/lamda ได้</span></div>
     </div>
+    <p class="small" style="margin:7px 0 0">ยังรองรับรูปแบบเดิม เช่น <code>(a|b)a*</code> และ <code>ε</code> เพื่อเปิดงานเก่าได้</p>
 
     <div class="equation-output-choice">
       <label for="regexOutput">ต้องการสร้างเป็นแบบไหน</label>
       <select id="regexOutput">
         <option value="minimal">Minimal DFA — state น้อยสุดแบบ DFA</option>
-        <option value="nfa">NFA แบบกระชับ — ไม่มี ε-transition</option>
-        <option value="epsilon-nfa">ε-NFA — แสดงขั้นตอน Thompson</option>
+        <option value="nfa">NFA แบบกระชับ — ไม่มี λ-transition</option>
+        <option value="epsilon-nfa">λ-NFA — แสดงขั้นตอน Thompson</option>
       </select>
       <p id="regexOutputHelp">แปลงเป็น DFA แล้วรวม state ที่ทำงานเหมือนกัน เหมาะสำหรับ diagram ที่กระชับ</p>
     </div>
@@ -354,10 +356,10 @@ start: q0
 final: q1,q2
 δ(q0,0) = q1
 NFA หลายปลายทาง: δ(q0,0) = {q0,q1}
-Epsilon transition: δ(q0,eps) = q1</div>
+Lambda transition: δ(q0,lambda) = q1</div>
         <div id="transitionFeedback" class="result equation-feedback" aria-live="polite">ใส่นิยามด้านบนเพื่อดูผลลัพธ์</div>
         <div class="equation-primary-action">
-          <p class="small">ระบบรองรับ DFA, NFA และ ε-NFA</p>
+          <p class="small">ระบบรองรับ DFA, NFA และ λ-NFA</p>
           <button id="generateTransitions" class="primary" disabled>สร้างจาก Transitions</button>
         </div>
       </div>
@@ -373,7 +375,7 @@ const svg=$('canvas'), viewport=$('viewport'), statesLayer=$('statesLayer'), edg
 
 let states=[],edges=[],selected=null,tool='select',connectFrom=null,drag=null,counter=0;
 let history=[],future=[],sim=null,lastCounterexample=null,lastComparisonSignature=null;
-const EPS=['ε','eps','epsilon','λ'];
+const EPS=['λ','lambda','lamda','ε','eps','epsilon'];
 
 function type(){return $('machineType').value}
 function alphabet(){return $('alphabet').value.split(',').map(x=>x.trim()).filter(Boolean)}
@@ -418,13 +420,13 @@ function openEdgeModal(from,to){
   $('modalEdgeLabel').focus();
 }
 function defaultEdgeLabel(){
-  if(type()==='PDA')return 'a,ε→A';
+  if(type()==='PDA')return 'a,λ→A';
   if(type()==='TM')return '1→1,R';
   return alphabet()[0]||'0';
 }
 function edgeHint(){
-  if(type()==='DFA'||type()==='NFA')return 'ใช้ comma คั่น เช่น 0,1 หรือ ε';
-  if(type()==='PDA')return 'รูปแบบ: input,pop→push เช่น a,ε→A หรือ b,A→ε';
+  if(type()==='DFA'||type()==='NFA')return 'ใช้ comma คั่น เช่น 0,1 หรือ λ';
+  if(type()==='PDA')return 'รูปแบบ: input,pop→push เช่น a,λ→A หรือ b,A→λ';
   return 'รูปแบบ: read→write,move เช่น 1→1,R หรือ □→1,S';
 }
 
@@ -544,11 +546,11 @@ function validateRegex(){
     },
     nfa:{
       button:'สร้าง NFA',
-      help:'สร้าง NFA แบบไม่มี ε-transition และใช้ state ตามตำแหน่งตัวอักษร มักกระชับ แต่ไม่รับประกันว่าเป็น NFA ที่น้อยที่สุด'
+      help:'สร้าง NFA แบบไม่มี λ-transition และใช้ state ตามตำแหน่งตัวอักษร มักกระชับ แต่ไม่รับประกันว่าเป็น NFA ที่น้อยที่สุด'
     },
     'epsilon-nfa':{
-      button:'สร้าง ε-NFA',
-      help:'ใช้ Thompson’s construction เหมาะสำหรับเรียนรู้ขั้นตอน แต่อาจมี state และ ε-transition จำนวนมาก'
+      button:'สร้าง λ-NFA',
+      help:'ใช้ Thompson’s construction เหมาะสำหรับเรียนรู้ขั้นตอน แต่อาจมี state และ λ-transition จำนวนมาก'
     }
   }[output];
   $('generateRegex').textContent=outputInfo.button;
@@ -567,7 +569,7 @@ function validateRegex(){
       model=AutomataEquation.minimizeDfa(AutomataEquation.determinizeNfa(epsilonNfa));
       setEquationFeedback(
         'regexFeedback',
-        `✓ Minimal DFA ${model.states.length} states · NFA ${compactNfa.states.length} · ε-NFA ${epsilonNfa.states.length} · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
+        `✓ Minimal DFA ${model.states.length} states · NFA ${compactNfa.states.length} · λ-NFA ${epsilonNfa.states.length} · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
         'ready'
       )
     }else if(output==='nfa'){
@@ -575,14 +577,14 @@ function validateRegex(){
       const reduced=epsilonNfa.states.length-model.states.length;
       setEquationFeedback(
         'regexFeedback',
-        `✓ NFA ไม่มี ε · ${model.states.length} states${reduced>0?` · ลดจาก ε-NFA ${reduced} states`:''} · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
+        `✓ NFA ไม่มี λ · ${model.states.length} states${reduced>0?` · ลดจาก λ-NFA ${reduced} states`:''} · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
         'ready'
       )
     }else{
       model=epsilonNfa;
       setEquationFeedback(
         'regexFeedback',
-        `✓ ε-NFA · ${epsilonNfa.states.length} states · ${epsilonNfa.transitions.length} transitions · เหมาะสำหรับดูขั้นตอน Thompson`,
+        `✓ λ-NFA · ${epsilonNfa.states.length} states · ${epsilonNfa.transitions.length} transitions · เหมาะสำหรับดูขั้นตอน Thompson`,
         'ready'
       )
     }
@@ -618,7 +620,7 @@ function closeEquationModal(){
   $('equationModal').style.display='none'
 }
 function openEquationModal(){
-  if(!$('regexInput').value.trim())$('regexInput').value='(0|1)*01';
+  if(!$('regexInput').value.trim())$('regexInput').value='{0,1}*.0.1';
   $('equationReplaceNotice').textContent=states.length
     ? `จะแทนที่งานปัจจุบัน ${states.length} states · กด Undo ย้อนกลับได้`
     :'ระบบจะจัดตำแหน่ง diagram ให้อัตโนมัติ';
@@ -654,7 +656,7 @@ function generateEquationModel(model){
     :model.sourceKind==='position-nfa'
       ?`สร้าง NFA ${model.states.length} states จาก Regex แล้ว`
     :model.sourceKind==='regex'
-      ?'สร้าง ε-NFA จาก Regex แล้ว'
+      ?'สร้าง λ-NFA จาก Regex แล้ว'
       :`สร้าง ${model.type} จาก Transition equations แล้ว`
 }
 $('equationBtn').onclick=openEquationModal;
@@ -716,9 +718,9 @@ function validate(){
   if(type()==='DFA'){
     const m=transMap();
     for(const s of states)for(const c of A){const ds=m.get(s.id+'|'+c)||[];if(ds.length===0)errs.push(`ขาด δ(${s.name},${c})`);if(ds.length>1)errs.push(`δ(${s.name},${c}) มีหลายปลายทาง`)}
-    for(const e of edges)if(parseFAEdge(e.label).some(x=>EPS.includes(x)))errs.push('DFA ห้ามมี ε-transition')
+    for(const e of edges)if(parseFAEdge(e.label).some(x=>EPS.includes(x)))errs.push('DFA ห้ามมี λ-transition')
   }
-  if(type()==='NFA')warns.push('NFA สามารถมีหลาย transition และ ε-transition ได้');
+  if(type()==='NFA')warns.push('NFA สามารถมีหลาย transition และ λ-transition ได้');
   if(type()==='PDA')for(const e of edges)if(!e.label.includes('→')||!e.label.includes(','))warns.push(`รูปแบบ PDA ที่ "${e.label}" อาจไม่ถูกต้อง`);
   if(type()==='TM')for(const e of edges)if(!e.label.includes('→')||!e.label.includes(','))warns.push(`รูปแบบ TM ที่ "${e.label}" อาจไม่ถูกต้อง`);
   return{errs,warns}
@@ -749,7 +751,7 @@ function runPDA(input,maxSteps=500){
   while(queue.length&&steps++<maxSteps){
     const c=queue.shift(),key=c.state+'|'+c.pos+'|'+c.stack.join('');if(seen.has(key))continue;seen.add(key);
     const st=stateById(c.state);
-    if(c.pos===str.length&&st.final)return{ok:true,accepted:true,detail:c.trace.join('\n'),config:`(${st.name}, end, ${c.stack.join('')||'ε'})`};
+    if(c.pos===str.length&&st.final)return{ok:true,accepted:true,detail:c.trace.join('\n'),config:`(${st.name}, end, ${c.stack.join('')||'λ'})`};
     for(const e of edges.filter(e=>e.from===c.state)){
       for(const line of e.label.split(';').map(x=>x.trim()).filter(Boolean)){
         const r=parsePDA(line);if(!r)continue;
@@ -759,7 +761,7 @@ function runPDA(input,maxSteps=500){
         const ns=[...c.stack];if(!EPS.includes(r.pop))ns.pop();
         if(!EPS.includes(r.push))for(const ch of [...r.push].reverse())ns.push(ch);
         const np=c.pos+(EPS.includes(r.inp)?0:1),dest=stateById(e.to);
-        queue.push({state:e.to,pos:np,stack:ns,trace:[...c.trace,`${line} → ${dest.name}, stack=${ns.join('')||'ε'}`]})
+        queue.push({state:e.to,pos:np,stack:ns,trace:[...c.trace,`${line} → ${dest.name}, stack=${ns.join('')||'λ'}`]})
       }
     }
   }
@@ -799,7 +801,7 @@ $('runBtn').onclick=runCurrent;
 $('stepBtn').onclick=()=>{runCurrent();$('status').textContent='Step mode แบบละเอียดจะเพิ่มในเวอร์ชันถัดไป; ตอนนี้แสดง trace ทุก step แล้ว'};
 
 function canvasLanguageModel(){
-  if(type()!=='DFA'&&type()!=='NFA')throw new Error('ตรวจได้เฉพาะ DFA, NFA และ ε-NFA เท่านั้น');
+  if(type()!=='DFA'&&type()!=='NFA')throw new Error('ตรวจได้เฉพาะ DFA, NFA และ λ-NFA เท่านั้น');
   if(!states.length)throw new Error('ยังไม่มี state บน Canvas');
   const initial=states.filter(state=>state.initial);
   if(initial.length!==1)throw new Error('ต้องกำหนด Initial state ให้มีเพียง 1 state');
@@ -865,7 +867,7 @@ Alphabet: {${alphabetText}}
 Regex เมื่อแปลงเป็น DFA: ${result.rightDfaStates} states`;
       $('status').textContent='รูปที่วาดตรงกับ Regular Expression'
     }else{
-      const word=result.counterexample===''?'ε':result.counterexample;
+      const word=result.counterexample===''?'λ':result.counterexample;
       resultBox.classList.add('mismatch');
       resultBox.textContent=`✕ ไม่ตรงกัน
 ตัวอย่างสั้นที่สุดที่ให้ผลต่างกัน: ${word}
@@ -938,7 +940,7 @@ function preset(name){
     $('alphabet').value='0,1';$('machineType').value='DFA';const a=add('qEven',280,310,true,true),b=add('qOdd',700,310);E(a,b,'0');E(a,a,'1');E(b,a,'0');E(b,b,'1')
   }else if(name==='pdaAnBn'){
     $('alphabet').value='a,b';$('machineType').value='PDA';const q0=add('q0',160,310,true),q1=add('q1',450,220),q2=add('q2',730,310,false,true);
-    E(q0,q1,'ε,ε→$; a,ε→A');E(q1,q1,'a,ε→A; b,A→ε');E(q1,q2,'ε,$→ε')
+    E(q0,q1,'λ,λ→$; a,λ→A');E(q1,q1,'a,λ→A; b,A→λ');E(q1,q2,'λ,$→λ')
   }else{
     $('alphabet').value='1';$('machineType').value='TM';const q0=add('q0',220,310,true),qf=add('qAccept',730,310,false,true);
     E(q0,q0,'1→1,R');E(q0,qf,'□→1,S')
