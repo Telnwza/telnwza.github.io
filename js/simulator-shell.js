@@ -16,10 +16,11 @@
       canvas: ".canvas-panel",
       essentials: ["machineType", "undoBtn", "redoBtn"],
       advanced: ["saveBtn", "loadBtn", "exportBtn", "importBtn", "exportSvgBtn", "importFile", "clearBtn"],
-      leftLabel: "เครื่องมือ",
-      rightLabel: "จำลอง",
-      defaultLeft: true,
+      leftLabel: "ตั้งค่า",
+      rightLabel: "วิเคราะห์",
+      defaultLeft: false,
       defaultRight: false,
+      storageVersion: "drafting-v2",
       tips: [
         "ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state ได้ทันที",
         "กด Regex → Automata แล้วเลือกผลลัพธ์เป็น Minimal DFA, NFA หรือ λ-NFA ได้",
@@ -80,7 +81,7 @@
   const canvasRegion = document.querySelector(definition.canvas);
   if (!root || !workspace || !leftPanel || !canvasRegion) return;
 
-  const storageKey = `visualLearningShell:${simulator}`;
+  const storageKey = `visualLearningShell:${simulator}${definition.storageVersion ? `:${definition.storageVersion}` : ""}`;
   const initialState = readState();
   let state = {
     headerMode: definition.fixedHeader || initialState.headerMode === "always" ? "always" : "auto",
@@ -213,10 +214,19 @@
   canvasRegion.addEventListener("pointerdown", () => queueHide(260), { passive: true });
   if (simulator === "automata") {
     const canvasShell = canvasRegion.querySelector(".canvas-shell");
+    const coordinateReadout = canvasRegion.querySelector(".drafting-coordinates");
     canvasShell?.addEventListener("pointermove", (event) => {
       const bounds = canvasShell.getBoundingClientRect();
       canvasShell.style.setProperty("--canvas-x", `${event.clientX - bounds.left}px`);
       canvasShell.style.setProperty("--canvas-y", `${event.clientY - bounds.top}px`);
+      const svgCanvas = canvasShell.querySelector("svg");
+      if (coordinateReadout && svgCanvas?.createSVGPoint && svgCanvas.getScreenCTM()) {
+        const point = svgCanvas.createSVGPoint();
+        point.x = event.clientX;
+        point.y = event.clientY;
+        const position = point.matrixTransform(svgCanvas.getScreenCTM().inverse());
+        coordinateReadout.textContent = `X ${Math.round(position.x)} · Y ${Math.round(position.y)}`;
+      }
     }, { passive: true });
   }
 
@@ -454,6 +464,62 @@
   }
 
   function enhanceAutomata() {
+    const sourceToolbar = leftPanel.querySelector(":scope > .toolbar:first-of-type");
+    const rail = create("nav", "automata-tool-rail");
+    rail.setAttribute("aria-label", "เครื่องมือวาด Automata");
+    const railTitle = create("div", "automata-tool-rail-title", "BUILD");
+    rail.append(railTitle);
+    const toolDefinitions = [
+      ["selectTool", "↖", "เลือก", "V"],
+      ["addTool", "+", "State", "A"],
+      ["connectTool", "→", "Transition", "T"],
+      ["deleteTool", "×", "ลบ", "X"],
+      ["equationBtn", "∑", "Regex", "R"],
+    ];
+    toolDefinitions.forEach(([id, glyph, label, shortcut]) => {
+      const button = document.getElementById(id);
+      if (!button) return;
+      button.classList.add("automata-rail-tool");
+      button.setAttribute("aria-label", `${label} (${shortcut})`);
+      button.innerHTML = `<span class="automata-rail-glyph" aria-hidden="true">${glyph}</span><span class="automata-rail-label">${label}</span><kbd>${shortcut}</kbd>`;
+      rail.append(button);
+    });
+    sourceToolbar?.remove();
+    workspace.prepend(rail);
+
+    const rulerX = create("div", "drafting-ruler drafting-ruler-x");
+    const rulerY = create("div", "drafting-ruler drafting-ruler-y");
+    const canvasShell = canvasRegion.querySelector(".canvas-shell");
+    canvasShell?.append(rulerX, rulerY);
+    const statusbar = canvasRegion.querySelector(".statusbar");
+    const coordinates = create("span", "drafting-coordinates", "X 0 · Y 0");
+    statusbar?.append(coordinates);
+
+    const settingsHeading = leftPanel.querySelector(":scope > h2:first-child");
+    if (settingsHeading) settingsHeading.textContent = "Machine settings";
+    const settingsClose = create("button", "drawer-close", "ปิด ×");
+    settingsClose.type = "button";
+    settingsClose.setAttribute("aria-label", "ปิดแผงตั้งค่า");
+    settingsClose.addEventListener("click", () => {
+      state.leftOpen = false;
+      updatePanels();
+    });
+    settingsHeading?.append(settingsClose);
+
+    if (rightPanel) {
+      const drawerHead = create("div", "analysis-drawer-head");
+      drawerHead.append(create("span", "", "Analysis drawer"));
+      const analysisClose = create("button", "drawer-close", "ปิด ×");
+      analysisClose.type = "button";
+      analysisClose.setAttribute("aria-label", "ปิดแผงวิเคราะห์");
+      analysisClose.addEventListener("click", () => {
+        state.rightOpen = false;
+        updatePanels();
+      });
+      drawerHead.append(analysisClose);
+      rightPanel.prepend(drawerHead);
+    }
+
     const stateSection = wrapHeadingBlock(leftPanel, "State ที่เลือก");
     const edgeSection = wrapHeadingBlock(leftPanel, "Transition ที่เลือก");
     const presetHeading = [...leftPanel.querySelectorAll("h3")].find((heading) => heading.textContent.trim() === "Preset");

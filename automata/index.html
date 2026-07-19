@@ -694,6 +694,11 @@ window.addEventListener('keydown',ev=>{
   if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'&&!editing){ev.preventDefault();ev.shiftKey?redo():undo()}
   else if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='y'&&!editing){ev.preventDefault();redo()}
   else if(ev.key==='Delete'&&selected&&!editing){commit(removeSelected)}
+  else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='v'){setTool('select')}
+  else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='a'){setTool('add')}
+  else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='t'){setTool('connect')}
+  else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='x'){setTool('delete')}
+  else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='r'){$('equationBtn').click()}
   else if(ev.key==='Escape'){connectFrom=null;setTool('select');$('edgeModal').style.display='none';closeEquationModal()}
 });
 
