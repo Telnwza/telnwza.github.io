@@ -6288,5 +6288,162 @@ init();
   decorateCanvasMotion();
 })();
 </script>
+<!-- Softer visual polish: keeps the professional EDA layout while reducing its rigid feel. -->
+<style id="softWorkbenchPolish">
+  :root{
+    --bg-0:#0b1018;--bg-1:#111824;--bg-2:#182230;--bg-3:#223044;
+    --line:#283548;--line-2:#3a4b63;
+    --ink:#e8eef8;--ink-dim:#a9b6c9;--muted:#718096;
+    --accent:#659cf6;--accent-2:#8ab8ff;
+    --sh-1:0 4px 14px #02060d55;--sh-2:0 12px 32px #02060d88;--sh-3:0 26px 70px #02060dcc;
+    --ux-glass:#172231e8;
+  }
+  html,body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI Variable","Noto Sans Thai","Segoe UI",sans-serif;
+    font-size:12.5px;
+  }
+  #app{grid-template-rows:48px 1fr 26px}
+
+  /* Softer application chrome */
+  .topbar{
+    height:48px;padding:0 12px;gap:8px;
+    background:linear-gradient(180deg,#192331 0%,#121a25 100%);
+    border-bottom:1px solid #334157;box-shadow:0 8px 24px #03070d38;
+  }
+  .brand{
+    height:31px;padding:0 15px 0 3px;gap:9px;margin-right:3px;
+    border-right-color:#3a485c;font-size:13.5px;font-weight:680;
+  }
+  .brand::before{
+    width:18px;height:18px;border-radius:5px;border-color:#8bb7ff;
+    background:linear-gradient(145deg,#233b60,#16253d);
+    box-shadow:inset 0 0 0 3px #192a44,0 3px 9px #050a1266;
+  }
+  .studio-subtitle{color:#7f8da1;font-size:8.5px;letter-spacing:1.35px}
+  .menu>.mi>button{height:32px;padding:0 10px;border-radius:7px;color:#acb8c8}
+  .menu>.mi>button:hover,.menu>.mi.open>button{background:#263448;color:#fff}
+  .dd{top:39px;padding:6px;background:#1a2533f7;border-color:#40516a;border-radius:10px;box-shadow:var(--sh-2);backdrop-filter:blur(16px)}
+  .dd button{min-height:32px;padding:6px 10px;border-radius:6px}
+  .dd button:hover{background:#2a3b52}
+  .dd .kbd{border-radius:5px;background:#111923;border-color:#334157}
+  .proj-name,input,select,textarea{border-radius:7px;background:#0f1722;border-color:#35445a}
+  .proj-name{height:30px;padding-inline:10px}
+  .btn{min-height:30px;padding:5px 11px;border-radius:7px;background:#1e2a3a;border-color:#394a61}
+  .btn:hover{background:#29394e;border-color:#56708e;box-shadow:0 5px 14px #03070d45;transform:translateY(-1px)}
+  .btn-primary{background:linear-gradient(135deg,#4f84df,#6a9ff4);border-color:#7aabfa;box-shadow:0 6px 16px #2359a744}
+  .btn-primary:hover{background:linear-gradient(135deg,#5b91ed,#78abfa);box-shadow:0 8px 20px #2359a766}
+  .btn-ghost{background:transparent;border-color:transparent}
+  .btn-ghost:hover{background:#263448;border-color:#34445a}
+  .ux-top-btn{height:30px;min-width:30px;border-radius:7px}
+
+  /* Docks and navigation */
+  .workspace{--activity-w:46px;background:#0b111a}
+  .ux-activity{
+    width:46px;min-width:46px;
+    background:linear-gradient(180deg,#111a26,#0d141e);
+    border-right-color:#2e3c50;padding-top:3px;
+  }
+  .ux-activity button{width:45px;height:43px;border-left:0;color:#74849a}
+  .ux-activity button::before{
+    left:5px!important;width:3px!important;border-radius:5px!important;
+    background:#73a8ff!important;
+  }
+  .ux-activity button:hover{background:#1b293a;color:#dce6f4}
+  .ux-activity button.active{background:linear-gradient(90deg,#1b2c43,#1a2636);color:#edf4ff;border-left-color:transparent}
+  .ux-activity button::after{left:51px;padding:6px 9px;border-radius:7px;background:#1c2939;border-color:#42536a}
+  .ux-activity .ux-density-mark{border-radius:4px;padding:2px 3px}
+  .pane{background:linear-gradient(180deg,#131c28,#101822);border-color:#2f3d50}
+  .pane.right{border-left-color:#2f3d50}
+  .pane-tabs{height:38px;background:#151f2c;border-bottom-color:#2f3d50;padding:0 5px;gap:3px}
+  .pane-tabs button{padding:9px 10px;border-radius:7px 7px 0 0;color:#8290a4}
+  .pane-tabs button:hover{background:#1c2939;color:#cbd6e4}
+  .pane-tabs button.active{background:#1b2736;color:#f0f5fc;border-bottom-color:#70a5fa}
+  .ux-left-dock-title{
+    height:38px;min-height:38px;padding:0 9px 0 12px;
+    background:linear-gradient(180deg,#182331,#141d29);border-bottom-color:#2f3d50;
+    color:#d4deea;font-size:10.5px;letter-spacing:.65px;
+  }
+  .ux-left-dock-title button{width:25px;height:25px;border-radius:6px}
+  .ux-left-dock-title button:hover{background:#29394d}
+  .ux-splitter::after{background:#253246}
+
+  /* Project tree and component cards */
+  .tree{padding:9px 7px}
+  .tree-group h4,.pal-group h4{color:#7e8ca0;padding:9px 8px 6px}
+  .tree-item{min-height:31px;padding:6px 9px;margin:2px;border-radius:7px}
+  .tree-item:hover{background:#1d2a3a}
+  .tree-item.active{background:linear-gradient(90deg,#274164,#223650);box-shadow:inset 0 0 0 1px #42618a;color:#f4f8fd}
+  .tree-group h4 .add{width:21px;height:21px;border-radius:6px}
+  .ux-palette-head{padding:10px 8px 8px;background:linear-gradient(180deg,#131d29 80%,transparent);border-bottom-color:#283649}
+  .ux-search{height:32px;border-radius:8px;background-color:#0d151f}
+  .ux-fav-toggle{width:33px;height:32px;border-radius:8px}
+  .ux-recent button{padding:4px 7px;border-radius:6px;background:#1a2635}
+  .palette{padding:0 6px 10px}
+  .pal-group h4{margin:2px;border-radius:6px}
+  .pal-group h4:hover{background:#1a2635}
+  .pal-grid{gap:7px;padding:0 3px}
+  .ptile{min-height:72px;padding:8px 4px;border-radius:9px;background:linear-gradient(145deg,#182331,#141d29);border-color:#2d3c50}
+  .ptile:hover{background:linear-gradient(145deg,#223147,#1a2737);border-color:#557398;transform:translateY(-2px);box-shadow:0 8px 18px #02060d66}
+
+  /* Canvas and floating controls */
+  .sch-tabs{height:37px;padding:0 7px;gap:3px;background:#121b27;border-bottom-color:#2d3b4e}
+  .sch-tab{height:37px;padding:8px 13px;border-radius:7px 7px 0 0}
+  .sch-tab:hover{background:#1a2635}
+  .sch-tab.active{background:#0d141e;border-bottom-color:#72a8ff}
+  .canvas-host{background:radial-gradient(circle at 1px 1px,#2b3543 1px,transparent 0) 0 0/24px 24px,linear-gradient(145deg,#0c1119,#0a1018)}
+  .canvas-host::before{box-shadow:inset 0 2px 16px #02050a88}
+  .canvas-toolbar,.canvas-tools{
+    padding:5px;gap:2px;border-radius:10px;
+    background:#182331df;border-color:#40516a;box-shadow:0 10px 24px #02060d88;
+    backdrop-filter:blur(14px);
+  }
+  .canvas-toolbar{left:12px;top:12px}.canvas-tools{right:12px;top:12px}
+  .canvas-toolbar button,.canvas-tools button{border-radius:7px}
+  .canvas-toolbar button:hover,.canvas-tools button:hover{background:#2b3c52}
+  .canvas-toolbar button.active{background:linear-gradient(145deg,#4277c9,#315f9f);box-shadow:inset 0 0 0 1px #75aaff,0 4px 12px #183d7555}
+  .canvas-hint{left:12px;bottom:12px;padding:7px 30px 7px 11px;border-radius:8px;background:#111a25d9;border-color:#35465d;backdrop-filter:blur(12px)}
+  .ux-minimap{right:12px;bottom:12px;border-radius:9px;background:#111a25d9;border-color:#36485f;box-shadow:0 9px 24px #02060d88;backdrop-filter:blur(10px)}
+  .ux-quickbar{top:48px;padding:5px 6px;border-radius:10px;background:#1a2635ee;border-color:#465a74;box-shadow:0 12px 28px #02060da8;backdrop-filter:blur(14px)}
+  .ux-quickbar button{padding:6px 8px;border-radius:6px}
+  .ux-quickbar button:hover{background:#2a3a4f}
+  .ux-layout-toast{top:88px;padding:6px 10px;border-radius:7px;background:#1b293aed}
+
+  /* Inspector, diagnostics and editor */
+  .insp{padding:14px 14px 18px}
+  .insp h3{margin-bottom:14px;padding-bottom:10px;border-bottom-color:#2c3a4d;font-size:13px}
+  .insp .row{gap:10px;margin-bottom:10px}
+  .insp .row label{color:#97a5b8}
+  .insp input,.insp select{height:31px;border-radius:7px;background:#0e1620}
+  .ux-section-title{margin-top:16px;padding-bottom:7px;color:#74859b}
+  .err-list{padding:9px}
+  .err-item{padding:9px 10px;margin-bottom:7px;border-radius:8px;background:#182331}
+  .err-item:hover{background:#1e2c3e;transform:translateX(2px)}
+  .ux-issuebar{padding:8px;background:#131d29}
+  .ux-issuebar button{padding:5px 8px;border-radius:7px;background:#1a2635}
+  .ux-issuebar button.active{background:#2b4770}
+  .vhdl-tools{padding:8px;background:#131d29}
+  .vhdl-tools select{height:31px;border-radius:7px}
+  .ux-vhdl-meta{padding:7px 10px;background:#101823}
+  .ux-line-nos{background:#0d141e}
+  .vhdl-pane pre{background:#0f1722}
+
+  /* Status and overlays */
+  .statusbar{height:26px;padding:0 11px;background:#101824;border-top-color:#2d3a4d;color:#75849a}
+  .ux-zoom-chip{border-radius:5px;padding:2px 6px}
+  .modal-bg{background:#03070dbf;backdrop-filter:blur(8px)}
+  .modal,.ux-command{border-radius:12px;background:#172230;border-color:#465a74;box-shadow:var(--sh-3)}
+  .modal h2{padding:14px 17px;border-bottom-color:#34445a}
+  .modal-body{padding:17px}
+  .modal-foot{padding:11px 17px;background:#131d29;border-top-color:#34445a}
+  .ux-command-search{padding:11px 13px;background:#121b27}
+  .ux-command-item{border-radius:7px}
+  .ux-command-item:hover,.ux-command-item.active{background:#29415f;border-color:#456991}
+  .toast{padding:10px 13px;border-radius:9px;background:#1d2a3a;border-color:#43566e;box-shadow:0 13px 30px #02060da8}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#3c4c61;border:2px solid #131c27;border-radius:8px}
+
+  @media(max-width:1280px){.studio-subtitle{display:none}}
+  @media(max-width:900px){.workspace{--activity-w:42px}.ux-activity{width:42px;min-width:42px}.ux-activity button{width:41px}.ux-quickbar{top:47px}}
+</style>
 </body>
 </html>
