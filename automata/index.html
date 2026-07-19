@@ -449,10 +449,15 @@ function drawEdge(e){
     lx=a.x;ly=a.y-88;
   }else{
     const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,nx=-uy,ny=ux;
-    const same=edges.filter(x=>x.from===e.from&&x.to===e.to),idx=same.indexOf(e),curve=(idx-(same.length-1)/2)*42;
+    const same=edges.filter(x=>x.from===e.from&&x.to===e.to),reverse=edges.filter(x=>x.from===e.to&&x.to===e.from),idx=same.indexOf(e);
+    // Bidirectional transitions bend to opposite physical sides because the
+    // normal vector flips with the edge direction. Parallel one-way edges
+    // continue to fan out around the straight centre line.
+    const curve=reverse.length?48+idx*34:(idx-(same.length-1)/2)*42;
     const sx=a.x+ux*34,sy=a.y+uy*34,ex=b.x-ux*39,ey=b.y-uy*39,mx=(sx+ex)/2,my=(sy+ey)/2;
     d=`M ${sx} ${sy} Q ${mx+nx*curve} ${my+ny*curve} ${ex} ${ey}`;
-    lx=mx+nx*(curve+16);ly=my+ny*(curve+16);
+    const labelCurve=curve===0?16:curve+Math.sign(curve)*16;
+    lx=mx+nx*labelCurve;ly=my+ny*labelCurve;
   }
   const hit=document.createElementNS('http://www.w3.org/2000/svg','path');hit.setAttribute('d',d);hit.setAttribute('class','edge-hit');
   const p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d',d);p.setAttribute('marker-end','url(#arrow)');
