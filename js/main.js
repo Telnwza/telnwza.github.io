@@ -23,6 +23,14 @@ const tools = [
     path: "./vectors/",
     topics: ["Vectors", "2D", "3D", "Resultant", "Geometry"],
   },
+  {
+    number: "04",
+    title: "Schematic Studio",
+    description: "Design digital schematics and generate VHDL for Spartan-7 and Vivado.",
+    category: "FPGA design",
+    path: "./schematic2vhdl/",
+    topics: ["VHDL", "Schematic", "FPGA", "Spartan-7", "Vivado"],
+  },
 ];
 
 const searchInput = document.querySelector("#tool-search");
@@ -89,7 +97,7 @@ document.addEventListener("keydown", (event) => {
     searchInput.select();
   }
 
-  if (event.altKey && /^[1-3]$/.test(event.key) && !isEditing) {
+  if (event.altKey && /^[1-4]$/.test(event.key) && !isEditing) {
     const tool = tools[Number(event.key) - 1];
     if (tool) window.location.href = tool.path;
   }
