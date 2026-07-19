@@ -67,7 +67,7 @@
         continue;
       }
 
-      if (char === "|" || char === ",") {
+      if (char === "|" || char === "," || char === "U" || char === "∪") {
         tokens.push({ type: "union", value: char, column: index + 1 });
         index += 1;
         continue;
@@ -82,6 +82,24 @@
       if ("*+?".includes(char)) {
         tokens.push({ type: char, value: char, column: index + 1 });
         index += 1;
+        continue;
+      }
+
+      if (char === "^") {
+        const exponent = source.slice(index + 1).match(/^\s*(\d+)/u);
+        if (!exponent) {
+          throw new EquationSyntaxError("หลัง ^ ต้องเป็นเลขยกกำลังตั้งแต่ 0 ถึง 40", {
+            column: index + 1,
+          });
+        }
+        const count = Number(exponent[1]);
+        if (count > 40) {
+          throw new EquationSyntaxError("รองรับเลขยกกำลังสูงสุด 40 เพื่อไม่ให้มี state มากเกินไป", {
+            column: index + 1,
+          });
+        }
+        tokens.push({ type: "power", value: count, column: index + 1 });
+        index += 1 + exponent[0].length;
         continue;
       }
 
@@ -147,7 +165,7 @@
               column: separator.column,
             });
           }
-          if (["concat", "union", "close", "eof", "*", "+", "?"].includes(peek().type)) {
+          if (["concat", "union", "close", "eof", "*", "+", "?", "power"].includes(peek().type)) {
             throw new EquationSyntaxError("ด้านขวาของ . ต้องมีนิพจน์", {
               column: peek().column,
             });
@@ -170,17 +188,26 @@
     function parseRepetition() {
       let node = parseAtom();
       let hasPostfix = false;
-      while (["*", "+", "?"].includes(peek().type)) {
+      while (["*", "+", "?", "power"].includes(peek().type)) {
         if (hasPostfix) {
           throw new EquationSyntaxError("ไม่รองรับ postfix operator ซ้อนกัน", {
             column: peek().column,
           });
         }
-        const operator = tokens[current++].type;
-        node = {
-          type: operator === "*" ? "star" : operator === "+" ? "plus" : "optional",
-          child: node,
-        };
+        const token = tokens[current++];
+        if (token.type === "power") {
+          node = token.value === 0
+            ? { type: "epsilon" }
+            : Array.from({ length: token.value - 1 }).reduce(
+              (result) => ({ type: "concat", left: result, right: node }),
+              node,
+            );
+        } else {
+          node = {
+            type: token.type === "*" ? "star" : token.type === "+" ? "plus" : "optional",
+            child: node,
+          };
+        }
         hasPostfix = true;
       }
       return node;

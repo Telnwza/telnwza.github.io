@@ -135,7 +135,9 @@ The checker proves equivalence over all strings. When the languages differ, it r
 ### Classroom Regular Expression Notation
 
 - `{a,b}` means `a` or `b`.
+- `a U b` and `a ∪ b` are also accepted as union; use `\U` for a literal uppercase U.
 - `a.b` and `ab` both mean `a` followed by `b`.
+- `a^5` means exactly five repetitions of `a`; fixed exponents from 0 through 40 are supported.
 - `a*` means zero or more repetitions.
 - `λ`, `lambda`, and `lamda` mean the empty word.
 - Legacy notation such as `(a|b)`, `ε`, `epsilon`, and `eps` remains supported.

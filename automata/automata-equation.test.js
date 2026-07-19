@@ -101,6 +101,31 @@ test("supports classroom braces, comma union, explicit dots, and implicit concat
   assert.deepEqual(classroom.alphabet, ["a", "b"]);
 });
 
+test("supports U and union-symbol aliases while allowing an escaped literal U", () => {
+  const expected = regexToNfa("{0,10}*|1");
+  const asciiUnion = regexToNfa("{0,10}* U {1}");
+  const symbolUnion = regexToNfa("{0,10}* ∪ {1}");
+  const literalU = regexToNfa("\\U");
+
+  assert.equal(compareLanguages(asciiUnion, expected).equivalent, true);
+  assert.equal(compareLanguages(symbolUnion, expected).equivalent, true);
+  assert.deepEqual(asciiUnion.alphabet, ["0", "1"]);
+  assert.deepEqual(literalU.alphabet, ["U"]);
+});
+
+test("supports fixed non-negative exponents on symbols and groups", () => {
+  const symbolPower = regexToNfa("a^5");
+  const groupPower = regexToNfa("{ab}^3");
+  const zeroPower = regexToNfa("a^0");
+
+  assert.equal(compareLanguages(symbolPower, regexToNfa("aaaaa")).equivalent, true);
+  assert.equal(compareLanguages(groupPower, regexToNfa("ababab")).equivalent, true);
+  assert.equal(runNfa(zeroPower, ""), true);
+  assert.deepEqual(zeroPower.alphabet, []);
+  assert.throws(() => regexToNfa("a^m"), /เลขยกกำลัง/);
+  assert.throws(() => regexToNfa("a^41"), /สูงสุด 40/);
+});
+
 test("accepts lambda spellings for the empty word", () => {
   ["λ", "lambda", "lamda", "ε", "epsilon", "eps"].forEach((expression) => {
     const model = regexToPositionNfa(expression);

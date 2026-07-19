@@ -310,6 +310,8 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
       <button type="button" data-regex="{0,1}*.0.0.1.{0,1}*">มี 001 อยู่ข้างใน</button>
       <button type="button" data-regex="a*.b">a หลายตัว แล้วตามด้วย b</button>
       <button type="button" data-regex="{a,b}+">มี a หรือ b อย่างน้อย 1 ตัว</button>
+      <button type="button" data-regex="{0,10}* U {1}">Union ด้วย U</button>
+      <button type="button" data-regex="a^5">a จำนวน 5 ตัว</button>
       <button type="button" data-regex="{a,b.a*.{a,b}.a}*">ตัวอย่างแบบในชั้นเรียน</button>
     </div>
 
@@ -318,13 +320,15 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
       <div><code>a</code><span>ตัวอักษรที่ต้องการอ่าน</span></div>
       <div><code>a.b หรือ ab</code><span>a แล้วตามด้วย b</span></div>
       <div><code>{a,b}</code><span>a หรือ b</span></div>
+      <div><code>a U b หรือ a ∪ b</code><span>union ของสองนิพจน์</span></div>
       <div><code>a*</code><span>a จำนวน 0 ครั้งขึ้นไป</span></div>
+      <div><code>a^5</code><span>a ซ้ำจำนวน 5 ครั้ง</span></div>
       <div><code>a+</code><span>a อย่างน้อย 1 ครั้ง</span></div>
       <div><code>a?</code><span>มี a หรือไม่มีก็ได้</span></div>
       <div><code>{a.b}</code><span>จัดกลุ่มก่อนคำนวณ</span></div>
       <div><code>λ</code><span>คำว่าง; พิมพ์ lambda/lamda ได้</span></div>
     </div>
-    <p class="small" style="margin:7px 0 0">ยังรองรับรูปแบบเดิม เช่น <code>(a|b)a*</code> และ <code>ε</code> เพื่อเปิดงานเก่าได้</p>
+    <p class="small" style="margin:7px 0 0">ยังรองรับรูปแบบเดิม เช่น <code>(a|b)a*</code> และ <code>ε</code>; หากต้องการตัวอักษร U ให้เขียน <code>\U</code></p>
 
     <div class="equation-output-choice">
       <label for="regexOutput">ต้องการสร้างเป็นแบบไหน</label>
