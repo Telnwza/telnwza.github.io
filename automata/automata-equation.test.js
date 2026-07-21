@@ -5,6 +5,8 @@ const {
   EPSILON,
   compareLanguages,
   determinizeNfa,
+  equationNotationToParserExpression,
+  equationNotationToSet,
   enumerateAcceptedWords,
   finiteLanguageToRegex,
   layoutAutomaton,
@@ -15,7 +17,28 @@ const {
   regexToMinimalDfa,
   regexToNfa,
   regexToPositionNfa,
+  setNotationToEquation,
 } = require("./automata-equation.js");
+
+test("converts Set-style and equation notation exactly in both directions", () => {
+  const setStyle = "{ab*,bb}*";
+  const equation = setNotationToEquation(setStyle);
+  const setRoundTrip = equationNotationToSet(equation);
+  const equationParserSource = equationNotationToParserExpression(equation);
+
+  assert.equal(equation, "(a.b* + b.b)*");
+  assert.equal(setRoundTrip, setStyle);
+  assert.equal(equationParserSource, "(a.b* | b.b)*");
+  assert.equal(
+    compareLanguages(regexToNfa(setStyle), regexToNfa(equationParserSource)).equivalent,
+    true,
+  );
+});
+
+test("keeps equation literals escaped and expands Set-style one-or-more without ambiguity", () => {
+  assert.equal(equationNotationToSet("a.\\+"), "a\\+");
+  assert.equal(setNotationToEquation("{a,b}+"), "(a + b).(a + b)*");
+});
 
 test("converts finite language sets to equivalent regular expressions", () => {
   const words = parseFiniteLanguageSet("L = {λ, 0, 01, '10', 01}");

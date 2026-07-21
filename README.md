@@ -98,7 +98,7 @@ This keeps the site compatible with GitHub Pages project URLs and direct browser
 
 ## Current Available Tools
 
-- Automata Studio: DFA, NFA, lambda-NFA, PDA, and Turing Machine creation and simulation, including a two-way Regular Expression / finite-language Set converter, output as a minimal DFA, compact lambda-free NFA, or Thompson lambda-NFA, DFA/NFA generation from transition equations, exact language-equivalence checking with shortest counterexamples, and randomized DFA/NFA practice in both diagram-to-Regex and equation-to-diagram directions.
+- Automata Studio: DFA, NFA, lambda-NFA, PDA, and Turing Machine creation and simulation, including an exact two-way Set-style / equation-style Regular Expression converter, output as a minimal DFA, compact lambda-free NFA, or Thompson lambda-NFA, DFA/NFA generation from transition equations, exact language-equivalence checking with shortest counterexamples, and randomized DFA/NFA practice in both diagram-to-Regex and equation-to-diagram directions.
 - Vector Addition Visualizer: 2D and 3D vector addition, resultant vectors, magnitude, ordering, import/export, and local browser saving.
 - Logic Gates Lab: drag-and-drop combinational circuits, live signal simulation, circuit-to-truth-table analysis, Boolean equation parsing and minimization, truth-table-to-circuit synthesis, presets, autosave, and JSON/image/table export.
 
@@ -122,15 +122,16 @@ node --test automata/automata-equation.test.js
 
 The tests cover classroom and legacy Regular Expression notation, lambda spellings, Thompson lambda-NFA generation, compact position-NFA construction, subset construction, minimal DFA generation, language equivalence, syntax errors, DFA/NFA transition definitions, parallel-transition merging, and automatic state layout.
 
-### Regex / Set Converter and Practice Lab
+### Regex Notation Converter and Practice Lab
 
-- Enter either a Regular Expression or a finite set such as `{λ, 0, 01}`. Set-to-Regex conversion is exact.
-- Regex-to-Set shows accepted words up to the selected maximum length, since a regular language can be infinite.
-- Practice Lab can show a DFA/NFA diagram for a Regex answer, or show a Regex/Set for the learner to draw on the main canvas.
+- Enter either Set-style notation such as `{ab*,bb}*` or equation notation such as `(a.b* + b.b)*`; both fields can generate a DFA/NFA directly.
+- Conversion is exact and bidirectional. Braces plus commas express union in Set-style notation, while `+` expresses union in the equation field.
+- Practice Lab can show a DFA/NFA diagram for a Regex answer, or show a Regex in either classroom style for the learner to draw on the main canvas.
 - Answers are checked by exact language equivalence rather than visual shape. A mismatch reports the shortest counterexample.
 - The Automata canvas supports cursor-centered zoom, trackpad/mouse-wheel panning, Space-drag panning, content-aware Fit, optional grid snapping, marquee/Shift multi-selection, group dragging, keyboard nudging, and copy/paste/duplicate.
 - Drag the transition handle on the right side of a state to another state for a live transition preview. Selection quick actions provide Initial/Final toggles, alignment, duplication, and deletion.
 - Automata Studio includes Light, Dark, and System themes with persisted preference and reduced-motion support.
+- A visible Dark/Light button sits in the main toolbar. The tool rail, settings drawer, and analysis drawer are resizable on desktop, and their sizes persist locally.
 
 ### Check a Drawn Automaton Against a Regex
 

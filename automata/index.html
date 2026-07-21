@@ -130,6 +130,7 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
         <option value="PDA">Pushdown Automaton</option>
         <option value="TM">Turing Machine</option>
       </select>
+      <button id="themeToggleBtn" type="button" aria-label="เปิด Dark mode" aria-pressed="false"><span aria-hidden="true">☾</span><span class="theme-toggle-label">Dark</span></button>
       <select id="themeMode" style="width:auto" aria-label="ธีมสี">
         <option value="system">Theme: System</option>
         <option value="light">Theme: Light</option>
@@ -348,8 +349,8 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
   <div class="modal equation-modal" role="dialog" aria-modal="true" aria-labelledby="equationModalTitle">
     <div class="equation-heading">
       <div>
-        <h2 id="equationModalTitle">Language Converter</h2>
-        <p>ใส่ Regular Expression หรือ Finite Set อย่างใดอย่างหนึ่ง แล้วแปลงหรือสร้าง Automata</p>
+        <h2 id="equationModalTitle">Regular Expression Converter</h2>
+        <p>ใส่ได้ทั้งแบบสมการหรือแบบ Set-style แล้วแปลงหรือสร้าง Automata ได้จากช่องใดก็ได้</p>
       </div>
       <button id="closeEquation" aria-label="ปิด">ปิด</button>
     </div>
@@ -357,29 +358,26 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
     <div class="language-converter-grid">
       <section id="regexCard" class="converter-card active-source">
         <div class="converter-card-head">
-          <label for="regexInput">Regular Expression</label>
+          <label for="regexInput">แบบสมการ: วงเล็บ จุด และ +</label>
           <span id="regexSourceBadge" class="source-badge">INPUT</span>
         </div>
-        <textarea id="regexInput" spellcheck="false" aria-describedby="regexFeedback" placeholder="เช่น {0,1}*.0.1"></textarea>
-        <button id="regexToSet" type="button">แปลงเป็น Set →</button>
+        <textarea id="regexInput" spellcheck="false" aria-describedby="regexFeedback" placeholder="เช่น (a.b* + b.b)*"></textarea>
+        <button id="regexToSet" type="button">แปลงเป็นแบบ Set →</button>
       </section>
 
       <div class="converter-swap" aria-hidden="true">⇄</div>
 
       <section id="setCard" class="converter-card">
         <div class="converter-card-head">
-          <label for="setInput">Finite Set / Language</label>
+          <label for="setInput">แบบ Set-style: { } และ comma</label>
           <span id="setSourceBadge" class="source-badge">OUTPUT</span>
         </div>
-        <textarea id="setInput" spellcheck="false" aria-describedby="regexFeedback" placeholder="เช่น {λ, 0, 01, 101}"></textarea>
-        <button id="setToRegex" type="button">← แปลงเป็น Regex</button>
+        <textarea id="setInput" spellcheck="false" aria-describedby="regexFeedback" placeholder="เช่น {ab*,bb}*"></textarea>
+        <button id="setToRegex" type="button">← แปลงเป็นสมการ</button>
       </section>
     </div>
-    <div class="set-preview-options">
-      <label for="setMaxLen">Regex → Set: แสดงสมาชิกยาวไม่เกิน</label>
-      <input id="setMaxLen" type="number" min="0" max="6" value="4">
-      <span>ตัวอักษร</span>
-      <span id="setPreviewNote">Set → Regex แปลงครบทุกสมาชิก</span>
+    <div class="set-preview-options" id="setPreviewNote">
+      <span><strong>แปลงแบบ exact:</strong> <code>{ab*,bb}*</code> ⇄ <code>(a.b* + b.b)*</code> — ทั้งสองแบบแทนภาษาเดียวกัน</span>
     </div>
 
     <div class="equation-section-title">ลองกดตัวอย่าง</div>
@@ -397,16 +395,17 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
     <div class="equation-guide" aria-label="คู่มือสัญลักษณ์ Regular Expression">
       <div><code>a</code><span>ตัวอักษรที่ต้องการอ่าน</span></div>
       <div><code>a.b หรือ ab</code><span>a แล้วตามด้วย b</span></div>
-      <div><code>{a,b}</code><span>a หรือ b</span></div>
+      <div><code>{a,b}</code><span>a หรือ b ในช่อง Set-style</span></div>
+      <div><code>a + b</code><span>a หรือ b ในช่องสมการ</span></div>
       <div><code>a U b หรือ a ∪ b</code><span>union ของสองนิพจน์</span></div>
       <div><code>a*</code><span>a จำนวน 0 ครั้งขึ้นไป</span></div>
       <div><code>a^5</code><span>a ซ้ำจำนวน 5 ครั้ง</span></div>
-      <div><code>a+</code><span>a อย่างน้อย 1 ครั้ง</span></div>
+      <div><code>a+</code><span>a อย่างน้อย 1 ครั้งในช่อง Set-style</span></div>
       <div><code>a?</code><span>มี a หรือไม่มีก็ได้</span></div>
       <div><code>{a.b}</code><span>จัดกลุ่มก่อนคำนวณ</span></div>
       <div><code>λ</code><span>คำว่าง; พิมพ์ lambda/lamda ได้</span></div>
     </div>
-    <p class="small" style="margin:7px 0 0">ยังรองรับรูปแบบเดิม เช่น <code>(a|b)a*</code> และ <code>ε</code>; หากต้องการตัวอักษร U ให้เขียน <code>\U</code></p>
+    <p class="small" style="margin:7px 0 0">ช่องสมการตีความ <code>+</code> เป็น union; ยังรองรับ <code>(a|b)a*</code>, <code>U</code>, <code>∪</code> และ <code>ε</code> ด้วย</p>
 
     <div class="equation-output-choice">
       <label for="regexOutput">ต้องการสร้างเป็นแบบไหน</label>
@@ -875,7 +874,7 @@ function setEquationFeedback(id,message,state=''){
   element.classList.remove('ready','bad','warn');
   if(state)element.classList.add(state)
 }
-let activeEquationSource='regex';
+let activeEquationSource='set';
 function setActiveEquationSource(source){
   activeEquationSource=source;
   $('regexCard').classList.toggle('active-source',source==='regex');
@@ -885,10 +884,12 @@ function setActiveEquationSource(source){
 }
 function expressionFromActiveSource(){
   if(activeEquationSource==='set'){
-    const words=AutomataEquation.parseFiniteLanguageSet($('setInput').value);
-    return{expression:AutomataEquation.finiteLanguageToRegex(words),words}
+    return{expression:$('setInput').value.trim(),notation:'Set-style'}
   }
-  return{expression:$('regexInput').value.trim(),words:null}
+  return{
+    expression:AutomataEquation.equationNotationToParserExpression($('regexInput').value),
+    notation:'สมการ'
+  }
 }
 function validateRegex(){
   const output=$('regexOutput').value;
@@ -911,7 +912,7 @@ function validateRegex(){
   const raw=activeEquationSource==='set'?$('setInput').value.trim():$('regexInput').value.trim();
   if(!raw){
     $('generateRegex').disabled=true;
-    setEquationFeedback('regexFeedback',activeEquationSource==='set'?'พิมพ์ Finite Set เช่น {λ, 0, 01}':'พิมพ์ Regex หรือเลือกตัวอย่างด้านบน');
+    setEquationFeedback('regexFeedback',activeEquationSource==='set'?'พิมพ์แบบ Set-style เช่น {ab*,bb}*':'พิมพ์แบบสมการ เช่น (a.b* + b.b)*');
     return null
   }
   try{
@@ -924,7 +925,7 @@ function validateRegex(){
       model=AutomataEquation.minimizeDfa(AutomataEquation.determinizeNfa(epsilonNfa));
       setEquationFeedback(
         'regexFeedback',
-        `✓ ${source.words?'Finite Set '+source.words.length+' สมาชิก · ':''}Minimal DFA ${model.states.length} states · NFA ${compactNfa.states.length} · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
+        `✓ ${source.notation} · Minimal DFA ${model.states.length} states · NFA ${compactNfa.states.length} · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
         'ready'
       )
     }else if(output==='nfa'){
@@ -952,29 +953,21 @@ function validateRegex(){
     return null
   }
 }
-function formatFiniteSet(words){
-  return `{${words.map(word=>word||'λ').join(', ')}}`
-}
 function convertRegexToSet(){
   setActiveEquationSource('regex');
   try{
     const input=$('regexInput').value.trim();
-    if(!input)throw new Error('กรุณาใส่ Regular Expression ก่อน');
-    const model=AutomataEquation.regexToPositionNfa(input);
-    const maxLength=Math.max(0,Math.min(6,+$('setMaxLen').value||0));
-    const preview=AutomataEquation.enumerateAcceptedWords(model,maxLength,512);
-    $('setInput').value=formatFiniteSet(preview.words);
-    $('setPreviewNote').textContent=`ตัวอย่าง ${preview.words.length} สมาชิก ความยาว ≤ ${maxLength}${preview.truncated?' (ตัดบางส่วน)':''}`;
-    setEquationFeedback('regexFeedback',`✓ แปลง Regex เป็น Set preview แล้ว · ตรวจ ${preview.checked} strings · ภาษาที่ไม่สิ้นสุดจะแสดงตามขอบเขตความยาว`,'ready');
+    if(!input)throw new Error('กรุณาใส่สมการก่อน');
+    $('setInput').value=AutomataEquation.equationNotationToSet(input);
     validateRegex()
   }catch(error){setEquationFeedback('regexFeedback',equationErrorText(error),'bad')}
 }
 function convertSetToRegex(){
   setActiveEquationSource('set');
   try{
-    const words=AutomataEquation.parseFiniteLanguageSet($('setInput').value);
-    $('regexInput').value=AutomataEquation.finiteLanguageToRegex(words);
-    $('setPreviewNote').textContent=`แปลงครบ ${words.length} สมาชิกแบบ exact`;
+    const input=$('setInput').value.trim();
+    if(!input)throw new Error('กรุณาใส่ Set-style ก่อน');
+    $('regexInput').value=AutomataEquation.setNotationToEquation(input);
     validateRegex()
   }catch(error){
     $('generateRegex').disabled=true;
@@ -1006,7 +999,10 @@ function closeEquationModal(){
   $('equationModal').style.display='none'
 }
 function openEquationModal(){
-  if(!$('regexInput').value.trim())$('regexInput').value='{0,1}*.0.1';
+  if(!$('regexInput').value.trim()&&!$('setInput').value.trim()){
+    $('setInput').value='{ab*,bb}*';
+    activeEquationSource='set'
+  }
   $('equationReplaceNotice').textContent=states.length
     ? `จะแทนที่งานปัจจุบัน ${states.length} states · กด Undo ย้อนกลับได้`
     :'ระบบจะจัดตำแหน่ง diagram ให้อัตโนมัติ';
@@ -1039,7 +1035,7 @@ function generateEquationModel(model){
   });
   closeEquationModal();
   fitView();
-  const sourceLabel=model.inputKind==='set'?'Set':'Regex';
+  const sourceLabel=model.inputKind==='set'?'Set-style':'สมการ';
   $('status').textContent=model.sourceKind==='minimal-dfa'
     ?`สร้าง Minimal DFA ${model.states.length} states จาก ${sourceLabel} แล้ว`
     :model.sourceKind==='position-nfa'
@@ -1055,13 +1051,12 @@ $('regexInput').oninput=()=>{setActiveEquationSource('regex');validateRegex()};
 $('setInput').oninput=()=>{setActiveEquationSource('set');validateRegex()};
 $('regexToSet').onclick=convertRegexToSet;
 $('setToRegex').onclick=convertSetToRegex;
-$('setMaxLen').onchange=()=>{if(activeEquationSource==='regex'&&$('regexInput').value.trim())convertRegexToSet()};
 $('regexOutput').onchange=validateRegex;
 $('transitionInput').oninput=validateTransitions;
 document.querySelectorAll('[data-regex]').forEach(button=>button.onclick=()=>{
-  $('regexInput').value=button.dataset.regex;
-  setActiveEquationSource('regex');
-  validateRegex();$('regexInput').focus()
+  $('setInput').value=button.dataset.regex;
+  setActiveEquationSource('set');
+  validateRegex();$('setInput').focus()
 });
 $('transitionExample').onclick=()=>{
   $('transitionInput').value=transitionExample;
@@ -1082,6 +1077,7 @@ const practiceBank=[
   {difficulty:'easy',title:'ภาษาจำกัดชุดเล็ก',set:'{λ, 0, 1}',hint:'ต้องรับคำว่างด้วย และรับคำยาว 1 ตัวเท่านั้น'},
   {difficulty:'medium',title:'ลงท้ายด้วย 01',regex:'{0,1}*.0.1',hint:'จำ suffix ที่ยังมีโอกาสกลายเป็น 01'},
   {difficulty:'medium',title:'มี 00 อยู่ข้างใน',regex:'{0,1}*.0.0.{0,1}*',hint:'เมื่อเจอ 00 แล้วจะอยู่ใน accepting state ต่อไป'},
+  {difficulty:'medium',title:'บล็อก ab* หรือ bb',set:'{ab*,bb}*',hint:'มองแต่ละรอบของดาวเป็นการเลือกบล็อก ab* หรือ bb หนึ่งครั้ง'},
   {difficulty:'medium',title:'ภาษาจำกัดสลับบิต',set:'{01, 10, 101}',hint:'วาดเป็นต้นไม้ตาม prefix แล้วรวมทางที่ทำงานเหมือนกันได้'},
   {difficulty:'hard',title:'มี 010 อยู่ข้างใน',regex:'{0,1}*.0.1.0.{0,1}*',hint:'แต่ละ state จำ prefix ของ 010 ที่ตรงอยู่ล่าสุด'},
   {difficulty:'hard',title:'บล็อก 1 หรือ 01',regex:'{1,0.1}*',hint:'ทุก 0 ต้องตามด้วย 1 และคำว่างต้องผ่าน'},
@@ -1092,7 +1088,7 @@ let practiceSerial=0;
 let practiceScore=Number(localStorage.getItem('automataPracticeScore')||0);
 
 function practiceTargetExpression(question){
-  return question.regex||AutomataEquation.finiteLanguageToRegex(AutomataEquation.parseFiniteLanguageSet(question.set))
+  return question.regex||question.set
 }
 function practiceModel(question,machine){
   const expression=practiceTargetExpression(question);
@@ -1164,7 +1160,7 @@ function generatePracticeQuestion(){
     setPracticeFeedback('เขียน Regular Expression ที่รับภาษาเดียวกับรูป ไม่จำเป็นต้องเขียนเหมือนเฉลย')
   }else{
     $('practiceMachineText').textContent=machine;
-    $('practicePromptKind').textContent=question.set?'FINITE SET':'REGULAR EXPRESSION';
+    $('practicePromptKind').textContent=question.set?'SET-STYLE REGEX':'REGULAR EXPRESSION';
     $('practicePromptText').textContent=question.set||question.regex;
     setPracticeFeedback('พร้อมแล้ว กด “เริ่มวาดบน Canvas”')
   }
@@ -1245,11 +1241,16 @@ function applyThemeMode(mode){
   const resolved=mode==='dark'||(mode==='system'&&systemDark)?'dark':'light';
   document.documentElement.dataset.automataTheme=resolved;
   document.documentElement.dataset.automataThemeMode=mode;
-  $('themeMode').value=mode;localStorage.setItem('automataThemeMode',mode)
+  $('themeMode').value=mode;
+  $('themeToggleBtn').innerHTML=resolved==='dark'?'<span aria-hidden="true">☀</span><span class="theme-toggle-label">Light</span>':'<span aria-hidden="true">☾</span><span class="theme-toggle-label">Dark</span>';
+  $('themeToggleBtn').setAttribute('aria-label',resolved==='dark'?'เปลี่ยนเป็น Light mode':'เปิด Dark mode');
+  $('themeToggleBtn').setAttribute('aria-pressed',String(resolved==='dark'));
+  localStorage.setItem('automataThemeMode',mode)
 }
 const savedTheme=document.documentElement.dataset.automataThemeMode||'system';
 applyThemeMode(savedTheme);
 $('themeMode').onchange=()=>applyThemeMode($('themeMode').value);
+$('themeToggleBtn').onclick=()=>applyThemeMode(document.documentElement.dataset.automataTheme==='dark'?'light':'dark');
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>{if($('themeMode').value==='system')applyThemeMode('system')});
 function nudgeSelected(dx,dy){
   if(!selectedStates.size)return;

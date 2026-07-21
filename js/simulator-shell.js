@@ -14,8 +14,8 @@
       left: "main.workspace > aside:first-of-type",
       right: "main.workspace > aside:last-of-type",
       canvas: ".canvas-panel",
-      essentials: ["machineType", "themeMode", "undoBtn", "redoBtn"],
-      advanced: ["saveBtn", "loadBtn", "exportBtn", "importBtn", "exportSvgBtn", "importFile", "clearBtn"],
+      essentials: ["machineType", "themeToggleBtn", "undoBtn", "redoBtn"],
+      advanced: ["themeMode", "saveBtn", "loadBtn", "exportBtn", "importBtn", "exportSvgBtn", "importFile", "clearBtn"],
       leftLabel: "ตั้งค่า",
       rightLabel: "วิเคราะห์",
       defaultLeft: false,
@@ -91,6 +91,9 @@
     leftOpen: typeof initialState.leftOpen === "boolean" ? initialState.leftOpen : definition.defaultLeft,
     rightOpen: typeof initialState.rightOpen === "boolean" ? initialState.rightOpen : definition.defaultRight,
     focus: false,
+    railWidth: Number(initialState.railWidth) || 76,
+    leftWidth: Number(initialState.leftWidth) || 286,
+    rightHeight: Number(initialState.rightHeight) || Math.min(430, Math.round(window.innerHeight * 0.44)),
   };
   if (window.matchMedia("(max-width: 820px)").matches && typeof initialState.leftOpen !== "boolean") {
     state.leftOpen = false;
@@ -176,6 +179,7 @@
   document.body.append(helpDialog);
 
   enhanceSimulator();
+  applyPanelSizes();
   updatePanels(false);
   updateFocus(false);
   document.body.classList.add("sim-shell-ready");
@@ -265,6 +269,9 @@
         headerMode: state.headerMode,
         leftOpen: state.leftOpen,
         rightOpen: state.rightOpen,
+        railWidth: state.railWidth,
+        leftWidth: state.leftWidth,
+        rightHeight: state.rightHeight,
       }));
     } catch {
       // UI preferences are optional.
@@ -308,6 +315,7 @@
   }
 
   function updatePanels(persist = true) {
+    applyPanelSizes();
     workspace.classList.toggle("sim-left-collapsed", !state.leftOpen);
     workspace.classList.toggle("sim-right-collapsed", !state.rightOpen || !rightPanel);
     leftButton.setAttribute("aria-pressed", String(state.leftOpen));
@@ -366,6 +374,83 @@
 
   function notifyResize() {
     window.requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+  }
+
+  function clamp(value, minimum, maximum) {
+    return Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
+  }
+
+  function applyPanelSizes() {
+    if (simulator !== "automata") return;
+    const bounds = workspace.getBoundingClientRect();
+    state.railWidth = clamp(state.railWidth, 58, Math.min(140, Math.max(58, bounds.width * 0.16)));
+    state.leftWidth = clamp(state.leftWidth, 240, Math.min(560, Math.max(240, bounds.width - state.railWidth - 160)));
+    state.rightHeight = clamp(state.rightHeight, 180, Math.min(Math.max(180, bounds.height - 100), bounds.height * 0.82));
+    workspace.style.setProperty("--automata-rail-width", `${Math.round(state.railWidth)}px`);
+    workspace.style.setProperty("--automata-left-width", `${Math.round(state.leftWidth)}px`);
+    workspace.style.setProperty("--automata-right-height", `${Math.round(state.rightHeight)}px`);
+  }
+
+  function addPanelResizer(target, kind, label) {
+    if (!target) return;
+    const handle = create("div", `panel-resize-handle panel-resize-${kind}`);
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-label", `${label} · ลากหรือใช้ปุ่มลูกศรเพื่อปรับขนาด · ดับเบิลคลิกเพื่อคืนค่า`);
+    handle.setAttribute("aria-orientation", kind === "right" ? "horizontal" : "vertical");
+    target.append(handle);
+
+    const updateFromPointer = (event) => {
+      const bounds = workspace.getBoundingClientRect();
+      if (kind === "rail") state.railWidth = event.clientX - bounds.left;
+      if (kind === "left") state.leftWidth = event.clientX - bounds.left - state.railWidth;
+      if (kind === "right") state.rightHeight = bounds.bottom - 31 - event.clientY;
+      applyPanelSizes();
+      notifyResize();
+    };
+
+    handle.addEventListener("pointerdown", (event) => {
+      if (isMobile()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handle.setPointerCapture(event.pointerId);
+      document.body.classList.add("is-resizing-panel");
+      updateFromPointer(event);
+    });
+    handle.addEventListener("pointermove", (event) => {
+      if (!handle.hasPointerCapture(event.pointerId)) return;
+      updateFromPointer(event);
+    });
+    const finish = (event) => {
+      if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+      document.body.classList.remove("is-resizing-panel");
+      saveState();
+    };
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+    handle.addEventListener("dblclick", () => {
+      if (kind === "rail") state.railWidth = 76;
+      if (kind === "left") state.leftWidth = 286;
+      if (kind === "right") state.rightHeight = Math.min(430, Math.round(window.innerHeight * 0.44));
+      applyPanelSizes();
+      saveState();
+      notifyResize();
+    });
+    handle.addEventListener("keydown", (event) => {
+      const horizontal = kind !== "right";
+      const decrement = horizontal ? event.key === "ArrowLeft" : event.key === "ArrowDown";
+      const increment = horizontal ? event.key === "ArrowRight" : event.key === "ArrowUp";
+      if (!decrement && !increment) return;
+      event.preventDefault();
+      const amount = event.shiftKey ? 32 : 8;
+      const direction = decrement ? -1 : 1;
+      if (kind === "rail") state.railWidth += direction * amount;
+      if (kind === "left") state.leftWidth += direction * amount;
+      if (kind === "right") state.rightHeight += direction * amount;
+      applyPanelSizes();
+      saveState();
+      notifyResize();
+    });
   }
 
   function isMobile() {
@@ -491,6 +576,9 @@
     });
     sourceToolbar?.remove();
     workspace.prepend(rail);
+    addPanelResizer(rail, "rail", "ความกว้างแถบเครื่องมือ");
+    addPanelResizer(workspace, "left", "ความกว้างแผงตั้งค่า");
+    addPanelResizer(workspace, "right", "ความสูงแผงวิเคราะห์");
 
     const rulerX = create("div", "drafting-ruler drafting-ruler-x");
     const rulerY = create("div", "drafting-ruler drafting-ruler-y");

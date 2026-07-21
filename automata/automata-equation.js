@@ -274,6 +274,112 @@
     return { expression, ast: parseRegexAst(expression) };
   }
 
+  function flattenAst(node, type) {
+    if (node.type !== type) return [node];
+    return [...flattenAst(node.left, type), ...flattenAst(node.right, type)];
+  }
+
+  function astPrecedence(node) {
+    if (node.type === "union") return 1;
+    if (node.type === "concat") return 2;
+    if (["star", "plus", "optional"].includes(node.type)) return 3;
+    return 4;
+  }
+
+  function escapeNotationLiteral(symbol) {
+    return /[\\(){}|,.U∪*+?^ελ∅]/u.test(symbol) ? `\\${symbol}` : symbol;
+  }
+
+  function astToEquationNotation(node, parentPrecedence = 0) {
+    if (node.type === "literal") return escapeNotationLiteral(node.value);
+    if (node.type === "epsilon") return EPSILON;
+    if (node.type === "empty") return "∅";
+
+    if (node.type === "plus") {
+      const expanded = {
+        type: "concat",
+        left: node.child,
+        right: { type: "star", child: node.child },
+      };
+      return astToEquationNotation(expanded, parentPrecedence);
+    }
+
+    const precedence = astPrecedence(node);
+    let output;
+    if (node.type === "union") {
+      output = flattenAst(node, "union")
+        .map((child) => astToEquationNotation(child, precedence))
+        .join(" + ");
+    } else if (node.type === "concat") {
+      output = flattenAst(node, "concat")
+        .map((child) => astToEquationNotation(child, precedence))
+        .join(".");
+    } else if (node.type === "star" || node.type === "optional") {
+      output = `${astToEquationNotation(node.child, precedence)}${node.type === "star" ? "*" : "?"}`;
+    } else {
+      throw new EquationSyntaxError(`ไม่สามารถแปลง node ชนิด ${node.type} ได้`);
+    }
+    return precedence < parentPrecedence ? `(${output})` : output;
+  }
+
+  function astToSetNotation(node, parentPrecedence = 0) {
+    if (node.type === "literal") return escapeNotationLiteral(node.value);
+    if (node.type === "epsilon") return EPSILON;
+    if (node.type === "empty") return "∅";
+
+    const precedence = astPrecedence(node);
+    let output;
+    if (node.type === "union") {
+      output = `{${flattenAst(node, "union")
+        .map((child) => astToSetNotation(child))
+        .join(",")}}`;
+    } else if (node.type === "concat") {
+      output = flattenAst(node, "concat")
+        .map((child) => astToSetNotation(child, precedence))
+        .join("");
+    } else if (["star", "plus", "optional"].includes(node.type)) {
+      output = `${astToSetNotation(node.child, precedence)}${node.type === "star" ? "*" : node.type === "plus" ? "+" : "?"}`;
+    } else {
+      throw new EquationSyntaxError(`ไม่สามารถแปลง node ชนิด ${node.type} ได้`);
+    }
+
+    if (node.type === "union") return output;
+    return precedence < parentPrecedence ? `{${output}}` : output;
+  }
+
+  function normalizeEquationNotation(source) {
+    const input = String(source || "").trim();
+    let output = "";
+    let escaped = false;
+    for (const character of input) {
+      if (escaped) {
+        output += character;
+        escaped = false;
+      } else if (character === "\\") {
+        output += character;
+        escaped = true;
+      } else {
+        output += character === "+" ? "|" : character;
+      }
+    }
+    return output;
+  }
+
+  function setNotationToEquation(source) {
+    return astToEquationNotation(parseRegexExpression(source).ast);
+  }
+
+  function equationNotationToSet(source) {
+    const normalized = normalizeEquationNotation(source);
+    return astToSetNotation(parseRegexExpression(normalized).ast);
+  }
+
+  function equationNotationToParserExpression(source) {
+    const normalized = normalizeEquationNotation(source);
+    parseRegexExpression(normalized);
+    return normalized;
+  }
+
   function regexToNfa(source) {
     const { expression, ast } = parseRegexExpression(source);
     const transitions = [];
@@ -1227,6 +1333,8 @@
     EPSILON,
     EquationSyntaxError,
     compareLanguages,
+    equationNotationToParserExpression,
+    equationNotationToSet,
     enumerateAcceptedWords,
     finiteLanguageToRegex,
     layoutAutomaton,
@@ -1238,5 +1346,6 @@
     regexToMinimalDfa,
     regexToNfa,
     regexToPositionNfa,
+    setNotationToEquation,
   };
 });
