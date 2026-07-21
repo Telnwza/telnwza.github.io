@@ -278,11 +278,12 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
         <h2>Simulation</h2>
         <label>Input</label>
         <input id="testInput" placeholder="เช่น 10101 หรือ λ">
-        <div class="row" style="margin-top:8px">
+        <div class="simulation-actions" style="margin-top:8px">
           <button id="runBtn" class="primary">Run</button>
           <button id="stepBtn">Step</button>
+          <button id="resetSimBtn" disabled>Reset</button>
         </div>
-        <div id="runResult" class="result" style="margin-top:8px">ยังไม่ได้ทดสอบ</div>
+        <div id="runResult" class="result" style="margin-top:8px" aria-live="polite">ยังไม่ได้ทดสอบ</div>
 
         <h3>Current Configuration</h3>
         <div id="configuration" class="result">—</div>
@@ -527,7 +528,7 @@ const svg=$('canvas'), viewport=$('viewport'), statesLayer=$('statesLayer'), edg
 const transitionPreview=$('transitionPreview'),marqueeRect=$('marqueeRect'),selectionQuickbar=$('selectionQuickbar');
 
 let states=[],edges=[],selected=null,tool='select',connectFrom=null,drag=null,counter=0;
-let history=[],future=[],sim=null,lastCounterexample=null,lastComparisonSignature=null;
+let history=[],future=[],sim=null,simTimer=null,lastCounterexample=null,lastComparisonSignature=null;
 let selectedStates=new Set(),view={x:0,y:0,k:1},pan=null,marquee=null,connectDrag=null,spaceDown=false;
 let clipboardData=null,ignoreNextCanvasClick=false;
 let snapEnabled=localStorage.getItem('automataSnap')!=='off';
@@ -555,9 +556,9 @@ function restore(raw){
   const d=JSON.parse(raw);states=d.states||[];edges=d.edges||[];counter=d.counter||states.length;
   if(d.type)$('machineType').value=d.type;if(d.alphabet)$('alphabet').value=d.alphabet;
   if(d.view)view=d.view;
-  clearSelection();connectFrom=null;connectDrag=null;sim=null;render();
+  clearSelection();connectFrom=null;connectDrag=null;resetSimulation(true);render();
 }
-function commit(fn){snapshot();fn();render();snapshot(false)}
+function commit(fn){snapshot();resetSimulation(true);fn();render();snapshot(false)}
 
 function setTool(t){
   tool=t;connectFrom=null;connectDrag=null;updateInteractionOverlay();
@@ -668,7 +669,7 @@ function render(){
 function drawEdge(e){
   const a=stateById(e.from),b=stateById(e.to);if(!a||!b)return;
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');
-  g.setAttribute('class','edge'+(selected?.type==='edge'&&selected.id===e.id?' selected':'')+(e.animate?' edge-enter':''));
+  g.setAttribute('class','edge'+(selected?.type==='edge'&&selected.id===e.id?' selected':'')+(e.animate?' edge-enter':'')+(sim?.activeEdges?.includes(e.id)?' sim-active':''));
   let d,lx,ly;
   if(a.id===b.id){
     d=`M ${a.x-18} ${a.y-26} C ${a.x-78} ${a.y-115}, ${a.x+78} ${a.y-115}, ${a.x+18} ${a.y-26}`;
@@ -695,7 +696,8 @@ function drawEdge(e){
 }
 function drawState(s){
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');
-  g.setAttribute('class','state'+(s.final?' final':'')+(s.initial?' initial':'')+(selectedStates.has(s.id)?' selected':'')+(connectDrag&&connectDrag.from!==s.id?' connection-target':'')+(s.animate?' state-enter':'')+(s.flash?' flash-accept':''));
+  const simActive=sim?.activeStates?.includes(s.id),simAccepted=simActive&&sim?.done&&sim?.accepted,simRejected=simActive&&sim?.done&&!sim?.accepted;
+  g.setAttribute('class','state'+(s.final?' final':'')+(s.initial?' initial':'')+(selectedStates.has(s.id)?' selected':'')+(connectDrag&&connectDrag.from!==s.id?' connection-target':'')+(s.animate?' state-enter':'')+(s.flash?' flash-accept':'')+(simActive?' sim-active':'')+(simAccepted?' sim-accepted':'')+(simRejected?' sim-rejected':''));
   g.setAttribute('transform',`translate(${s.x},${s.y})`);
   if(s.initial){
     const l=document.createElementNS('http://www.w3.org/2000/svg','line');
@@ -1031,7 +1033,7 @@ function generateEquationModel(model){
     edges=generatedEdges.map(edge=>({
       id:uid('e'),from:ids.get(edge.from),to:ids.get(edge.to),label:edge.label
     }));
-    counter=nextStateCounter(model.states);clearSelection();connectFrom=null;connectDrag=null;sim=null
+    counter=nextStateCounter(model.states);clearSelection();connectFrom=null;connectDrag=null
   });
   closeEquationModal();
   fitView();
@@ -1190,7 +1192,7 @@ function practiceHintText(){
 }
 function startPracticeDrawing(){
   if(!practiceSession)return;
-  snapshot();states=[];edges=[];counter=0;clearSelection();sim=null;view={x:0,y:0,k:1};
+  snapshot();resetSimulation(true);states=[];edges=[];counter=0;clearSelection();view={x:0,y:0,k:1};
   $('machineType').value=practiceSession.machine;$('alphabet').value=practiceSession.model.alphabet.join(',');
   render();snapshot(false);closePracticeModal();
   $('practiceStrip').classList.remove('hidden');
@@ -1232,9 +1234,9 @@ $('practiceExitBtn').onclick=()=>{$('practiceStrip').classList.add('hidden');pra
 
 ['select','add','connect','delete'].forEach(t=>$(t+'Tool').onclick=()=>setTool(t));
 $('clearBtn').onclick=()=>commit(()=>{states=[];edges=[];clearSelection();counter=0});
-$('alphabet').onchange=()=>{snapshot();render()};
+$('alphabet').onchange=()=>{resetSimulation(true);snapshot();render()};
 $('maxLen').onchange=refreshAnalysis;
-$('machineType').onchange=()=>{sim=null;snapshot();render()};
+$('machineType').onchange=()=>{resetSimulation(true);snapshot();render()};
 
 function applyThemeMode(mode){
   const systemDark=matchMedia('(prefers-color-scheme: dark)').matches;
@@ -1385,15 +1387,104 @@ function pulseAcceptingStates(){
   const accepting=states.filter(state=>state.final);accepting.forEach(state=>{state.flash=true});render();
   setTimeout(()=>accepting.forEach(state=>{delete state.flash}),760)
 }
+function simulationSignature(input){return languageSignature()+'|input='+input}
+function stopSimulationTimer(){if(simTimer){clearTimeout(simTimer);simTimer=null}}
+function resetSimulation(clearOutput=true,redraw=false,announce=false){
+  stopSimulationTimer();sim=null;
+  $('runBtn').disabled=false;$('runBtn').textContent='Run';
+  $('stepBtn').disabled=false;$('stepBtn').textContent='Step';
+  $('resetSimBtn').disabled=true;
+  if(clearOutput){$('runResult').textContent='ยังไม่ได้ทดสอบ';$('configuration').textContent='—'}
+  if(announce)$('status').textContent='รีเซ็ต Simulation แล้ว';
+  if(redraw)render()
+}
+function simulationError(message){
+  stopSimulationTimer();
+  if(sim){sim.done=true;sim.activeEdges=[]}
+  $('runBtn').disabled=false;$('runBtn').textContent='Run';$('stepBtn').disabled=false;$('stepBtn').textContent='เริ่มใหม่';$('resetSimBtn').disabled=false;
+  $('runResult').innerHTML='<span class="bad">Error:</span> '+message;
+  $('configuration').textContent='—';$('status').textContent='Simulation หยุด: '+message;render()
+}
+function beginFASimulation(input){
+  const initial=states.filter(state=>state.initial);
+  if(initial.length!==1)throw new Error(initial.length?'ต้องมี Initial state เพียง 1 state':'ไม่มี Initial state');
+  const value=EPS.includes(input)?'':input,symbols=[...value],A=alphabet();
+  const invalid=symbols.find(symbol=>!A.includes(symbol));if(invalid)throw new Error(`${invalid} ไม่อยู่ใน alphabet`);
+  const map=transMap(),current=epsilonClosure([initial[0].id],map);
+  sim={kind:'fa',signature:simulationSignature(input),input,value,symbols,index:0,current,activeStates:[...current],activeEdges:[],trace:[`Start: ${type()==='DFA'?stateById(current[0])?.name:`{${current.map(id=>stateById(id)?.name).join(', ')}}`}`],done:false,accepted:false,auto:false};
+  if(!symbols.length)finishFASimulation();else updateFASimulationDisplay()
+}
+function finishFASimulation(){
+  sim.done=true;sim.accepted=sim.current.some(id=>stateById(id)?.final);stopSimulationTimer();
+  $('runBtn').disabled=false;$('runBtn').textContent='Run';$('stepBtn').disabled=false;$('stepBtn').textContent='เริ่มใหม่';
+  updateFASimulationDisplay();
+  $('status').textContent=`Simulation จบแล้ว: ${sim.accepted?'ACCEPT':'REJECT'}`
+}
+function updateFASimulationDisplay(){
+  if(!sim)return;
+  const names=sim.current.map(id=>stateById(id)?.name).filter(Boolean);
+  const config=type()==='DFA'?(names[0]||'∅'):`{${names.join(', ')}}`;
+  const remaining=sim.symbols.slice(sim.index).join('')||'λ';
+  $('configuration').textContent=`State: ${config}\nอ่านแล้ว: ${sim.symbols.slice(0,sim.index).join('')||'λ'}\nเหลือ: ${remaining}`;
+  $('runResult').innerHTML=sim.trace.join('\n')+(sim.done?'\nResult: <span class="'+(sim.accepted?'ok':'bad')+'">'+(sim.accepted?'ACCEPT':'REJECT')+'</span>':`\nProgress: ${sim.index}/${sim.symbols.length}`);
+  if(!sim.done)$('stepBtn').textContent=`Step ${sim.index}/${sim.symbols.length}`;
+  $('resetSimBtn').disabled=false;render()
+}
+function advanceFASimulation(){
+  if(!sim||sim.kind!=='fa'||sim.done)return;
+  const symbol=sim.symbols[sim.index],map=transMap(),rawDestinations=[],activeEdges=[];
+  for(const from of sim.current){
+    const matching=edges.filter(edge=>edge.from===from&&parseFAEdge(edge.label).includes(symbol));
+    matching.forEach(edge=>{activeEdges.push(edge.id);rawDestinations.push(edge.to)})
+  }
+  if(type()==='DFA'&&rawDestinations.length!==1){simulationError(`δ(${stateById(sim.current[0])?.name||'?'},${symbol}) ไม่สมบูรณ์`);return}
+  const next=type()==='DFA'?[rawDestinations[0]]:epsilonClosure([...new Set(rawDestinations)],map);
+  const closureSet=new Set(next);
+  edges.filter(edge=>closureSet.has(edge.from)&&closureSet.has(edge.to)&&parseFAEdge(edge.label).some(label=>EPS.includes(label))).forEach(edge=>activeEdges.push(edge.id));
+  sim.current=next;sim.activeStates=[...next];sim.activeEdges=[...new Set(activeEdges)];sim.index+=1;
+  const names=next.map(id=>stateById(id)?.name).filter(Boolean);
+  sim.trace.push(`${symbol}: ${type()==='DFA'?(names[0]||'∅'):`{${names.join(', ')}}`}`);
+  if(sim.index>=sim.symbols.length)finishFASimulation();else updateFASimulationDisplay()
+}
+function stepCurrent(){
+  const input=$('testInput').value.trim();stopSimulationTimer();$('runBtn').disabled=false;$('runBtn').textContent='Run';
+  if(type()!=='DFA'&&type()!=='NFA'){
+    const r=type()==='PDA'?runPDA(input):runTM(input);if(!r.ok){simulationError(r.error);return}
+    if(!sim||sim.kind!=='trace'||sim.signature!==simulationSignature(input))sim={kind:'trace',signature:simulationSignature(input),lines:r.detail.split('\n'),index:0,result:r,activeStates:[],activeEdges:[]};
+    sim.index=Math.min(sim.lines.length,sim.index+1);$('runResult').textContent=sim.lines.slice(0,sim.index).join('\n');$('configuration').textContent=sim.index===sim.lines.length?(r.config||'—'):`Step ${sim.index}/${sim.lines.length}`;
+    $('stepBtn').textContent=sim.index===sim.lines.length?'เริ่มใหม่':`Step ${sim.index}/${sim.lines.length}`;$('resetSimBtn').disabled=false;
+    if(sim.index===sim.lines.length){$('runResult').innerHTML+=`\nResult: <span class="${r.accepted?'ok':'bad'}">${r.accepted?'ACCEPT':'REJECT'}</span>`;sim=null}
+    return
+  }
+  try{
+    if(!sim||sim.kind!=='fa'||sim.signature!==simulationSignature(input)||sim.done){
+      resetSimulation(false);beginFASimulation(input);
+      if(sim&&!sim.done)advanceFASimulation()
+    }else advanceFASimulation()
+  }catch(error){simulationError(error.message)}
+}
+function autoplayFASimulation(){
+  if(!sim||sim.done)return;
+  advanceFASimulation();
+  if(sim&&!sim.done){simTimer=setTimeout(autoplayFASimulation,520)}
+}
 function runCurrent(){
-  const inp=$('testInput').value.trim(),r=type()==='DFA'||type()==='NFA'?runFA(inp):type()==='PDA'?runPDA(inp):runTM(inp);
-  if(!r.ok){$('runResult').innerHTML='<span class="bad">Error:</span> '+r.error;return}
+  const input=$('testInput').value.trim();resetSimulation(false);
+  if(type()==='DFA'||type()==='NFA'){
+    try{beginFASimulation(input);if(!sim.done){sim.auto=true;$('runBtn').disabled=true;$('runBtn').textContent='Running…';$('stepBtn').disabled=true;simTimer=setTimeout(autoplayFASimulation,360)}}catch(error){simulationError(error.message)}
+    return
+  }
+  const r=type()==='PDA'?runPDA(input):runTM(input);
+  if(!r.ok){simulationError(r.error);return}
   if(r.accepted)pulseAcceptingStates();
   $('runResult').innerHTML=r.detail+'\nResult: <span class="'+(r.accepted?'ok':'bad')+'">'+(r.accepted?'ACCEPT':'REJECT')+'</span>';
-  $('configuration').textContent=r.config||'—'
+  $('configuration').textContent=r.config||'—';$('resetSimBtn').disabled=false
 }
 $('runBtn').onclick=runCurrent;
-$('stepBtn').onclick=()=>{runCurrent();$('status').textContent='Step mode แบบละเอียดจะเพิ่มในเวอร์ชันถัดไป; ตอนนี้แสดง trace ทุก step แล้ว'};
+$('stepBtn').onclick=stepCurrent;
+$('resetSimBtn').onclick=()=>resetSimulation(true,true,true);
+$('testInput').oninput=()=>{if(sim)resetSimulation(true,true)};
+$('testInput').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();runCurrent()}};
 
 function canvasLanguageModel(){
   if(type()!=='DFA'&&type()!=='NFA')throw new Error('ตรวจได้เฉพาะ DFA, NFA และ λ-NFA เท่านั้น');
@@ -1540,7 +1631,7 @@ function preset(name){
     $('alphabet').value='1';$('machineType').value='TM';const q0=add('q0',220,310,true),qf=add('qAccept',730,310,false,true);
     E(q0,q0,'1→1,R');E(q0,qf,'□→1,S')
   }
-  clearSelection();sim=null;view={x:0,y:0,k:1};render();fitView();snapshot(false)
+  clearSelection();resetSimulation(true);view={x:0,y:0,k:1};render();fitView();snapshot(false)
 }
 document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>preset(b.dataset.preset));
 

@@ -785,6 +785,17 @@ body[data-simulator="automata"] .sim-right-panel .tabs {
   background: var(--notebook-paper);
 }
 
+body[data-simulator="automata"] .simulation-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+body[data-simulator="automata"] .simulation-actions button { min-width: 0; }
+body[data-simulator="automata"] .simulation-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .drafting-ruler {
   position: absolute;
   z-index: 3;
@@ -1158,6 +1169,33 @@ body[data-simulator="automata"] .state-enter { animation: automataStateIn 220ms 
 body[data-simulator="automata"] .state.flash-accept circle.outer {
   animation: automataAccept 720ms cubic-bezier(.2,.8,.2,1) both;
 }
+body[data-simulator="automata"] .state.sim-active circle.outer {
+  fill: color-mix(in srgb, var(--notebook-accent) 16%, var(--notebook-sheet));
+  stroke: var(--notebook-accent);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--notebook-accent) 62%, transparent));
+  animation: automataSimulationPulse 760ms ease-in-out infinite alternate;
+}
+body[data-simulator="automata"] .state.sim-accepted circle.outer {
+  fill: color-mix(in srgb, var(--notebook-success) 20%, var(--notebook-sheet));
+  stroke: var(--notebook-success);
+  animation: automataSimulationFinish 420ms cubic-bezier(.2,.8,.2,1) both;
+}
+body[data-simulator="automata"] .state.sim-rejected circle.outer {
+  fill: color-mix(in srgb, var(--notebook-danger) 16%, var(--notebook-sheet));
+  stroke: var(--notebook-danger);
+  animation: automataSimulationFinish 420ms cubic-bezier(.2,.8,.2,1) both;
+}
+body[data-simulator="automata"] .edge.sim-active path:not(.edge-hit) {
+  stroke: var(--notebook-accent);
+  stroke-width: 4;
+  stroke-dasharray: 9 7;
+  animation: automataDash 520ms linear infinite;
+}
+body[data-simulator="automata"] .edge.sim-active text {
+  fill: var(--notebook-accent);
+  font-weight: 850;
+}
 body[data-simulator="automata"] .edge-enter path:not(.edge-hit) {
   stroke-dasharray: 900;
   stroke-dashoffset: 900;
@@ -1172,6 +1210,8 @@ body[data-simulator="automata"] .edge-enter text { animation: automataLabelIn 26
 @keyframes automataEdgeIn { to { stroke-dashoffset: 0; } }
 @keyframes automataLabelIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes automataQuickbarIn { from { opacity: 0; transform: translate(-50%,-8px) scale(.98); } to { opacity: 1; transform: translate(-50%,0) scale(1); } }
+@keyframes automataSimulationPulse { to { filter: drop-shadow(0 0 13px color-mix(in srgb, var(--notebook-accent) 78%, transparent)); } }
+@keyframes automataSimulationFinish { from { transform: scale(.9); } 70% { transform: scale(1.08); } to { transform: scale(1); } }
 
 /* Dark drafting-table theme */
 html[data-automata-theme="dark"] body[data-simulator="automata"] {
