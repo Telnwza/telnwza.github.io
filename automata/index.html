@@ -521,6 +521,7 @@ Lambda transition: δ(q0,lambda) = q1</div>
 </div>
 
 <script src="./automata-equation.js"></script>
+<script src="./practice-generator.js"></script>
 <script>
 (()=>{
 const $=id=>document.getElementById(id);
@@ -1073,21 +1074,10 @@ $('transitionAdvanced').ontoggle=()=>{
 $('generateRegex').onclick=()=>generateEquationModel(validateRegex());
 $('generateTransitions').onclick=()=>generateEquationModel(validateTransitions());
 
-const practiceBank=[
-  {difficulty:'easy',title:'อ่าน 0 กี่ตัวก็ได้',regex:'0*',hint:'เริ่มต้นก็เป็น final state และวนด้วย 0'},
-  {difficulty:'easy',title:'ลงท้ายด้วย 1',regex:'{0,1}*.1',hint:'สถานะสุดท้ายต้องจำว่าสัญลักษณ์ล่าสุดคือ 1'},
-  {difficulty:'easy',title:'ภาษาจำกัดชุดเล็ก',set:'{λ, 0, 1}',hint:'ต้องรับคำว่างด้วย และรับคำยาว 1 ตัวเท่านั้น'},
-  {difficulty:'medium',title:'ลงท้ายด้วย 01',regex:'{0,1}*.0.1',hint:'จำ suffix ที่ยังมีโอกาสกลายเป็น 01'},
-  {difficulty:'medium',title:'มี 00 อยู่ข้างใน',regex:'{0,1}*.0.0.{0,1}*',hint:'เมื่อเจอ 00 แล้วจะอยู่ใน accepting state ต่อไป'},
-  {difficulty:'medium',title:'บล็อก ab* หรือ bb',set:'{ab*,bb}*',hint:'มองแต่ละรอบของดาวเป็นการเลือกบล็อก ab* หรือ bb หนึ่งครั้ง'},
-  {difficulty:'medium',title:'ภาษาจำกัดสลับบิต',set:'{01, 10, 101}',hint:'วาดเป็นต้นไม้ตาม prefix แล้วรวมทางที่ทำงานเหมือนกันได้'},
-  {difficulty:'hard',title:'มี 010 อยู่ข้างใน',regex:'{0,1}*.0.1.0.{0,1}*',hint:'แต่ละ state จำ prefix ของ 010 ที่ตรงอยู่ล่าสุด'},
-  {difficulty:'hard',title:'บล็อก 1 หรือ 01',regex:'{1,0.1}*',hint:'ทุก 0 ต้องตามด้วย 1 และคำว่างต้องผ่าน'},
-  {difficulty:'hard',title:'ภาษาจำกัดหลายความยาว',set:'{λ, 00, 010, 101, 111}',hint:'เริ่มจาก prefix tree แล้วตรวจว่า state ใดรวมกันได้'}
-];
 let practiceSession=null;
 let practiceSerial=0;
 let practiceScore=Number(localStorage.getItem('automataPracticeScore')||0);
+let practiceDecks=(()=>{try{const saved=JSON.parse(localStorage.getItem('automataPracticeDecksV2')||'{}');return saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:{}}catch{return {}}})();
 
 function practiceTargetExpression(question){
   return question.regex||question.set
@@ -1146,14 +1136,16 @@ function updatePracticeScore(){
 }
 function generatePracticeQuestion(){
   const difficulty=$('practiceDifficulty').value,machine=$('practiceMachine').value,direction=$('practiceDirection').value;
-  const candidates=practiceBank.filter(item=>item.difficulty===difficulty);
-  let question=candidates[Math.floor(Math.random()*candidates.length)];
-  if(candidates.length>1&&practiceSession?.question===question)question=candidates[(candidates.indexOf(question)+1)%candidates.length];
+  const draw=AutomataPracticeGenerator.drawQuestion(difficulty,practiceDecks[difficulty]);
+  const question=draw.question;practiceDecks[difficulty]=draw.state;
+  localStorage.setItem('automataPracticeDecksV2',JSON.stringify(practiceDecks));
   const model=practiceModel(question,machine);
-  practiceSession={question,machine,direction,model,expression:practiceTargetExpression(question),solved:false};
+  practiceSession={question,machine,direction,model,expression:practiceTargetExpression(question),solved:false,deck:draw};
   practiceSerial+=1;
   $('practiceTypeBadge').textContent=machine;
-  $('practiceQuestionNumber').textContent=`โจทย์ #${practiceSerial} · ${difficulty==='easy'?'เริ่มต้น':difficulty==='medium'?'กำลังดี':'ท้าทาย'}`;
+  const level=difficulty==='easy'?'เริ่มต้น':difficulty==='medium'?'กำลังดี':'ท้าทาย';
+  const deckStatus=draw.remaining?`เหลือไม่ซ้ำ ${draw.remaining}/${draw.total}`:`ครบชุด ${draw.total} ข้อแล้ว`;
+  $('practiceQuestionNumber').textContent=`โจทย์ #${practiceSerial} · ${level} · ${deckStatus}`;
   $('practiceDiagramQuestion').classList.toggle('hidden',direction!=='diagram-to-regex');
   $('practiceEquationQuestion').classList.toggle('hidden',direction!=='equation-to-diagram');
   $('practiceRegexAnswer').value='';

@@ -117,16 +117,17 @@ The tests cover circuit evaluation, truth-table generation, Boolean minimization
 Run the Regular Expression and transition-equation parser tests with Node.js:
 
 ```sh
-node --test automata/automata-equation.test.js
+node --test automata/automata-equation.test.js automata/practice-generator.test.js
 ```
 
-The tests cover classroom and legacy Regular Expression notation, lambda spellings, Thompson lambda-NFA generation, compact position-NFA construction, subset construction, minimal DFA generation, language equivalence, syntax errors, DFA/NFA transition definitions, parallel-transition merging, and automatic state layout.
+The tests cover classroom and legacy Regular Expression notation, lambda spellings, Thompson lambda-NFA generation, compact position-NFA construction, subset construction, minimal DFA generation, language equivalence, syntax errors, DFA/NFA transition definitions, parallel-transition merging, automatic state layout, generated practice catalogs, and no-repeat shuffled decks.
 
 ### Regex Notation Converter and Practice Lab
 
 - Enter either Set-style notation such as `{ab*,bb}*` or equation notation such as `(a.b* + b.b)*`; both fields can generate a DFA/NFA directly.
 - Conversion is exact and bidirectional. Braces plus commas express union in Set-style notation, while `+` expresses union in the equation field.
 - Practice Lab can show a DFA/NFA diagram for a Regex answer, or show a Regex in either classroom style for the learner to draw on the main canvas.
+- Practice questions are generated from parameterized language templates: 28 beginner, 40 intermediate, and 60 advanced variants. A persisted shuffled deck prevents repeats until every question at that level has appeared.
 - Answers are checked by exact language equivalence rather than visual shape. A mismatch reports the shortest counterexample.
 - The Automata canvas supports cursor-centered zoom, trackpad/mouse-wheel panning, Space-drag panning, content-aware Fit, optional grid snapping, marquee/Shift multi-selection, group dragging, keyboard nudging, and copy/paste/duplicate.
 - Drag the transition handle on the right side of a state to another state for a live transition preview. Selection quick actions provide Initial/Final toggles, alignment, duplication, and deletion.
