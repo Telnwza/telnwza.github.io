@@ -4,6 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Automata Studio</title>
+<script>
+try{
+  const mode=localStorage.getItem('automataThemeMode')||'system';
+  const dark=mode==='dark'||(mode==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.automataTheme=dark?'dark':'light';
+  document.documentElement.dataset.automataThemeMode=mode;
+}catch(_){document.documentElement.dataset.automataTheme='light'}
+</script>
 <link rel="stylesheet" href="../css/style.css" />
 <style>
 :root{
@@ -122,6 +130,11 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
         <option value="PDA">Pushdown Automaton</option>
         <option value="TM">Turing Machine</option>
       </select>
+      <select id="themeMode" style="width:auto" aria-label="ธีมสี">
+        <option value="system">Theme: System</option>
+        <option value="light">Theme: Light</option>
+        <option value="dark">Theme: Dark</option>
+      </select>
       <button id="undoBtn">Undo</button>
       <button id="redoBtn">Redo</button>
       <button id="saveBtn">Save</button>
@@ -146,8 +159,9 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
       </div>
       <div class="help">
         ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state<br>
-        ใช้ <kbd>Shift</kbd> + คลิก state สองตัวเพื่อโยงเส้น<br>
-        กด <kbd>Delete</kbd> เพื่อลบ, <kbd>Ctrl/Cmd+Z</kbd> เพื่อ Undo
+        ลากจุดด้านขวาของ state เพื่อสร้าง transition<br>
+        <kbd>Shift</kbd>+คลิกเลือกหลาย state · <kbd>Space</kbd>+ลากเพื่อเลื่อนจอ<br>
+        <kbd>Ctrl/Cmd+C/V/D</kbd> คัดลอก วาง และทำสำเนา
       </div>
 
       <h3>ตั้งค่า</h3>
@@ -191,7 +205,11 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
     <section class="panel canvas-panel">
       <div class="toolbar">
         <span class="badge" id="modeBadge">โหมด: เลือก/ลาก</span>
-        <button id="fitBtn">จัดให้อยู่กลาง</button>
+        <button id="snapBtn" class="active" aria-pressed="true">Snap: On</button>
+        <button id="zoomOutBtn" aria-label="ซูมออก">−</button>
+        <button id="zoomResetBtn" aria-label="ซูม 100%">100%</button>
+        <button id="fitBtn">Fit</button>
+        <button id="zoomInBtn" aria-label="ซูมเข้า">+</button>
         <button id="validateBtn">ตรวจความถูกต้อง</button>
       </div>
       <div id="practiceStrip" class="practice-strip hidden" aria-live="polite">
@@ -208,15 +226,36 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
         <div id="practiceStripFeedback" class="practice-strip-feedback">เริ่มวาดได้เลย แล้วกดตรวจคำตอบ</div>
       </div>
       <div class="canvas-shell">
+        <div id="selectionQuickbar" class="selection-quickbar hidden" role="toolbar" aria-label="คำสั่งสำหรับ State ที่เลือก">
+          <span id="selectionCount">เลือก 1 State</span>
+          <button id="quickInitial">Initial</button>
+          <button id="quickFinal">Final</button>
+          <button id="quickAlignH">แนวนอน</button>
+          <button id="quickAlignV">แนวตั้ง</button>
+          <button id="quickDuplicate">Duplicate</button>
+          <button id="quickDelete" class="danger">Delete</button>
+        </div>
         <svg id="canvas" viewBox="0 0 1000 620">
           <defs>
             <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L9,3 z" fill="#94a3b8"></path>
             </marker>
+            <pattern id="smallGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path class="grid-minor" d="M 20 0 L 0 0 0 20" fill="none"></path>
+            </pattern>
+            <pattern id="largeGrid" width="100" height="100" patternUnits="userSpaceOnUse">
+              <rect width="100" height="100" fill="url(#smallGrid)"></rect>
+              <path class="grid-major" d="M 100 0 L 0 0 0 100" fill="none"></path>
+            </pattern>
           </defs>
           <g id="viewport">
+            <rect id="canvasGrid" x="-5000" y="-5000" width="10000" height="10000" fill="url(#largeGrid)"></rect>
             <g id="edgesLayer"></g>
             <g id="statesLayer"></g>
+            <g id="interactionLayer" pointer-events="none">
+              <path id="transitionPreview" class="transition-preview hidden"></path>
+              <rect id="marqueeRect" class="marquee-rect hidden"></rect>
+            </g>
           </g>
         </svg>
       </div>
@@ -486,52 +525,113 @@ Lambda transition: δ(q0,lambda) = q1</div>
 (()=>{
 const $=id=>document.getElementById(id);
 const svg=$('canvas'), viewport=$('viewport'), statesLayer=$('statesLayer'), edgesLayer=$('edgesLayer');
+const transitionPreview=$('transitionPreview'),marqueeRect=$('marqueeRect'),selectionQuickbar=$('selectionQuickbar');
 
 let states=[],edges=[],selected=null,tool='select',connectFrom=null,drag=null,counter=0;
 let history=[],future=[],sim=null,lastCounterexample=null,lastComparisonSignature=null;
+let selectedStates=new Set(),view={x:0,y:0,k:1},pan=null,marquee=null,connectDrag=null,spaceDown=false;
+let clipboardData=null,ignoreNextCanvasClick=false;
+let snapEnabled=localStorage.getItem('automataSnap')!=='off';
 const EPS=['λ','lambda','lamda','ε','eps','epsilon'];
+const GRID=20;
 
 function type(){return $('machineType').value}
 function alphabet(){return $('alphabet').value.split(',').map(x=>x.trim()).filter(Boolean)}
 function stateById(id){return states.find(s=>s.id===id)}
 function edgeById(id){return edges.find(e=>e.id===id)}
 function uid(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function snapValue(value){return snapEnabled?Math.round(value/GRID)*GRID:value}
+function clearSelection(){selected=null;selectedStates.clear()}
+function selectOnlyState(id){selectedStates=new Set([id]);selected={type:'state',id}}
+function normalizeSelection(){
+  selectedStates=new Set([...selectedStates].filter(id=>stateById(id)));
+  if(selected?.type==='state'&&!selectedStates.has(selected.id))selected=selectedStates.size?{type:'state',id:[...selectedStates][0]}:null
+}
 
 function snapshot(push=true){
   if(push){history.push(JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value})); if(history.length>80)history.shift(); future=[]}
-  localStorage.setItem('automataStudioAuto',JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value}));
+  localStorage.setItem('automataStudioAuto',JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value,view}));
 }
 function restore(raw){
   const d=JSON.parse(raw);states=d.states||[];edges=d.edges||[];counter=d.counter||states.length;
   if(d.type)$('machineType').value=d.type;if(d.alphabet)$('alphabet').value=d.alphabet;
-  selected=null;connectFrom=null;sim=null;render();
+  if(d.view)view=d.view;
+  clearSelection();connectFrom=null;connectDrag=null;sim=null;render();
 }
 function commit(fn){snapshot();fn();render();snapshot(false)}
 
 function setTool(t){
-  tool=t;connectFrom=null;
+  tool=t;connectFrom=null;connectDrag=null;updateInteractionOverlay();
   ['select','add','connect','delete'].forEach(x=>$(x+'Tool').classList.toggle('active',x===t));
   const names={select:'เลือก/ลาก',add:'เพิ่ม State',connect:'โยงเส้น',delete:'ลบ'};
   $('modeBadge').textContent='โหมด: '+names[t];$('status').textContent='เลือกโหมด '+names[t];
 }
 
-function svgPoint(ev){
+function canvasPoint(ev){
   const p=svg.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;
   return p.matrixTransform(svg.getScreenCTM().inverse());
 }
+function svgPoint(ev){
+  const p=svg.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;
+  const matrix=viewport.getScreenCTM();
+  return matrix?p.matrixTransform(matrix.inverse()):canvasPoint(ev)
+}
+function applyView(){
+  viewport.setAttribute('transform',`translate(${view.x} ${view.y}) scale(${view.k})`);
+  $('zoomResetBtn').textContent=`${Math.round(view.k*100)}%`
+}
+function zoomAt(factor,anchor={x:500,y:310}){
+  const next=Math.max(.35,Math.min(3,view.k*factor));
+  const worldX=(anchor.x-view.x)/view.k,worldY=(anchor.y-view.y)/view.k;
+  view.x=anchor.x-worldX*next;view.y=anchor.y-worldY*next;view.k=next;
+  applyView();updateInteractionOverlay()
+}
+function resetView(){view={x:0,y:0,k:1};applyView();updateInteractionOverlay()}
+function fitView(){
+  if(!states.length){resetView();return}
+  const margin=88,minX=Math.min(...states.map(s=>s.x))-55,maxX=Math.max(...states.map(s=>s.x))+55;
+  const minY=Math.min(...states.map(s=>s.y))-90,maxY=Math.max(...states.map(s=>s.y))+55;
+  const width=Math.max(120,maxX-minX),height=Math.max(120,maxY-minY);
+  const k=Math.max(.35,Math.min(2,Math.min((1000-margin*2)/width,(620-margin*2)/height)));
+  view={k,x:(1000-width*k)/2-minX*k,y:(620-height*k)/2-minY*k};
+  applyView();updateInteractionOverlay();$('status').textContent='จัด Automata ให้อยู่ในมุมมองแล้ว'
+}
+function updateInteractionOverlay(){
+  if(connectDrag||connectFrom){
+    const from=stateById(connectDrag?.from||connectFrom),point=connectDrag?.point;
+    if(from&&point){
+      const dx=point.x-from.x,dy=point.y-from.y,len=Math.hypot(dx,dy)||1;
+      const sx=from.x+dx/len*34,sy=from.y+dy/len*34;
+      transitionPreview.setAttribute('d',`M ${sx} ${sy} Q ${(sx+point.x)/2} ${(sy+point.y)/2-22} ${point.x} ${point.y}`);
+      transitionPreview.classList.remove('hidden')
+    }else transitionPreview.classList.add('hidden')
+  }else transitionPreview.classList.add('hidden');
+  if(marquee){
+    const x=Math.min(marquee.start.x,marquee.current.x),y=Math.min(marquee.start.y,marquee.current.y);
+    marqueeRect.setAttribute('x',x);marqueeRect.setAttribute('y',y);
+    marqueeRect.setAttribute('width',Math.abs(marquee.current.x-marquee.start.x));
+    marqueeRect.setAttribute('height',Math.abs(marquee.current.y-marquee.start.y));
+    marqueeRect.classList.remove('hidden')
+  }else marqueeRect.classList.add('hidden')
+}
 function addState(x,y,name){
-  const id=uid('s');states.push({id,name:name||'q'+counter++,x,y,initial:false,final:false});
-  selected={type:'state',id};
+  const id=uid('s');states.push({id,name:name||'q'+counter++,x:snapValue(x),y:snapValue(y),initial:false,final:false,animate:true});
+  selectOnlyState(id);
 }
 function removeSelected(){
+  if(selectedStates.size){const ids=new Set(selectedStates);states=states.filter(s=>!ids.has(s.id));edges=edges.filter(e=>!ids.has(e.from)&&!ids.has(e.to));clearSelection();return}
   if(!selected)return;
   if(selected.type==='state'){states=states.filter(s=>s.id!==selected.id);edges=edges.filter(e=>e.from!==selected.id&&e.to!==selected.id)}
   else edges=edges.filter(e=>e.id!==selected.id);
-  selected=null;
+  clearSelection();
 }
 function openEdgeModal(from,to){
   window.pendingEdge={from,to};$('modalEdgeLabel').value=defaultEdgeLabel();$('edgeModal').style.display='flex';
   $('modalEdgeLabel').focus();
+}
+function finishConnection(from,to){
+  if(!from||!to)return;
+  connectFrom=null;connectDrag=null;updateInteractionOverlay();openEdgeModal(from,to)
 }
 function defaultEdgeLabel(){
   if(type()==='PDA')return 'a,λ→A';
@@ -544,18 +644,32 @@ function edgeHint(){
   return 'รูปแบบ: read→write,move เช่น 1→1,R หรือ □→1,S';
 }
 
+function updateSelectionQuickbar(){
+  normalizeSelection();
+  const count=selectedStates.size;
+  selectionQuickbar.classList.toggle('hidden',count===0);
+  if(!count)return;
+  $('selectionCount').textContent=`เลือก ${count} State`;
+  $('quickInitial').classList.toggle('active',count===1&&stateById([...selectedStates][0])?.initial);
+  $('quickInitial').disabled=count!==1;
+  $('quickFinal').classList.toggle('active',[...selectedStates].every(id=>stateById(id)?.final));
+  $('quickAlignH').classList.toggle('hidden',count<2);
+  $('quickAlignV').classList.toggle('hidden',count<2)
+}
+
 function render(){
+  applyView();normalizeSelection();
   edgesLayer.innerHTML='';statesLayer.innerHTML='';
   for(const e of edges)drawEdge(e);
   for(const s of states)drawState(s);
-  syncInspector();refreshAnalysis();
+  syncInspector();refreshAnalysis();updateSelectionQuickbar();updateInteractionOverlay();
   if(lastComparisonSignature&&lastComparisonSignature!==languageSignature())resetCompareResult();
   $('countInfo').textContent=`${states.length} states, ${edges.length} transitions`;
 }
 function drawEdge(e){
   const a=stateById(e.from),b=stateById(e.to);if(!a||!b)return;
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');
-  g.setAttribute('class','edge'+(selected?.type==='edge'&&selected.id===e.id?' selected':''));
+  g.setAttribute('class','edge'+(selected?.type==='edge'&&selected.id===e.id?' selected':'')+(e.animate?' edge-enter':''));
   let d,lx,ly;
   if(a.id===b.id){
     d=`M ${a.x-18} ${a.y-26} C ${a.x-78} ${a.y-115}, ${a.x+78} ${a.y-115}, ${a.x+18} ${a.y-26}`;
@@ -576,13 +690,13 @@ function drawEdge(e){
   const p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d',d);p.setAttribute('marker-end','url(#arrow)');
   const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('x',lx);t.setAttribute('y',ly);t.setAttribute('text-anchor','middle');t.textContent=e.label||'∅';
   g.append(hit,p,t);
-  g.onclick=ev=>{ev.stopPropagation();if(tool==='delete')commit(()=>{selected={type:'edge',id:e.id};removeSelected()});else{selected={type:'edge',id:e.id};render()}};
-  g.ondblclick=ev=>{ev.stopPropagation();selected={type:'edge',id:e.id};render();$('edgeLabel').focus()};
-  edgesLayer.append(g);
+  g.onclick=ev=>{ev.stopPropagation();if(tool==='delete')commit(()=>{selectedStates.clear();selected={type:'edge',id:e.id};removeSelected()});else{selectedStates.clear();selected={type:'edge',id:e.id};render()}};
+  g.ondblclick=ev=>{ev.stopPropagation();selectedStates.clear();selected={type:'edge',id:e.id};render();$('edgeLabel').focus()};
+  edgesLayer.append(g);if(e.animate)setTimeout(()=>{delete e.animate},380)
 }
 function drawState(s){
   const g=document.createElementNS('http://www.w3.org/2000/svg','g');
-  g.setAttribute('class','state'+(s.final?' final':'')+(s.initial?' initial':'')+(selected?.type==='state'&&selected.id===s.id?' selected':''));
+  g.setAttribute('class','state'+(s.final?' final':'')+(s.initial?' initial':'')+(selectedStates.has(s.id)?' selected':'')+(connectDrag&&connectDrag.from!==s.id?' connection-target':'')+(s.animate?' state-enter':'')+(s.flash?' flash-accept':''));
   g.setAttribute('transform',`translate(${s.x},${s.y})`);
   if(s.initial){
     const l=document.createElementNS('http://www.w3.org/2000/svg','line');
@@ -592,26 +706,87 @@ function drawState(s){
   if(s.final){const i=document.createElementNS('http://www.w3.org/2000/svg','circle');i.setAttribute('class','inner');i.setAttribute('r','25');g.append(i)}
   const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','middle');t.textContent=s.name;g.append(t);
 
+  const handle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  handle.setAttribute('class','transition-handle');handle.setAttribute('cx','38');handle.setAttribute('cy','0');handle.setAttribute('r','7');
+  handle.onmousedown=ev=>{
+    if(ev.button!==0)return;ev.preventDefault();ev.stopPropagation();
+    selectOnlyState(s.id);connectDrag={from:s.id,point:{x:s.x+42,y:s.y},dragging:true};
+    $('status').textContent=`ลาก Transition จาก ${s.name} ไปยัง State ปลายทาง`;render()
+  };
+  handle.onmouseup=ev=>{ev.preventDefault();ev.stopPropagation();if(connectDrag)finishConnection(connectDrag.from,s.id)};
+  g.append(handle);
+
   g.onmousedown=ev=>{
+    if(ev.button!==0)return;
     ev.stopPropagation();
-    if(ev.shiftKey){ if(!connectFrom){connectFrom=s.id;$('status').textContent='เลือกต้นทาง '+s.name+' แล้ว'} else{openEdgeModal(connectFrom,s.id);connectFrom=null} return }
-    if(tool==='delete'){commit(()=>{selected={type:'state',id:s.id};removeSelected()});return}
-    if(tool==='connect'){if(!connectFrom){connectFrom=s.id;$('status').textContent='เลือกต้นทาง '+s.name+' แล้ว'}else{openEdgeModal(connectFrom,s.id);connectFrom=null}return}
-    selected={type:'state',id:s.id};
-    if(tool==='select'){const p=svgPoint(ev);drag={id:s.id,dx:p.x-s.x,dy:p.y-s.y};snapshot()}
+    if(tool==='delete'){commit(()=>{selectOnlyState(s.id);removeSelected()});return}
+    if(tool==='connect'){
+      if(!connectDrag){selectOnlyState(s.id);connectDrag={from:s.id,point:{x:s.x,y:s.y}};$('status').textContent='เลือกต้นทาง '+s.name+' แล้ว';render()}
+      else finishConnection(connectDrag.from,s.id);
+      return
+    }
+    if(ev.shiftKey){
+      if(selectedStates.has(s.id))selectedStates.delete(s.id);else selectedStates.add(s.id);
+      selected=selectedStates.size?{type:'state',id:s.id}:null;render();return
+    }
+    if(!selectedStates.has(s.id))selectOnlyState(s.id);else selected={type:'state',id:s.id};
+    if(tool==='select'){
+      const p=svgPoint(ev);snapshot();
+      drag={start:p,moved:false,items:[...selectedStates].map(id=>stateById(id)).filter(Boolean).map(state=>({state,x:state.x,y:state.y}))};svg.classList.add('dragging-states')
+    }
     render()
   };
-  g.ondblclick=ev=>{ev.stopPropagation();selected={type:'state',id:s.id};render();$('stateName').focus()};
-  statesLayer.append(g);
+  g.onmouseup=ev=>{if(connectDrag?.dragging){ev.stopPropagation();finishConnection(connectDrag.from,s.id)}};
+  g.ondblclick=ev=>{ev.stopPropagation();selectOnlyState(s.id);render();$('stateName').focus()};
+  statesLayer.append(g);if(s.animate)setTimeout(()=>{delete s.animate},260)
 }
-
-svg.onmousemove=ev=>{if(!drag)return;const s=stateById(drag.id),p=svgPoint(ev);s.x=Math.max(40,Math.min(960,p.x-drag.dx));s.y=Math.max(40,Math.min(580,p.y-drag.dy));render()};
-window.onmouseup=()=>{if(drag){drag=null;snapshot(false)}};
+svg.onmousedown=ev=>{
+  if(ev.target.closest('.state')||ev.target.closest('.edge')||ev.button===2)return;
+  if(ev.button===1||spaceDown){
+    ev.preventDefault();const point=canvasPoint(ev);pan={start:point,x:view.x,y:view.y};
+    svg.classList.add('is-panning');return
+  }
+  if(ev.button===0&&tool==='select'){
+    const point=svgPoint(ev);marquee={start:point,current:point,additive:ev.shiftKey,moved:false};
+    if(!ev.shiftKey)clearSelection();updateInteractionOverlay();render()
+  }
+};
+svg.onmousemove=ev=>{
+  const world=svgPoint(ev);
+  if(drag){
+    const dx=world.x-drag.start.x,dy=world.y-drag.start.y;
+    if(!drag.moved&&Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;
+    if(drag.moved){drag.items.forEach(item=>{item.state.x=snapValue(item.x+dx);item.state.y=snapValue(item.y+dy)});render()}
+  }else if(connectDrag){connectDrag.point=world;updateInteractionOverlay()}
+  else if(pan){const point=canvasPoint(ev);view.x=pan.x+point.x-pan.start.x;view.y=pan.y+point.y-pan.start.y;applyView()}
+  else if(marquee){marquee.current=world;if(Math.abs(world.x-marquee.start.x)+Math.abs(world.y-marquee.start.y)>3)marquee.moved=true;updateInteractionOverlay()}
+};
+window.addEventListener('mouseup',ev=>{
+  if(drag){const moved=drag.moved;drag=null;svg.classList.remove('dragging-states');if(moved){snapshot(false);render();$('status').textContent=`ย้าย ${selectedStates.size} state แล้ว`}}
+  if(pan){pan=null;svg.classList.remove('is-panning');snapshot(false)}
+  if(marquee){
+    const finished=marquee;marquee=null;
+    if(finished.moved){
+      const x1=Math.min(finished.start.x,finished.current.x),x2=Math.max(finished.start.x,finished.current.x);
+      const y1=Math.min(finished.start.y,finished.current.y),y2=Math.max(finished.start.y,finished.current.y);
+      states.forEach(state=>{if(state.x+31>=x1&&state.x-31<=x2&&state.y+31>=y1&&state.y-31<=y2)selectedStates.add(state.id)});
+      selected=selectedStates.size?{type:'state',id:[...selectedStates][0]}:null;ignoreNextCanvasClick=true;
+      $('status').textContent=`เลือก ${selectedStates.size} state`;render()
+    }else updateInteractionOverlay()
+  }
+  if(connectDrag?.dragging){connectDrag=null;updateInteractionOverlay();render();$('status').textContent='ยกเลิกการสร้าง Transition'}
+});
+svg.addEventListener('wheel',ev=>{
+  ev.preventDefault();
+  if(ev.ctrlKey||ev.metaKey){zoomAt(ev.deltaY<0?1.12:1/1.12,canvasPoint(ev))}
+  else{const unit=ev.deltaMode===1?16:1;view.x-=ev.deltaX*unit*(1000/Math.max(1,svg.clientWidth));view.y-=ev.deltaY*unit*(620/Math.max(1,svg.clientHeight));applyView()}
+},{passive:false});
 svg.onclick=ev=>{
   if(ev.target.closest('.state')||ev.target.closest('.edge'))return;
+  if(ignoreNextCanvasClick){ignoreNextCanvasClick=false;return}
   const p=svgPoint(ev);
   if(tool==='add'){commit(()=>addState(p.x,p.y));return}
-  selected=null;connectFrom=null;render()
+  clearSelection();connectFrom=null;connectDrag=null;render()
 };
 svg.ondblclick=ev=>{if(ev.target===svg||ev.target.closest('#viewport')){const p=svgPoint(ev);commit(()=>addState(p.x,p.y))}};
 
@@ -626,7 +801,52 @@ $('toggleInitial').onclick=()=>{if(selected?.type!=='state')return;commit(()=>{c
 $('toggleFinal').onclick=()=>{if(selected?.type!=='state')return;commit(()=>stateById(selected.id).final=!stateById(selected.id).final)};
 $('applyEdgeLabel').onclick=()=>{if(selected?.type==='edge')commit(()=>edgeById(selected.id).label=$('edgeLabel').value.trim())};
 
-$('confirmEdge').onclick=()=>{const p=window.pendingEdge,label=$('modalEdgeLabel').value.trim();if(!p)return;commit(()=>edges.push({id:uid('e'),from:p.from,to:p.to,label}));$('edgeModal').style.display='none';window.pendingEdge=null};
+function uniqueStateName(base,reserved){
+  if(!reserved.has(base)){reserved.add(base);return base}
+  let index=2,name=`${base}_${index}`;while(reserved.has(name))name=`${base}_${++index}`;
+  reserved.add(name);return name
+}
+function copySelection(){
+  if(!selectedStates.size)return false;
+  const ids=new Set(selectedStates),picked=states.filter(state=>ids.has(state.id));
+  clipboardData={
+    states:picked.map(({animate,flash,...state})=>state),
+    edges:edges.filter(edge=>ids.has(edge.from)&&ids.has(edge.to)).map(({animate,...edge})=>edge),
+    pasteCount:0
+  };
+  $('status').textContent=`คัดลอก ${picked.length} state แล้ว`;return true
+}
+function pasteSelection(){
+  if(!clipboardData?.states.length)return;
+  clipboardData.pasteCount+=1;const offset=GRID*2*clipboardData.pasteCount;
+  const ids=new Map(),reserved=new Set(states.map(state=>state.name)),created=[];
+  commit(()=>{
+    clipboardData.states.forEach(source=>{
+      const id=uid('s');ids.set(source.id,id);created.push(id);
+      states.push({...source,id,name:uniqueStateName(source.name,reserved),x:snapValue(source.x+offset),y:snapValue(source.y+offset),initial:false,animate:true})
+    });
+    clipboardData.edges.forEach(source=>edges.push({...source,id:uid('e'),from:ids.get(source.from),to:ids.get(source.to),animate:true}));
+    selectedStates=new Set(created);selected={type:'state',id:created[0]}
+  });
+  $('status').textContent=`วาง ${created.length} state แล้ว`
+}
+function duplicateSelection(){if(copySelection()){clipboardData.pasteCount=0;pasteSelection()}}
+function alignSelected(axis){
+  const picked=[...selectedStates].map(id=>stateById(id)).filter(Boolean);if(picked.length<2)return;
+  commit(()=>{
+    if(axis==='horizontal'){const y=snapValue(picked.reduce((sum,state)=>sum+state.y,0)/picked.length);picked.forEach(state=>state.y=y)}
+    else{const x=snapValue(picked.reduce((sum,state)=>sum+state.x,0)/picked.length);picked.forEach(state=>state.x=x)}
+  });
+  $('status').textContent=axis==='horizontal'?'จัด State ในแนวนอนแล้ว':'จัด State ในแนวตั้งแล้ว'
+}
+$('quickInitial').onclick=()=>{if(selectedStates.size!==1)return;selected={type:'state',id:[...selectedStates][0]};$('toggleInitial').click()};
+$('quickFinal').onclick=()=>{if(!selectedStates.size)return;const makeFinal=[...selectedStates].some(id=>!stateById(id)?.final);commit(()=>selectedStates.forEach(id=>{const state=stateById(id);if(state)state.final=makeFinal}))};
+$('quickAlignH').onclick=()=>alignSelected('horizontal');
+$('quickAlignV').onclick=()=>alignSelected('vertical');
+$('quickDuplicate').onclick=duplicateSelection;
+$('quickDelete').onclick=()=>commit(removeSelected);
+
+$('confirmEdge').onclick=()=>{const p=window.pendingEdge,label=$('modalEdgeLabel').value.trim();if(!p)return;commit(()=>edges.push({id:uid('e'),from:p.from,to:p.to,label,animate:true}));$('edgeModal').style.display='none';window.pendingEdge=null};
 $('cancelEdge').onclick=()=>{$('edgeModal').style.display='none';window.pendingEdge=null};
 $('edgeModal').onclick=e=>{if(e.target===$('edgeModal'))$('cancelEdge').click()};
 
@@ -815,9 +1035,10 @@ function generateEquationModel(model){
     edges=generatedEdges.map(edge=>({
       id:uid('e'),from:ids.get(edge.from),to:ids.get(edge.to),label:edge.label
     }));
-    counter=nextStateCounter(model.states);selected=null;connectFrom=null;sim=null
+    counter=nextStateCounter(model.states);clearSelection();connectFrom=null;connectDrag=null;sim=null
   });
   closeEquationModal();
+  fitView();
   const sourceLabel=model.inputKind==='set'?'Set':'Regex';
   $('status').textContent=model.sourceKind==='minimal-dfa'
     ?`สร้าง Minimal DFA ${model.states.length} states จาก ${sourceLabel} แล้ว`
@@ -973,7 +1194,7 @@ function practiceHintText(){
 }
 function startPracticeDrawing(){
   if(!practiceSession)return;
-  snapshot();states=[];edges=[];counter=0;selected=null;sim=null;
+  snapshot();states=[];edges=[];counter=0;clearSelection();sim=null;view={x:0,y:0,k:1};
   $('machineType').value=practiceSession.machine;$('alphabet').value=practiceSession.model.alphabet.join(',');
   render();snapshot(false);closePracticeModal();
   $('practiceStrip').classList.remove('hidden');
@@ -988,7 +1209,7 @@ function checkPracticeDrawing(){
   const feedback=$('practiceStripFeedback');feedback.classList.remove('match','mismatch');
   try{
     const result=AutomataEquation.compareLanguages(canvasLanguageModel(),practiceSession.model);
-    if(result.equivalent){awardPracticePoint();feedback.textContent='✓ ถูกต้อง! รูปที่วาดรับภาษาเดียวกับโจทย์ทุกสตริง';feedback.classList.add('match')}
+    if(result.equivalent){awardPracticePoint();pulseAcceptingStates();feedback.textContent='✓ ถูกต้อง! รูปที่วาดรับภาษาเดียวกับโจทย์ทุกสตริง';feedback.classList.add('match')}
     else{feedback.textContent=practiceCounterexampleText(result,'รูปที่วาด','โจทย์');feedback.classList.add('mismatch')}
   }catch(error){feedback.textContent='ตรวจไม่ได้: '+error.message;feedback.classList.add('mismatch')}
 }
@@ -1014,24 +1235,55 @@ $('practiceNextFromStrip').onclick=()=>{$('practiceStrip').classList.add('hidden
 $('practiceExitBtn').onclick=()=>{$('practiceStrip').classList.add('hidden');practiceSession=null;$('status').textContent='ออกจากโหมดฝึกแล้ว'};
 
 ['select','add','connect','delete'].forEach(t=>$(t+'Tool').onclick=()=>setTool(t));
-$('clearBtn').onclick=()=>commit(()=>{states=[];edges=[];selected=null;counter=0});
+$('clearBtn').onclick=()=>commit(()=>{states=[];edges=[];clearSelection();counter=0});
 $('alphabet').onchange=()=>{snapshot();render()};
 $('maxLen').onchange=refreshAnalysis;
 $('machineType').onchange=()=>{sim=null;snapshot();render()};
 
+function applyThemeMode(mode){
+  const systemDark=matchMedia('(prefers-color-scheme: dark)').matches;
+  const resolved=mode==='dark'||(mode==='system'&&systemDark)?'dark':'light';
+  document.documentElement.dataset.automataTheme=resolved;
+  document.documentElement.dataset.automataThemeMode=mode;
+  $('themeMode').value=mode;localStorage.setItem('automataThemeMode',mode)
+}
+const savedTheme=document.documentElement.dataset.automataThemeMode||'system';
+applyThemeMode(savedTheme);
+$('themeMode').onchange=()=>applyThemeMode($('themeMode').value);
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>{if($('themeMode').value==='system')applyThemeMode('system')});
+function nudgeSelected(dx,dy){
+  if(!selectedStates.size)return;
+  commit(()=>selectedStates.forEach(id=>{const state=stateById(id);if(state){state.x=snapValue(state.x+dx);state.y=snapValue(state.y+dy)}}))
+}
+
 window.addEventListener('keydown',ev=>{
   const editing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)||document.activeElement?.isContentEditable;
-  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'&&!editing){ev.preventDefault();ev.shiftKey?redo():undo()}
+  const command=ev.ctrlKey||ev.metaKey,key=ev.key.toLowerCase();
+  if(!editing&&ev.code==='Space'){spaceDown=true;svg.classList.add('pan-ready');ev.preventDefault()}
+  else if(command&&key==='z'&&!editing){ev.preventDefault();ev.shiftKey?redo():undo()}
   else if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='y'&&!editing){ev.preventDefault();redo()}
-  else if(ev.key==='Delete'&&selected&&!editing){commit(removeSelected)}
+  else if(command&&key==='c'&&!editing){ev.preventDefault();copySelection()}
+  else if(command&&key==='v'&&!editing){ev.preventDefault();pasteSelection()}
+  else if(command&&key==='d'&&!editing){ev.preventDefault();duplicateSelection()}
+  else if(command&&key==='a'&&!editing){ev.preventDefault();selectedStates=new Set(states.map(state=>state.id));selected=states.length?{type:'state',id:states[0].id}:null;render()}
+  else if((ev.key==='Delete'||ev.key==='Backspace')&&(selected||selectedStates.size)&&!editing){ev.preventDefault();commit(removeSelected)}
+  else if(!editing&&selectedStates.size&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(ev.key)){
+    ev.preventDefault();const step=ev.shiftKey?GRID*4:GRID;
+    nudgeSelected(ev.key==='ArrowLeft'?-step:ev.key==='ArrowRight'?step:0,ev.key==='ArrowUp'?-step:ev.key==='ArrowDown'?step:0)
+  }
+  else if(!editing&&ev.key==='Home'){ev.preventDefault();fitView()}
+  else if(!editing&&(ev.key==='+'||ev.key==='=')){ev.preventDefault();zoomAt(1.2)}
+  else if(!editing&&ev.key==='-'){ev.preventDefault();zoomAt(1/1.2)}
   else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='v'){setTool('select')}
   else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='a'){setTool('add')}
   else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='t'){setTool('connect')}
   else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='x'){setTool('delete')}
   else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='r'){$('equationBtn').click()}
   else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='p'){$('practiceBtn').click()}
-  else if(ev.key==='Escape'){connectFrom=null;setTool('select');$('edgeModal').style.display='none';closeEquationModal();closePracticeModal()}
+  else if(ev.key==='Escape'){connectFrom=null;connectDrag=null;marquee=null;setTool('select');$('edgeModal').style.display='none';closeEquationModal();closePracticeModal();updateInteractionOverlay()}
 });
+window.addEventListener('keyup',ev=>{if(ev.code==='Space'){spaceDown=false;svg.classList.remove('pan-ready');if(!pan)svg.classList.remove('is-panning')}});
+window.addEventListener('blur',()=>{spaceDown=false;pan=null;svg.classList.remove('pan-ready','is-panning')});
 
 function undo(){if(!history.length)return;future.push(JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value}));restore(history.pop())}
 function redo(){if(!future.length)return;history.push(JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value}));restore(future.pop())}
@@ -1128,9 +1380,14 @@ function tapeView(tape,head){
   let s='';for(let i=min;i<=max;i++)s+=(i===head?'[':' ')+(tape.get(i)||'□')+(i===head?']':' ');
   return s
 }
+function pulseAcceptingStates(){
+  const accepting=states.filter(state=>state.final);accepting.forEach(state=>{state.flash=true});render();
+  setTimeout(()=>accepting.forEach(state=>{delete state.flash}),760)
+}
 function runCurrent(){
   const inp=$('testInput').value.trim(),r=type()==='DFA'||type()==='NFA'?runFA(inp):type()==='PDA'?runPDA(inp):runTM(inp);
   if(!r.ok){$('runResult').innerHTML='<span class="bad">Error:</span> '+r.error;return}
+  if(r.accepted)pulseAcceptingStates();
   $('runResult').innerHTML=r.detail+'\nResult: <span class="'+(r.accepted?'ok':'bad')+'">'+(r.accepted?'ACCEPT':'REJECT')+'</span>';
   $('configuration').textContent=r.config||'—'
 }
@@ -1282,7 +1539,7 @@ function preset(name){
     $('alphabet').value='1';$('machineType').value='TM';const q0=add('q0',220,310,true),qf=add('qAccept',730,310,false,true);
     E(q0,q0,'1→1,R');E(q0,qf,'□→1,S')
   }
-  selected=null;sim=null;render();snapshot(false)
+  clearSelection();sim=null;view={x:0,y:0,k:1};render();fitView();snapshot(false)
 }
 document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>preset(b.dataset.preset));
 
@@ -1303,10 +1560,16 @@ $('exportSvgBtn').onclick=()=>{
   const clone=svg.cloneNode(true),data=new XMLSerializer().serializeToString(clone);
   const blob=new Blob([data],{type:'image/svg+xml'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='automata-diagram.svg';a.click();URL.revokeObjectURL(a.href)
 };
-$('fitBtn').onclick=()=>{svg.setAttribute('viewBox','0 0 1000 620');$('status').textContent='จัดมุมมองแล้ว'};
+$('snapBtn').classList.toggle('active',snapEnabled);$('snapBtn').setAttribute('aria-pressed',String(snapEnabled));$('snapBtn').textContent=`Snap: ${snapEnabled?'On':'Off'}`;
+$('snapBtn').onclick=()=>{snapEnabled=!snapEnabled;localStorage.setItem('automataSnap',snapEnabled?'on':'off');$('snapBtn').classList.toggle('active',snapEnabled);$('snapBtn').setAttribute('aria-pressed',String(snapEnabled));$('snapBtn').textContent=`Snap: ${snapEnabled?'On':'Off'}`;$('status').textContent=`Snap to grid: ${snapEnabled?'เปิด':'ปิด'}`};
+$('zoomOutBtn').onclick=()=>zoomAt(1/1.2);
+$('zoomInBtn').onclick=()=>zoomAt(1.2);
+$('zoomResetBtn').onclick=resetView;
+$('fitBtn').onclick=fitView;
 
 const auto=localStorage.getItem('automataStudioAuto');
 if(auto){try{restore(auto)}catch{preset('ends01')}}else preset('ends01');
+applyView();updateSelectionQuickbar();
 setTool('select');
 })();
 </script>

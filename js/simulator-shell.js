@@ -14,7 +14,7 @@
       left: "main.workspace > aside:first-of-type",
       right: "main.workspace > aside:last-of-type",
       canvas: ".canvas-panel",
-      essentials: ["machineType", "undoBtn", "redoBtn"],
+      essentials: ["machineType", "themeMode", "undoBtn", "redoBtn"],
       advanced: ["saveBtn", "loadBtn", "exportBtn", "importBtn", "exportSvgBtn", "importFile", "clearBtn"],
       leftLabel: "ตั้งค่า",
       rightLabel: "วิเคราะห์",
@@ -22,12 +22,14 @@
       defaultRight: false,
       storageVersion: "drafting-v2",
       tips: [
-        "ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state ได้ทันที",
+        "ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state และลากจุดด้านขวาเพื่อสร้าง transition",
+        "กด Space ค้างแล้วลากเพื่อเลื่อนจอ และใช้ Ctrl+ล้อเมาส์เพื่อซูม",
+        "ลากกรอบบนพื้นที่ว่างหรือ Shift+คลิกเพื่อเลือกหลาย state",
         "กด Regex / Set เพื่อแปลงภาษาและสร้าง Minimal DFA, NFA หรือ λ-NFA ได้",
         "กดสุ่มโจทย์เพื่อฝึกทั้งรูป → Regex และสมการ → วาด DFA/NFA",
         "แท็บ ตรวจ Regex ใช้พิสูจน์ว่ารูปที่วาดรับภาษาเดียวกับ Regular Expression หรือไม่",
         "เลือก state หรือ transition แล้วตัวแก้ไขที่เกี่ยวข้องจึงจะแสดง",
-        "กด Shift ค้างแล้วเลือก state สองตัวเพื่อสร้าง transition",
+        "ใช้ Ctrl/Cmd+C, V และ D เพื่อคัดลอก วาง และทำสำเนา state ที่เลือก",
       ],
     },
     logic: {
@@ -221,11 +223,12 @@
       canvasShell.style.setProperty("--canvas-x", `${event.clientX - bounds.left}px`);
       canvasShell.style.setProperty("--canvas-y", `${event.clientY - bounds.top}px`);
       const svgCanvas = canvasShell.querySelector("svg");
-      if (coordinateReadout && svgCanvas?.createSVGPoint && svgCanvas.getScreenCTM()) {
+      const viewport = svgCanvas?.querySelector("#viewport");
+      if (coordinateReadout && svgCanvas?.createSVGPoint && (viewport?.getScreenCTM() || svgCanvas.getScreenCTM())) {
         const point = svgCanvas.createSVGPoint();
         point.x = event.clientX;
         point.y = event.clientY;
-        const position = point.matrixTransform(svgCanvas.getScreenCTM().inverse());
+        const position = point.matrixTransform((viewport?.getScreenCTM() || svgCanvas.getScreenCTM()).inverse());
         coordinateReadout.textContent = `X ${Math.round(position.x)} · Y ${Math.round(position.y)}`;
       }
     }, { passive: true });

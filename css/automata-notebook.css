@@ -1000,3 +1000,172 @@ body[data-simulator="automata"] .practice-strip-feedback {
   body[data-simulator="automata"] .practice-strip { grid-template-columns: 1fr; }
   body[data-simulator="automata"] .practice-strip-actions { justify-content: flex-start; }
 }
+
+/* Canvas workbench interactions */
+body[data-simulator="automata"] .canvas-shell { background-image: none; }
+body[data-simulator="automata"] #canvasGrid { pointer-events: none; }
+body[data-simulator="automata"] .grid-minor { stroke: var(--notebook-grid); stroke-width: 0.65; }
+body[data-simulator="automata"] .grid-major { stroke: var(--notebook-grid-major); stroke-width: 1; }
+
+body[data-simulator="automata"] .transition-handle {
+  fill: var(--notebook-accent);
+  stroke: var(--notebook-sheet);
+  stroke-width: 3;
+  opacity: 0;
+  cursor: crosshair;
+  transform: scale(0.65);
+  transform-origin: 38px 0;
+  transition: opacity 120ms ease, transform 150ms cubic-bezier(.2,.8,.2,1), filter 120ms ease;
+}
+body[data-simulator="automata"] .state:hover .transition-handle,
+body[data-simulator="automata"] .state.selected .transition-handle {
+  opacity: 1;
+  transform: scale(1);
+}
+body[data-simulator="automata"] .transition-handle:hover { filter: drop-shadow(0 0 5px var(--notebook-accent)); }
+body[data-simulator="automata"] .state.connection-target circle.outer {
+  stroke: var(--notebook-accent);
+  stroke-dasharray: 5 4;
+  animation: automataTarget 800ms linear infinite;
+}
+body[data-simulator="automata"] .transition-preview {
+  fill: none;
+  stroke: var(--notebook-accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 8 5;
+  marker-end: url(#arrow);
+  filter: drop-shadow(0 2px 3px color-mix(in srgb, var(--notebook-accent) 35%, transparent));
+  animation: automataDash 520ms linear infinite;
+}
+body[data-simulator="automata"] .marquee-rect {
+  fill: color-mix(in srgb, var(--notebook-accent) 10%, transparent);
+  stroke: var(--notebook-accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+body[data-simulator="automata"] #canvas.pan-ready { cursor: grab; }
+body[data-simulator="automata"] #canvas.is-panning { cursor: grabbing; }
+body[data-simulator="automata"] #canvas.dragging-states .state.selected { filter: drop-shadow(0 7px 7px rgba(23,34,56,.18)); }
+
+body[data-simulator="automata"] .selection-quickbar {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 8;
+  display: flex;
+  max-width: calc(100% - 36px);
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  overflow-x: auto;
+  color: var(--notebook-ink);
+  background: color-mix(in srgb, var(--notebook-paper) 92%, transparent);
+  border: 1px solid var(--notebook-ink);
+  border-radius: 6px;
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--notebook-ink) 12%, transparent);
+  backdrop-filter: blur(10px);
+  transform: translateX(-50%);
+  animation: automataQuickbarIn 180ms cubic-bezier(.2,.8,.2,1) both;
+}
+body[data-simulator="automata"] .selection-quickbar span {
+  padding: 0 7px;
+  color: var(--notebook-muted);
+  font: 700 9px/1 var(--notebook-mono);
+  white-space: nowrap;
+}
+body[data-simulator="automata"] .selection-quickbar button { flex: none; padding: 6px 8px; font-size: 10px; }
+
+body[data-simulator="automata"] .state-enter { animation: automataStateIn 220ms cubic-bezier(.2,.9,.2,1) both; }
+body[data-simulator="automata"] .state.flash-accept circle.outer {
+  animation: automataAccept 720ms cubic-bezier(.2,.8,.2,1) both;
+}
+body[data-simulator="automata"] .edge-enter path:not(.edge-hit) {
+  stroke-dasharray: 900;
+  stroke-dashoffset: 900;
+  animation: automataEdgeIn 330ms ease-out forwards;
+}
+body[data-simulator="automata"] .edge-enter text { animation: automataLabelIn 260ms 160ms ease-out both; }
+
+@keyframes automataTarget { to { stroke-dashoffset: -18; } }
+@keyframes automataDash { to { stroke-dashoffset: -26; } }
+@keyframes automataStateIn { from { opacity: 0; filter: blur(2px) drop-shadow(0 0 10px var(--notebook-accent)); } to { opacity: 1; filter: none; } }
+@keyframes automataAccept { 0%,100% { fill: var(--notebook-sheet); stroke: var(--notebook-success); } 45% { fill: color-mix(in srgb, var(--notebook-success) 24%, var(--notebook-sheet)); stroke-width: 5; filter: drop-shadow(0 0 9px var(--notebook-success)); } }
+@keyframes automataEdgeIn { to { stroke-dashoffset: 0; } }
+@keyframes automataLabelIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes automataQuickbarIn { from { opacity: 0; transform: translate(-50%,-8px) scale(.98); } to { opacity: 1; transform: translate(-50%,0) scale(1); } }
+
+/* Dark drafting-table theme */
+html[data-automata-theme="dark"] body[data-simulator="automata"] {
+  --notebook-paper: #0b1119;
+  --notebook-sheet: #101923;
+  --notebook-panel: #0e1721;
+  --notebook-ink: #e6edf7;
+  --notebook-ink-soft: #b4c0cf;
+  --notebook-muted: #8493a6;
+  --notebook-line: #344255;
+  --notebook-line-soft: #263445;
+  --notebook-grid: #1d2a38;
+  --notebook-grid-major: #2b3a4c;
+  --notebook-accent: #ff7657;
+  --notebook-accent-soft: #3b211d;
+  --notebook-success: #67d6a5;
+  --notebook-warning: #efbd63;
+  --notebook-danger: #ff8b7b;
+  --sim-shell-bg: rgba(11,17,25,.96);
+  color-scheme: dark;
+  background: var(--notebook-paper);
+}
+html[data-automata-theme="dark"] body[data-simulator="automata"] button:hover { background: #182434; border-color: #788aa0; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] button.primary,
+html[data-automata-theme="dark"] body[data-simulator="automata"] button.active { color: #fff; background: #2f68ad; border-color: #6095d2; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .panel,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-left-panel,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-right-panel,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .automata-tool-rail { border-color: var(--notebook-line) !important; box-shadow: none !important; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-shell-header { border-color: var(--notebook-line); }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-shell-button[aria-pressed="true"],
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-shell-menu[open] > summary { color: #fff; background: #2f68ad; border-color: #6095d2; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .result,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .chip,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .help,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .compare-guide,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-guide div,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-output-choice,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-code-help { color: var(--notebook-ink-soft); background: #111c28; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .result.ok,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .compare-result.match,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-feedback.ready { color: var(--notebook-success); background: #10251f; border-color: #2d6c55; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .result.bad,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .compare-result.mismatch,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-feedback.bad { color: var(--notebook-danger); background: #2a1718; border-color: #79443e; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .result.warn,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .compare-result.error,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-feedback.warn { color: var(--notebook-warning); background: #292214; border-color: #756036; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] th { background: #172330; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .converter-card.active-source,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .practice-strip { background: #241a17; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .statusbar { color: #afbac9; background: #070b11; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .statusbar span:first-child,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .practice-prompt-card span { color: #ff9b82; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .practice-prompt-card { color: #fff; background: #070b11; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .modal-backdrop { background: rgba(0,0,0,.72); }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .modal,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-shell-menu-panel,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-help-dialog { border-color: var(--notebook-line); box-shadow: 10px 10px 0 rgba(0,0,0,.28); }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .state line { stroke: var(--notebook-accent) !important; }
+
+body[data-simulator="automata"],
+body[data-simulator="automata"] .app,
+body[data-simulator="automata"] .panel,
+body[data-simulator="automata"] .canvas-shell,
+body[data-simulator="automata"] .modal,
+body[data-simulator="automata"] input,
+body[data-simulator="automata"] select,
+body[data-simulator="automata"] textarea,
+body[data-simulator="automata"] button { transition: color 150ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+
+@media (max-width: 700px) {
+  body[data-simulator="automata"] .selection-quickbar { top: 8px; }
+  body[data-simulator="automata"] .selection-quickbar #quickAlignH,
+  body[data-simulator="automata"] .selection-quickbar #quickAlignV { display: none; }
+}
