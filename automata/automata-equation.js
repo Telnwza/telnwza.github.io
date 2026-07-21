@@ -109,6 +109,12 @@
         continue;
       }
 
+      if (char === "∅") {
+        tokens.push({ type: "empty", value: "∅", column: index + 1 });
+        index += char.length;
+        continue;
+      }
+
       const rest = source.slice(index);
       const epsilonWord = rest.match(/^(epsilon|lambda|lamda|eps)(?![\p{L}\p{N}_])/iu);
       if (epsilonWord) {
@@ -221,6 +227,10 @@
         take("epsilon");
         return { type: "epsilon" };
       }
+      if (peek().type === "empty") {
+        take("empty");
+        return { type: "empty" };
+      }
       if (peek().type === "open") {
         const opening = take("open");
         if (peek().type === "close") {
@@ -288,10 +298,12 @@
     }
 
     function compile(node) {
-      if (node.type === "literal" || node.type === "epsilon") {
+      if (node.type === "literal" || node.type === "epsilon" || node.type === "empty") {
         const start = newState();
         const end = newState();
-        connect(start, end, node.type === "epsilon" ? EPSILON : node.value);
+        if (node.type !== "empty") {
+          connect(start, end, node.type === "epsilon" ? EPSILON : node.value);
+        }
         return { start, end };
       }
 
@@ -401,6 +413,10 @@
 
       if (node.type === "epsilon") {
         return { nullable: true, first: new Set(), last: new Set() };
+      }
+
+      if (node.type === "empty") {
+        return { nullable: false, first: new Set(), last: new Set() };
       }
 
       if (node.type === "union") {
@@ -1095,14 +1111,129 @@
     return positions;
   }
 
+  function parseFiniteLanguageSet(source) {
+    let text = String(source || "").trim();
+    const assignment = text.match(/^(?:L|language)\s*=\s*/iu);
+    if (assignment) text = text.slice(assignment[0].length).trim();
+    if (!text.startsWith("{") || !text.endsWith("}")) {
+      throw new EquationSyntaxError("รูปแบบ Set ต้องครอบด้วย { } เช่น {λ, 0, 01}");
+    }
+    const body = text.slice(1, -1).trim();
+    if (!body) return [];
+
+    const entries = [];
+    let token = "";
+    let quote = "";
+    let escaped = false;
+    for (const character of body) {
+      if (escaped) {
+        token += character;
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+        token += character;
+      } else if (quote) {
+        token += character;
+        if (character === quote) quote = "";
+      } else if (character === "\"" || character === "'") {
+        quote = character;
+        token += character;
+      } else if (character === "," || character === ";" || character === "\n") {
+        entries.push(token);
+        token = "";
+      } else {
+        token += character;
+      }
+    }
+    if (quote) throw new EquationSyntaxError("ยังปิดเครื่องหมายคำพูดใน Set ไม่ครบ");
+    entries.push(token);
+
+    const words = [];
+    const seen = new Set();
+    entries.forEach((rawEntry) => {
+      let word = rawEntry.trim();
+      if ((word.startsWith("\"") && word.endsWith("\""))
+        || (word.startsWith("'") && word.endsWith("'"))) {
+        word = word.slice(1, -1);
+      }
+      if (!word) {
+        throw new EquationSyntaxError("มีสมาชิกว่างระหว่าง comma; ใช้ λ แทนคำว่าง");
+      }
+      word = normalizeEpsilon(word) === EPSILON ? "" : word;
+      if ([...word].length > 40) {
+        throw new EquationSyntaxError("สมาชิกใน Set ยาวเกิน 40 สัญลักษณ์");
+      }
+      if (!seen.has(word)) {
+        seen.add(word);
+        words.push(word);
+      }
+    });
+    if (words.length > 64) {
+      throw new EquationSyntaxError("รองรับ Set สูงสุด 64 สมาชิกต่อครั้ง");
+    }
+    return words;
+  }
+
+  function escapeRegexLiteral(symbol) {
+    return /[\\(){}|,.U∪*+?^ελ∅]/u.test(symbol) ? `\\${symbol}` : symbol;
+  }
+
+  function finiteLanguageToRegex(wordsInput) {
+    const words = Array.isArray(wordsInput)
+      ? [...new Set(wordsInput.map((word) => String(word)))]
+      : parseFiniteLanguageSet(wordsInput);
+    if (!words.length) return "∅";
+    const expressions = words.map((word) => {
+      if (!word) return EPSILON;
+      return [...word].map(escapeRegexLiteral).join(".");
+    });
+    return expressions.length === 1 ? expressions[0] : `{${expressions.join(",")}}`;
+  }
+
+  function enumerateAcceptedWords(model, maxLength = 4, limit = 256) {
+    const length = Math.max(0, Math.min(8, Number(maxLength) || 0));
+    const resultLimit = Math.max(1, Math.min(4096, Number(limit) || 256));
+    const dfa = model.type === "DFA" ? model : determinizeNfa(model);
+    const transitions = new Map(
+      dfa.transitions.map(({ from, to, label }) => [`${from}\u0000${label}`, to]),
+    );
+    const finalSet = new Set(dfa.finals);
+    const words = [];
+    let truncated = false;
+    let checked = 0;
+    let level = [{ word: "", state: dfa.initial }];
+
+    for (let depth = 0; depth <= length; depth += 1) {
+      const next = [];
+      level.forEach(({ word, state }) => {
+        checked += 1;
+        if (finalSet.has(state)) {
+          if (words.length < resultLimit) words.push(word);
+          else truncated = true;
+        }
+        if (depth < length) {
+          dfa.alphabet.forEach((symbol) => {
+            const destination = transitions.get(`${state}\u0000${symbol}`);
+            if (destination !== undefined) next.push({ word: word + symbol, state: destination });
+          });
+        }
+      });
+      level = next;
+    }
+    return { words, truncated, checked, maxLength: length, alphabet: [...dfa.alphabet] };
+  }
+
   return {
     EPSILON,
     EquationSyntaxError,
     compareLanguages,
+    enumerateAcceptedWords,
+    finiteLanguageToRegex,
     layoutAutomaton,
     mergeParallelTransitions,
     determinizeNfa,
     minimizeDfa,
+    parseFiniteLanguageSet,
     parseTransitionEquations,
     regexToMinimalDfa,
     regexToNfa,

@@ -5,14 +5,38 @@ const {
   EPSILON,
   compareLanguages,
   determinizeNfa,
+  enumerateAcceptedWords,
+  finiteLanguageToRegex,
   layoutAutomaton,
   mergeParallelTransitions,
   minimizeDfa,
+  parseFiniteLanguageSet,
   parseTransitionEquations,
   regexToMinimalDfa,
   regexToNfa,
   regexToPositionNfa,
 } = require("./automata-equation.js");
+
+test("converts finite language sets to equivalent regular expressions", () => {
+  const words = parseFiniteLanguageSet("L = {λ, 0, 01, '10', 01}");
+  const expression = finiteLanguageToRegex(words);
+  const model = regexToPositionNfa(expression);
+  const accepted = enumerateAcceptedWords(model, 3).words;
+
+  assert.deepEqual(words, ["", "0", "01", "10"]);
+  assert.deepEqual(accepted, ["", "0", "01", "10"]);
+  assert.equal(compareLanguages(model, regexToNfa("{λ,0,01,10}")).equivalent, true);
+});
+
+test("supports the empty language symbol and empty finite sets", () => {
+  const expression = finiteLanguageToRegex(parseFiniteLanguageSet("{}"));
+  const model = regexToPositionNfa(expression);
+
+  assert.equal(expression, "∅");
+  assert.deepEqual(model.finals, []);
+  assert.deepEqual(enumerateAcceptedWords(model, 4).words, []);
+  assert.equal(runNfa(model, ""), false);
+});
 
 function runDfa(model, input) {
   const transitions = new Map(

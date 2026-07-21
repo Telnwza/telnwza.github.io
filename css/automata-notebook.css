@@ -594,7 +594,7 @@ body[data-simulator="automata"] .sim-canvas-region {
   min-height: 0;
   grid-column: 2;
   grid-row: 1;
-  grid-template-rows: 43px minmax(0, 1fr) 31px;
+  grid-template-rows: 43px auto minmax(0, 1fr) 31px;
 }
 
 body[data-simulator="automata"].sim-focus-mode .sim-canvas-region { grid-column: 1; }
@@ -804,4 +804,199 @@ body[data-simulator="automata"] .statusbar {
   }
   .automata-rail-glyph { font-size: 17px; }
   body[data-simulator="automata"] .sim-right-panel { height: min(52%, 340px) !important; }
+}
+
+/* Language converter and practice lab */
+body[data-simulator="automata"] .language-converter-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+body[data-simulator="automata"] .converter-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  background: var(--notebook-panel);
+  border: 1px solid var(--notebook-line);
+  border-radius: 6px;
+}
+
+body[data-simulator="automata"] .converter-card.active-source {
+  background: #fffaf3;
+  border-color: var(--notebook-accent);
+  box-shadow: inset 3px 0 0 var(--notebook-accent);
+}
+
+body[data-simulator="automata"] .converter-card-head,
+body[data-simulator="automata"] .practice-meta,
+body[data-simulator="automata"] .practice-answer-actions,
+body[data-simulator="automata"] .practice-strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+body[data-simulator="automata"] .converter-card-head { justify-content: space-between; }
+body[data-simulator="automata"] .converter-card-head label { margin: 0; }
+body[data-simulator="automata"] .converter-card textarea { min-height: 112px; }
+
+body[data-simulator="automata"] .source-badge,
+body[data-simulator="automata"] .practice-kicker {
+  color: var(--notebook-accent);
+  font: 800 9px/1 var(--notebook-mono);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+body[data-simulator="automata"] .source-badge {
+  padding: 4px 6px;
+  background: var(--notebook-accent-soft);
+  border-radius: 999px;
+}
+
+body[data-simulator="automata"] .converter-swap {
+  display: grid;
+  place-items: center;
+  color: var(--notebook-accent);
+  font: 800 22px/1 var(--notebook-mono);
+}
+
+body[data-simulator="automata"] .set-preview-options {
+  display: grid;
+  grid-template-columns: auto 68px auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin-top: 9px;
+  padding: 8px 10px;
+  color: var(--notebook-muted);
+  background: var(--notebook-sheet);
+  border: 1px dashed var(--notebook-line);
+  font-size: 11px;
+}
+
+body[data-simulator="automata"] .set-preview-options label { margin: 0; }
+body[data-simulator="automata"] .set-preview-options span:last-child { text-align: right; }
+
+body[data-simulator="automata"] .practice-modal {
+  width: min(900px, 95vw);
+  max-height: 92vh;
+  overflow: auto;
+}
+
+body[data-simulator="automata"] .practice-controls {
+  display: grid;
+  grid-template-columns: 1.35fr 0.8fr 0.8fr auto;
+  gap: 9px;
+  align-items: end;
+  margin: 14px 0 10px;
+  padding: 12px;
+  background: var(--notebook-panel);
+  border: 1px solid var(--notebook-line);
+}
+
+body[data-simulator="automata"] .practice-meta {
+  padding: 2px 0 10px;
+  color: var(--notebook-muted);
+  font: 650 10px/1 var(--notebook-mono);
+}
+
+body[data-simulator="automata"] .practice-meta #practiceScore { margin-left: auto; }
+
+body[data-simulator="automata"] .practice-question-card {
+  padding: 14px;
+  background: var(--notebook-sheet);
+  border: 1px solid var(--notebook-ink);
+  border-radius: 5px;
+}
+
+body[data-simulator="automata"] .practice-question-card h3 {
+  margin: 0 0 12px;
+  font-family: var(--notebook-serif);
+  font-size: 18px;
+}
+
+body[data-simulator="automata"] .practice-diagram-shell {
+  margin-bottom: 12px;
+  overflow: hidden;
+  background-color: var(--notebook-sheet);
+  background-image: linear-gradient(var(--notebook-grid) 1px, transparent 1px), linear-gradient(90deg, var(--notebook-grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border: 1px solid var(--notebook-line);
+}
+
+body[data-simulator="automata"] #practiceDiagram {
+  width: 100%;
+  height: auto;
+  min-height: 310px;
+  max-height: 380px;
+}
+
+body[data-simulator="automata"] .practice-answer-actions { margin-top: 9px; }
+body[data-simulator="automata"] .practice-answer-actions button:first-child { flex: 1; }
+
+body[data-simulator="automata"] .practice-prompt-card {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 12px;
+  padding: 22px;
+  color: var(--notebook-sheet);
+  background: var(--notebook-ink);
+  text-align: center;
+}
+
+body[data-simulator="automata"] .practice-prompt-card span {
+  color: #f4a18c;
+  font: 750 9px/1 var(--notebook-mono);
+  letter-spacing: 0.1em;
+}
+
+body[data-simulator="automata"] .practice-prompt-card strong {
+  overflow-wrap: anywhere;
+  font: 750 clamp(18px, 4vw, 28px)/1.4 var(--notebook-mono);
+}
+
+body[data-simulator="automata"] .practice-feedback { margin-top: 10px; }
+body[data-simulator="automata"] .practice-feedback.match,
+body[data-simulator="automata"] .practice-strip-feedback.match { color: var(--notebook-success); }
+body[data-simulator="automata"] .practice-feedback.mismatch,
+body[data-simulator="automata"] .practice-strip-feedback.mismatch { color: var(--notebook-danger); }
+
+body[data-simulator="automata"] .practice-strip {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 9px 14px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fff8ed;
+  border-bottom: 1px solid var(--notebook-accent);
+  box-shadow: inset 4px 0 0 var(--notebook-accent);
+}
+
+body[data-simulator="automata"] .practice-strip strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--notebook-ink);
+  font: 750 13px/1.35 var(--notebook-mono);
+}
+
+body[data-simulator="automata"] .practice-strip-actions { flex-wrap: wrap; justify-content: flex-end; }
+body[data-simulator="automata"] .practice-strip-actions button { padding: 6px 8px; font-size: 10px; }
+body[data-simulator="automata"] .practice-strip-feedback {
+  grid-column: 1 / -1;
+  color: var(--notebook-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  body[data-simulator="automata"] .language-converter-grid { grid-template-columns: 1fr; }
+  body[data-simulator="automata"] .converter-swap { height: 20px; transform: rotate(90deg); }
+  body[data-simulator="automata"] .set-preview-options { grid-template-columns: 1fr 68px auto; }
+  body[data-simulator="automata"] .set-preview-options span:last-child { grid-column: 1 / -1; text-align: left; }
+  body[data-simulator="automata"] .practice-controls { grid-template-columns: 1fr 1fr; }
+  body[data-simulator="automata"] .practice-controls > div:first-child { grid-column: 1 / -1; }
+  body[data-simulator="automata"] .practice-strip { grid-template-columns: 1fr; }
+  body[data-simulator="automata"] .practice-strip-actions { justify-content: flex-start; }
 }

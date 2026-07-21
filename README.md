@@ -98,7 +98,7 @@ This keeps the site compatible with GitHub Pages project URLs and direct browser
 
 ## Current Available Tools
 
-- Automata Studio: DFA, NFA, lambda-NFA, PDA, and Turing Machine creation and simulation, including classroom Regular Expression notation, output as a minimal DFA, compact lambda-free NFA, or Thompson lambda-NFA, DFA/NFA generation from transition equations, and exact Canvas automata-to-Regex language equivalence checking with shortest counterexamples.
+- Automata Studio: DFA, NFA, lambda-NFA, PDA, and Turing Machine creation and simulation, including a two-way Regular Expression / finite-language Set converter, output as a minimal DFA, compact lambda-free NFA, or Thompson lambda-NFA, DFA/NFA generation from transition equations, exact language-equivalence checking with shortest counterexamples, and randomized DFA/NFA practice in both diagram-to-Regex and equation-to-diagram directions.
 - Vector Addition Visualizer: 2D and 3D vector addition, resultant vectors, magnitude, ordering, import/export, and local browser saving.
 - Logic Gates Lab: drag-and-drop combinational circuits, live signal simulation, circuit-to-truth-table analysis, Boolean equation parsing and minimization, truth-table-to-circuit synthesis, presets, autosave, and JSON/image/table export.
 
@@ -121,6 +121,13 @@ node --test automata/automata-equation.test.js
 ```
 
 The tests cover classroom and legacy Regular Expression notation, lambda spellings, Thompson lambda-NFA generation, compact position-NFA construction, subset construction, minimal DFA generation, language equivalence, syntax errors, DFA/NFA transition definitions, parallel-transition merging, and automatic state layout.
+
+### Regex / Set Converter and Practice Lab
+
+- Enter either a Regular Expression or a finite set such as `{λ, 0, 01}`. Set-to-Regex conversion is exact.
+- Regex-to-Set shows accepted words up to the selected maximum length, since a regular language can be infinite.
+- Practice Lab can show a DFA/NFA diagram for a Regex answer, or show a Regex/Set for the learner to draw on the main canvas.
+- Answers are checked by exact language equivalence rather than visual shape. A mismatch reports the shortest counterexample.
 
 ### Check a Drawn Automaton Against a Regex
 

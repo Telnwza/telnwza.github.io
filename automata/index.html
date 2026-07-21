@@ -141,7 +141,8 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
         <button id="addTool">เพิ่ม State</button>
         <button id="connectTool">โยงเส้น</button>
         <button id="deleteTool">ลบ</button>
-        <button id="equationBtn" class="primary">Regex → Automata</button>
+        <button id="equationBtn" class="primary">Regex / Set → Automata</button>
+        <button id="practiceBtn">สุ่มโจทย์</button>
       </div>
       <div class="help">
         ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state<br>
@@ -192,6 +193,19 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
         <span class="badge" id="modeBadge">โหมด: เลือก/ลาก</span>
         <button id="fitBtn">จัดให้อยู่กลาง</button>
         <button id="validateBtn">ตรวจความถูกต้อง</button>
+      </div>
+      <div id="practiceStrip" class="practice-strip hidden" aria-live="polite">
+        <div>
+          <span id="practiceStripMode" class="practice-kicker">PRACTICE</span>
+          <strong id="practiceStripPrompt">วาด Automata ให้ตรงกับโจทย์</strong>
+        </div>
+        <div class="practice-strip-actions">
+          <button id="practiceHintBtn">ขอคำใบ้</button>
+          <button id="practiceCheckDrawing" class="primary">ตรวจรูปที่วาด</button>
+          <button id="practiceNextFromStrip">โจทย์ใหม่</button>
+          <button id="practiceExitBtn" aria-label="ออกจากโหมดฝึก">ออก</button>
+        </div>
+        <div id="practiceStripFeedback" class="practice-strip-feedback">เริ่มวาดได้เลย แล้วกดตรวจคำตอบ</div>
       </div>
       <div class="canvas-shell">
         <svg id="canvas" viewBox="0 0 1000 620">
@@ -295,14 +309,39 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
   <div class="modal equation-modal" role="dialog" aria-modal="true" aria-labelledby="equationModalTitle">
     <div class="equation-heading">
       <div>
-        <h2 id="equationModalTitle">สร้าง Automata จาก Regex</h2>
-        <p>พิมพ์รูปแบบของคำ แล้วเลือกสร้างเป็น DFA, NFA หรือ λ-NFA</p>
+        <h2 id="equationModalTitle">Language Converter</h2>
+        <p>ใส่ Regular Expression หรือ Finite Set อย่างใดอย่างหนึ่ง แล้วแปลงหรือสร้าง Automata</p>
       </div>
       <button id="closeEquation" aria-label="ปิด">ปิด</button>
     </div>
 
-    <label for="regexInput">Regular Expression (Regex)</label>
-    <textarea id="regexInput" spellcheck="false" aria-describedby="regexFeedback" placeholder="เช่น {0,1}*.0.1"></textarea>
+    <div class="language-converter-grid">
+      <section id="regexCard" class="converter-card active-source">
+        <div class="converter-card-head">
+          <label for="regexInput">Regular Expression</label>
+          <span id="regexSourceBadge" class="source-badge">INPUT</span>
+        </div>
+        <textarea id="regexInput" spellcheck="false" aria-describedby="regexFeedback" placeholder="เช่น {0,1}*.0.1"></textarea>
+        <button id="regexToSet" type="button">แปลงเป็น Set →</button>
+      </section>
+
+      <div class="converter-swap" aria-hidden="true">⇄</div>
+
+      <section id="setCard" class="converter-card">
+        <div class="converter-card-head">
+          <label for="setInput">Finite Set / Language</label>
+          <span id="setSourceBadge" class="source-badge">OUTPUT</span>
+        </div>
+        <textarea id="setInput" spellcheck="false" aria-describedby="regexFeedback" placeholder="เช่น {λ, 0, 01, 101}"></textarea>
+        <button id="setToRegex" type="button">← แปลงเป็น Regex</button>
+      </section>
+    </div>
+    <div class="set-preview-options">
+      <label for="setMaxLen">Regex → Set: แสดงสมาชิกยาวไม่เกิน</label>
+      <input id="setMaxLen" type="number" min="0" max="6" value="4">
+      <span>ตัวอักษร</span>
+      <span id="setPreviewNote">Set → Regex แปลงครบทุกสมาชิก</span>
+    </div>
 
     <div class="equation-section-title">ลองกดตัวอย่าง</div>
     <div class="equation-examples" id="regexExamples">
@@ -340,7 +379,7 @@ kbd{background:#0b1220;border:1px solid var(--line);border-bottom-width:2px;bord
       <p id="regexOutputHelp">แปลงเป็น DFA แล้วรวม state ที่ทำงานเหมือนกัน เหมาะสำหรับ diagram ที่กระชับ</p>
     </div>
 
-    <div id="regexFeedback" class="result equation-feedback" aria-live="polite">พิมพ์ Regex หรือเลือกตัวอย่างด้านบน</div>
+    <div id="regexFeedback" class="result equation-feedback" aria-live="polite">พิมพ์ Regex หรือ Set ในช่องใดช่องหนึ่ง</div>
     <div class="equation-primary-action">
       <p id="equationReplaceNotice" class="small"></p>
       <button id="generateRegex" class="primary" disabled>สร้าง Minimal DFA</button>
@@ -369,6 +408,76 @@ Lambda transition: δ(q0,lambda) = q1</div>
         </div>
       </div>
     </details>
+  </div>
+</div>
+
+<div id="practiceModal" class="modal-backdrop">
+  <div class="modal practice-modal" role="dialog" aria-modal="true" aria-labelledby="practiceModalTitle">
+    <div class="equation-heading">
+      <div>
+        <span class="practice-kicker">PRACTICE LAB</span>
+        <h2 id="practiceModalTitle">สุ่มโจทย์ Automata</h2>
+        <p>ฝึกแปลงระหว่างภาษาและแผนภาพ พร้อมตรวจคำตอบแบบเทียบภาษาจริง</p>
+      </div>
+      <button id="closePractice" aria-label="ปิด">ปิด</button>
+    </div>
+
+    <div class="practice-controls">
+      <div>
+        <label for="practiceDirection">รูปแบบโจทย์</label>
+        <select id="practiceDirection">
+          <option value="diagram-to-regex">ดูรูป → ตอบ Regex</option>
+          <option value="equation-to-diagram">ดูสมการ → วาดรูป</option>
+        </select>
+      </div>
+      <div>
+        <label for="practiceMachine">ชนิด Automata</label>
+        <select id="practiceMachine">
+          <option value="DFA">DFA</option>
+          <option value="NFA">NFA</option>
+        </select>
+      </div>
+      <div>
+        <label for="practiceDifficulty">ระดับ</label>
+        <select id="practiceDifficulty">
+          <option value="easy">เริ่มต้น</option>
+          <option value="medium" selected>กำลังดี</option>
+          <option value="hard">ท้าทาย</option>
+        </select>
+      </div>
+      <button id="newPracticeQuestion" class="primary">สุ่มโจทย์ใหม่</button>
+    </div>
+
+    <div class="practice-meta">
+      <span id="practiceTypeBadge" class="badge">DFA</span>
+      <span id="practiceQuestionNumber">โจทย์สุ่ม</span>
+      <span id="practiceScore">ตอบถูก 0 ข้อ</span>
+    </div>
+
+    <section id="practiceDiagramQuestion" class="practice-question-card">
+      <h3>แผนภาพนี้รับภาษาอะไร?</h3>
+      <div class="practice-diagram-shell">
+        <svg id="practiceDiagram" viewBox="0 0 760 380" aria-label="แผนภาพ Automata สำหรับโจทย์"></svg>
+      </div>
+      <label for="practiceRegexAnswer">ตอบเป็น Regular Expression</label>
+      <input id="practiceRegexAnswer" spellcheck="false" placeholder="เช่น {0,1}*.0.1">
+      <div class="practice-answer-actions">
+        <button id="checkPracticeRegex" class="primary">ตรวจ Regex</button>
+        <button id="practiceRegexHint">ขอคำใบ้</button>
+      </div>
+    </section>
+
+    <section id="practiceEquationQuestion" class="practice-question-card hidden">
+      <h3>วาด <span id="practiceMachineText">DFA</span> ที่รับภาษานี้</h3>
+      <div class="practice-prompt-card">
+        <span id="practicePromptKind">REGULAR EXPRESSION</span>
+        <strong id="practicePromptText">{0,1}*.0.1</strong>
+      </div>
+      <p class="small">กดเริ่มวาด ระบบจะเตรียม Canvas เปล่าและ Alphabet ให้ จากนั้นตรวจได้ว่ารับภาษาเดียวกันหรือไม่</p>
+      <button id="startPracticeDrawing" class="primary" style="width:100%">เริ่มวาดบน Canvas</button>
+    </section>
+
+    <div id="practiceFeedback" class="result practice-feedback" aria-live="polite">เลือกโหมดแล้วกด “สุ่มโจทย์ใหม่”</div>
   </div>
 </div>
 
@@ -546,8 +655,22 @@ function setEquationFeedback(id,message,state=''){
   element.classList.remove('ready','bad','warn');
   if(state)element.classList.add(state)
 }
+let activeEquationSource='regex';
+function setActiveEquationSource(source){
+  activeEquationSource=source;
+  $('regexCard').classList.toggle('active-source',source==='regex');
+  $('setCard').classList.toggle('active-source',source==='set');
+  $('regexSourceBadge').textContent=source==='regex'?'INPUT':'OUTPUT';
+  $('setSourceBadge').textContent=source==='set'?'INPUT':'OUTPUT'
+}
+function expressionFromActiveSource(){
+  if(activeEquationSource==='set'){
+    const words=AutomataEquation.parseFiniteLanguageSet($('setInput').value);
+    return{expression:AutomataEquation.finiteLanguageToRegex(words),words}
+  }
+  return{expression:$('regexInput').value.trim(),words:null}
+}
 function validateRegex(){
-  const input=$('regexInput').value.trim();
   const output=$('regexOutput').value;
   const outputInfo={
     minimal:{
@@ -565,25 +688,27 @@ function validateRegex(){
   }[output];
   $('generateRegex').textContent=outputInfo.button;
   $('regexOutputHelp').textContent=outputInfo.help;
-  if(!input){
+  const raw=activeEquationSource==='set'?$('setInput').value.trim():$('regexInput').value.trim();
+  if(!raw){
     $('generateRegex').disabled=true;
-    setEquationFeedback('regexFeedback','พิมพ์ Regex หรือเลือกตัวอย่างด้านบน');
+    setEquationFeedback('regexFeedback',activeEquationSource==='set'?'พิมพ์ Finite Set เช่น {λ, 0, 01}':'พิมพ์ Regex หรือเลือกตัวอย่างด้านบน');
     return null
   }
   try{
-    const epsilonNfa=AutomataEquation.regexToNfa(input);
+    const source=expressionFromActiveSource();
+    const epsilonNfa=AutomataEquation.regexToNfa(source.expression);
     let model;
     $('generateRegex').disabled=false;
     if(output==='minimal'){
-      const compactNfa=AutomataEquation.regexToPositionNfa(input);
+      const compactNfa=AutomataEquation.regexToPositionNfa(source.expression);
       model=AutomataEquation.minimizeDfa(AutomataEquation.determinizeNfa(epsilonNfa));
       setEquationFeedback(
         'regexFeedback',
-        `✓ Minimal DFA ${model.states.length} states · NFA ${compactNfa.states.length} · λ-NFA ${epsilonNfa.states.length} · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
+        `✓ ${source.words?'Finite Set '+source.words.length+' สมาชิก · ':''}Minimal DFA ${model.states.length} states · NFA ${compactNfa.states.length} · Alphabet {${model.alphabet.join(', ')||'∅'}}`,
         'ready'
       )
     }else if(output==='nfa'){
-      model=AutomataEquation.regexToPositionNfa(input);
+      model=AutomataEquation.regexToPositionNfa(source.expression);
       const reduced=epsilonNfa.states.length-model.states.length;
       setEquationFeedback(
         'regexFeedback',
@@ -598,11 +723,42 @@ function validateRegex(){
         'ready'
       )
     }
+    model.inputKind=activeEquationSource;
+    model.inputExpression=source.expression;
     return model
   }catch(error){
     $('generateRegex').disabled=true;
     setEquationFeedback('regexFeedback',equationErrorText(error),'bad');
     return null
+  }
+}
+function formatFiniteSet(words){
+  return `{${words.map(word=>word||'λ').join(', ')}}`
+}
+function convertRegexToSet(){
+  setActiveEquationSource('regex');
+  try{
+    const input=$('regexInput').value.trim();
+    if(!input)throw new Error('กรุณาใส่ Regular Expression ก่อน');
+    const model=AutomataEquation.regexToPositionNfa(input);
+    const maxLength=Math.max(0,Math.min(6,+$('setMaxLen').value||0));
+    const preview=AutomataEquation.enumerateAcceptedWords(model,maxLength,512);
+    $('setInput').value=formatFiniteSet(preview.words);
+    $('setPreviewNote').textContent=`ตัวอย่าง ${preview.words.length} สมาชิก ความยาว ≤ ${maxLength}${preview.truncated?' (ตัดบางส่วน)':''}`;
+    setEquationFeedback('regexFeedback',`✓ แปลง Regex เป็น Set preview แล้ว · ตรวจ ${preview.checked} strings · ภาษาที่ไม่สิ้นสุดจะแสดงตามขอบเขตความยาว`,'ready');
+    validateRegex()
+  }catch(error){setEquationFeedback('regexFeedback',equationErrorText(error),'bad')}
+}
+function convertSetToRegex(){
+  setActiveEquationSource('set');
+  try{
+    const words=AutomataEquation.parseFiniteLanguageSet($('setInput').value);
+    $('regexInput').value=AutomataEquation.finiteLanguageToRegex(words);
+    $('setPreviewNote').textContent=`แปลงครบ ${words.length} สมาชิกแบบ exact`;
+    validateRegex()
+  }catch(error){
+    $('generateRegex').disabled=true;
+    setEquationFeedback('regexFeedback',equationErrorText(error),'bad')
   }
 }
 function validateTransitions(){
@@ -635,8 +791,9 @@ function openEquationModal(){
     ? `จะแทนที่งานปัจจุบัน ${states.length} states · กด Undo ย้อนกลับได้`
     :'ระบบจะจัดตำแหน่ง diagram ให้อัตโนมัติ';
   $('equationModal').style.display='flex';
+  setActiveEquationSource(activeEquationSource);
   validateRegex();
-  $('regexInput').focus()
+  $(activeEquationSource==='regex'?'regexInput':'setInput').focus()
 }
 function nextStateCounter(names){
   const numbered=names.map(name=>/^q(\d+)$/.exec(name)).filter(Boolean).map(match=>+match[1]+1);
@@ -661,22 +818,28 @@ function generateEquationModel(model){
     counter=nextStateCounter(model.states);selected=null;connectFrom=null;sim=null
   });
   closeEquationModal();
+  const sourceLabel=model.inputKind==='set'?'Set':'Regex';
   $('status').textContent=model.sourceKind==='minimal-dfa'
-    ?`สร้าง Minimal DFA ${model.states.length} states จาก Regex แล้ว`
+    ?`สร้าง Minimal DFA ${model.states.length} states จาก ${sourceLabel} แล้ว`
     :model.sourceKind==='position-nfa'
-      ?`สร้าง NFA ${model.states.length} states จาก Regex แล้ว`
+      ?`สร้าง NFA ${model.states.length} states จาก ${sourceLabel} แล้ว`
     :model.sourceKind==='regex'
-      ?'สร้าง λ-NFA จาก Regex แล้ว'
+      ?`สร้าง λ-NFA จาก ${sourceLabel} แล้ว`
       :`สร้าง ${model.type} จาก Transition equations แล้ว`
 }
 $('equationBtn').onclick=openEquationModal;
 $('closeEquation').onclick=closeEquationModal;
 $('equationModal').onclick=event=>{if(event.target===$('equationModal'))closeEquationModal()};
-$('regexInput').oninput=validateRegex;
+$('regexInput').oninput=()=>{setActiveEquationSource('regex');validateRegex()};
+$('setInput').oninput=()=>{setActiveEquationSource('set');validateRegex()};
+$('regexToSet').onclick=convertRegexToSet;
+$('setToRegex').onclick=convertSetToRegex;
+$('setMaxLen').onchange=()=>{if(activeEquationSource==='regex'&&$('regexInput').value.trim())convertRegexToSet()};
 $('regexOutput').onchange=validateRegex;
 $('transitionInput').oninput=validateTransitions;
 document.querySelectorAll('[data-regex]').forEach(button=>button.onclick=()=>{
   $('regexInput').value=button.dataset.regex;
+  setActiveEquationSource('regex');
   validateRegex();$('regexInput').focus()
 });
 $('transitionExample').onclick=()=>{
@@ -691,6 +854,164 @@ $('transitionAdvanced').ontoggle=()=>{
 };
 $('generateRegex').onclick=()=>generateEquationModel(validateRegex());
 $('generateTransitions').onclick=()=>generateEquationModel(validateTransitions());
+
+const practiceBank=[
+  {difficulty:'easy',title:'อ่าน 0 กี่ตัวก็ได้',regex:'0*',hint:'เริ่มต้นก็เป็น final state และวนด้วย 0'},
+  {difficulty:'easy',title:'ลงท้ายด้วย 1',regex:'{0,1}*.1',hint:'สถานะสุดท้ายต้องจำว่าสัญลักษณ์ล่าสุดคือ 1'},
+  {difficulty:'easy',title:'ภาษาจำกัดชุดเล็ก',set:'{λ, 0, 1}',hint:'ต้องรับคำว่างด้วย และรับคำยาว 1 ตัวเท่านั้น'},
+  {difficulty:'medium',title:'ลงท้ายด้วย 01',regex:'{0,1}*.0.1',hint:'จำ suffix ที่ยังมีโอกาสกลายเป็น 01'},
+  {difficulty:'medium',title:'มี 00 อยู่ข้างใน',regex:'{0,1}*.0.0.{0,1}*',hint:'เมื่อเจอ 00 แล้วจะอยู่ใน accepting state ต่อไป'},
+  {difficulty:'medium',title:'ภาษาจำกัดสลับบิต',set:'{01, 10, 101}',hint:'วาดเป็นต้นไม้ตาม prefix แล้วรวมทางที่ทำงานเหมือนกันได้'},
+  {difficulty:'hard',title:'มี 010 อยู่ข้างใน',regex:'{0,1}*.0.1.0.{0,1}*',hint:'แต่ละ state จำ prefix ของ 010 ที่ตรงอยู่ล่าสุด'},
+  {difficulty:'hard',title:'บล็อก 1 หรือ 01',regex:'{1,0.1}*',hint:'ทุก 0 ต้องตามด้วย 1 และคำว่างต้องผ่าน'},
+  {difficulty:'hard',title:'ภาษาจำกัดหลายความยาว',set:'{λ, 00, 010, 101, 111}',hint:'เริ่มจาก prefix tree แล้วตรวจว่า state ใดรวมกันได้'}
+];
+let practiceSession=null;
+let practiceSerial=0;
+let practiceScore=Number(localStorage.getItem('automataPracticeScore')||0);
+
+function practiceTargetExpression(question){
+  return question.regex||AutomataEquation.finiteLanguageToRegex(AutomataEquation.parseFiniteLanguageSet(question.set))
+}
+function practiceModel(question,machine){
+  const expression=practiceTargetExpression(question);
+  return machine==='DFA'
+    ?AutomataEquation.regexToMinimalDfa(expression)
+    :AutomataEquation.regexToPositionNfa(expression)
+}
+function svgNode(tag,attributes={},content=''){
+  const node=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  Object.entries(attributes).forEach(([key,value])=>node.setAttribute(key,value));
+  if(content)node.textContent=content;
+  return node
+}
+function renderPracticeDiagram(model){
+  const target=$('practiceDiagram');target.innerHTML='';
+  const defs=svgNode('defs'),marker=svgNode('marker',{id:'practiceArrow',markerWidth:10,markerHeight:10,refX:9,refY:3,orient:'auto',markerUnits:'strokeWidth'});
+  marker.append(svgNode('path',{d:'M0,0 L0,6 L9,3 z',fill:'#172238'}));defs.append(marker);target.append(defs);
+  const positions=AutomataEquation.layoutAutomaton(model,760,380);
+  const merged=AutomataEquation.mergeParallelTransitions(model.transitions);
+  merged.forEach((edge,index)=>{
+    const a=positions[edge.from],b=positions[edge.to];if(!a||!b)return;
+    let pathData,labelX,labelY;
+    if(edge.from===edge.to){
+      pathData=`M ${a.x-18} ${a.y-27} C ${a.x-64} ${a.y-98}, ${a.x+64} ${a.y-98}, ${a.x+18} ${a.y-27}`;
+      labelX=a.x;labelY=a.y-72
+    }else{
+      const reverse=merged.some(item=>item.from===edge.to&&item.to===edge.from);
+      const dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy)||1,ux=dx/length,uy=dy/length,nx=-uy,ny=ux;
+      const bend=reverse?34:0,sx=a.x+ux*34,sy=a.y+uy*34,ex=b.x-ux*39,ey=b.y-uy*39,mx=(sx+ex)/2,my=(sy+ey)/2;
+      pathData=`M ${sx} ${sy} Q ${mx+nx*bend} ${my+ny*bend} ${ex} ${ey}`;
+      labelX=mx+nx*(bend+(bend?13:0));labelY=my+ny*(bend+(bend?13:0))-8
+    }
+    target.append(svgNode('path',{d:pathData,fill:'none',stroke:'#172238','stroke-width':2,'marker-end':'url(#practiceArrow)'}));
+    const label=svgNode('text',{x:labelX,y:labelY,'text-anchor':'middle',fill:'#172238','font-family':'SFMono-Regular, Menlo, monospace','font-size':13,'font-weight':700,style:'paint-order:stroke;stroke:#fbf8f1;stroke-width:5px'},edge.label);
+    target.append(label)
+  });
+  model.states.forEach(name=>{
+    const point=positions[name];if(!point)return;
+    if(name===model.initial){
+      target.append(svgNode('line',{x1:point.x-76,y1:point.y,x2:point.x-36,y2:point.y,stroke:'#d84b2a','stroke-width':2,'marker-end':'url(#practiceArrow)'}))
+    }
+    target.append(svgNode('circle',{cx:point.x,cy:point.y,r:32,fill:'#fbf8f1',stroke:name===model.initial?'#d84b2a':'#172238','stroke-width':2}));
+    if(model.finals.includes(name))target.append(svgNode('circle',{cx:point.x,cy:point.y,r:25,fill:'none',stroke:'#172238','stroke-width':2}));
+    target.append(svgNode('text',{x:point.x,y:point.y+5,'text-anchor':'middle',fill:'#172238','font-family':'SFMono-Regular, Menlo, monospace','font-size':13,'font-weight':750},name))
+  })
+}
+function setPracticeFeedback(message,state=''){
+  const box=$('practiceFeedback');box.textContent=message;box.classList.remove('match','mismatch');if(state)box.classList.add(state)
+}
+function updatePracticeScore(){
+  $('practiceScore').textContent=`ตอบถูก ${practiceScore} ข้อ`;
+  localStorage.setItem('automataPracticeScore',String(practiceScore))
+}
+function generatePracticeQuestion(){
+  const difficulty=$('practiceDifficulty').value,machine=$('practiceMachine').value,direction=$('practiceDirection').value;
+  const candidates=practiceBank.filter(item=>item.difficulty===difficulty);
+  let question=candidates[Math.floor(Math.random()*candidates.length)];
+  if(candidates.length>1&&practiceSession?.question===question)question=candidates[(candidates.indexOf(question)+1)%candidates.length];
+  const model=practiceModel(question,machine);
+  practiceSession={question,machine,direction,model,expression:practiceTargetExpression(question),solved:false};
+  practiceSerial+=1;
+  $('practiceTypeBadge').textContent=machine;
+  $('practiceQuestionNumber').textContent=`โจทย์ #${practiceSerial} · ${difficulty==='easy'?'เริ่มต้น':difficulty==='medium'?'กำลังดี':'ท้าทาย'}`;
+  $('practiceDiagramQuestion').classList.toggle('hidden',direction!=='diagram-to-regex');
+  $('practiceEquationQuestion').classList.toggle('hidden',direction!=='equation-to-diagram');
+  $('practiceRegexAnswer').value='';
+  if(direction==='diagram-to-regex'){
+    renderPracticeDiagram(model);
+    setPracticeFeedback('เขียน Regular Expression ที่รับภาษาเดียวกับรูป ไม่จำเป็นต้องเขียนเหมือนเฉลย')
+  }else{
+    $('practiceMachineText').textContent=machine;
+    $('practicePromptKind').textContent=question.set?'FINITE SET':'REGULAR EXPRESSION';
+    $('practicePromptText').textContent=question.set||question.regex;
+    setPracticeFeedback('พร้อมแล้ว กด “เริ่มวาดบน Canvas”')
+  }
+  updatePracticeScore()
+}
+function practiceCounterexampleText(result,leftLabel,rightLabel){
+  const word=result.counterexample===''?'λ':result.counterexample;
+  return `ยังไม่ตรง · ตัวอย่างสั้นที่สุด: ${word} · ${leftLabel} ${result.leftAccepted?'รับ':'ไม่รับ'} แต่ ${rightLabel} ${result.rightAccepted?'รับ':'ไม่รับ'}`
+}
+function awardPracticePoint(){
+  if(practiceSession&&!practiceSession.solved){practiceSession.solved=true;practiceScore+=1;updatePracticeScore()}
+}
+function checkPracticeRegex(){
+  if(!practiceSession)return;
+  try{
+    const answer=$('practiceRegexAnswer').value.trim();if(!answer)throw new Error('กรุณาใส่ Regular Expression ก่อน');
+    const answerModel=AutomataEquation.regexToPositionNfa(answer);
+    const result=AutomataEquation.compareLanguages(practiceSession.model,answerModel);
+    if(result.equivalent){awardPracticePoint();setPracticeFeedback('✓ ถูกต้อง! Regex นี้รับภาษาเดียวกับแผนภาพทุกสตริง','match')}
+    else setPracticeFeedback(practiceCounterexampleText(result,'รูป','Regex'),'mismatch')
+  }catch(error){setPracticeFeedback('ตรวจไม่ได้: '+error.message,'mismatch')}
+}
+function practiceHintText(){
+  if(!practiceSession)return '';
+  const sample=AutomataEquation.enumerateAcceptedWords(practiceSession.model,3,12).words.map(word=>word||'λ');
+  return `คำใบ้: ${practiceSession.question.hint} · ตัวอย่างที่รับ: ${sample.join(', ')||'ไม่มีในช่วงความยาว 0–3'}`
+}
+function startPracticeDrawing(){
+  if(!practiceSession)return;
+  snapshot();states=[];edges=[];counter=0;selected=null;sim=null;
+  $('machineType').value=practiceSession.machine;$('alphabet').value=practiceSession.model.alphabet.join(',');
+  render();snapshot(false);closePracticeModal();
+  $('practiceStrip').classList.remove('hidden');
+  $('practiceStripMode').textContent=`PRACTICE · ${practiceSession.machine}`;
+  $('practiceStripPrompt').textContent=practiceSession.question.set||practiceSession.question.regex;
+  $('practiceStripFeedback').textContent='Canvas พร้อมแล้ว วาดให้เสร็จแล้วกด “ตรวจรูปที่วาด”';
+  $('practiceStripFeedback').classList.remove('match','mismatch');
+  setTool('select');$('status').textContent='โหมดฝึก: วาด Automata ตามโจทย์'
+}
+function checkPracticeDrawing(){
+  if(!practiceSession)return;
+  const feedback=$('practiceStripFeedback');feedback.classList.remove('match','mismatch');
+  try{
+    const result=AutomataEquation.compareLanguages(canvasLanguageModel(),practiceSession.model);
+    if(result.equivalent){awardPracticePoint();feedback.textContent='✓ ถูกต้อง! รูปที่วาดรับภาษาเดียวกับโจทย์ทุกสตริง';feedback.classList.add('match')}
+    else{feedback.textContent=practiceCounterexampleText(result,'รูปที่วาด','โจทย์');feedback.classList.add('mismatch')}
+  }catch(error){feedback.textContent='ตรวจไม่ได้: '+error.message;feedback.classList.add('mismatch')}
+}
+function closePracticeModal(){$('practiceModal').style.display='none'}
+function openPracticeModal(){
+  $('practiceModal').style.display='flex';
+  if(!practiceSession)generatePracticeQuestion()
+}
+$('practiceBtn').onclick=openPracticeModal;
+$('closePractice').onclick=closePracticeModal;
+$('practiceModal').onclick=event=>{if(event.target===$('practiceModal'))closePracticeModal()};
+$('newPracticeQuestion').onclick=generatePracticeQuestion;
+$('practiceDirection').onchange=generatePracticeQuestion;
+$('practiceMachine').onchange=generatePracticeQuestion;
+$('practiceDifficulty').onchange=generatePracticeQuestion;
+$('checkPracticeRegex').onclick=checkPracticeRegex;
+$('practiceRegexAnswer').onkeydown=event=>{if(event.key==='Enter')checkPracticeRegex()};
+$('practiceRegexHint').onclick=()=>setPracticeFeedback(practiceHintText());
+$('startPracticeDrawing').onclick=startPracticeDrawing;
+$('practiceCheckDrawing').onclick=checkPracticeDrawing;
+$('practiceHintBtn').onclick=()=>{$('practiceStripFeedback').textContent=practiceHintText()};
+$('practiceNextFromStrip').onclick=()=>{$('practiceStrip').classList.add('hidden');openPracticeModal();generatePracticeQuestion()};
+$('practiceExitBtn').onclick=()=>{$('practiceStrip').classList.add('hidden');practiceSession=null;$('status').textContent='ออกจากโหมดฝึกแล้ว'};
 
 ['select','add','connect','delete'].forEach(t=>$(t+'Tool').onclick=()=>setTool(t));
 $('clearBtn').onclick=()=>commit(()=>{states=[];edges=[];selected=null;counter=0});
@@ -708,7 +1029,8 @@ window.addEventListener('keydown',ev=>{
   else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='t'){setTool('connect')}
   else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='x'){setTool('delete')}
   else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='r'){$('equationBtn').click()}
-  else if(ev.key==='Escape'){connectFrom=null;setTool('select');$('edgeModal').style.display='none';closeEquationModal()}
+  else if(!editing&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey&&ev.key.toLowerCase()==='p'){$('practiceBtn').click()}
+  else if(ev.key==='Escape'){connectFrom=null;setTool('select');$('edgeModal').style.display='none';closeEquationModal();closePracticeModal()}
 });
 
 function undo(){if(!history.length)return;future.push(JSON.stringify({states,edges,counter,type:type(),alphabet:$('alphabet').value}));restore(history.pop())}
