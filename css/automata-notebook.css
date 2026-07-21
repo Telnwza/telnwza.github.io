@@ -646,16 +646,17 @@ body[data-simulator="automata"] .sim-left-panel {
 }
 
 body[data-simulator="automata"] .sim-right-panel {
+  top: 0 !important;
   right: 0 !important;
   bottom: 31px !important;
-  left: var(--automata-rail-width, 76px) !important;
-  width: auto !important;
-  height: var(--automata-right-height, min(44%, 430px)) !important;
+  left: auto !important;
+  width: var(--automata-right-width, 360px) !important;
+  height: auto !important;
   max-height: none !important;
   padding: 0 16px 16px;
-  border-width: 1px 0 0 !important;
-  box-shadow: 0 -8px 0 rgba(23, 34, 56, 0.07) !important;
-  transform: translateY(0);
+  border-width: 0 0 0 1px !important;
+  box-shadow: -8px 0 0 rgba(23, 34, 56, 0.07) !important;
+  transform: translateX(0);
 }
 
 body[data-simulator="automata"] .sim-workspace.sim-left-collapsed .sim-left-panel,
@@ -671,7 +672,7 @@ body[data-simulator="automata"].sim-focus-mode .sim-right-panel {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(calc(100% + 42px));
+  transform: translateX(calc(100% + 42px));
 }
 
 body[data-simulator="automata"].sim-focus-mode .automata-tool-rail { display: none; }
@@ -718,14 +719,14 @@ body[data-simulator="automata"].is-resizing-panel .panel-resize-handle::after {
 .panel-resize-left::after { top: 0; bottom: 0; left: 4px; width: 2px; }
 
 .panel-resize-right {
-  right: 0;
-  bottom: calc(31px + var(--automata-right-height, 430px) - 5px);
-  left: var(--automata-rail-width, 76px);
-  height: 10px;
-  cursor: row-resize;
+  top: 0;
+  right: calc(var(--automata-right-width, 360px) - 5px);
+  bottom: 31px;
+  width: 10px;
+  cursor: col-resize;
 }
 
-.panel-resize-right::after { top: 4px; right: 0; left: 0; height: 2px; }
+.panel-resize-right::after { top: 0; bottom: 0; left: 4px; width: 2px; }
 
 body[data-simulator="automata"].is-resizing-panel { user-select: none; }
 body[data-simulator="automata"] .sim-workspace.sim-left-collapsed > .panel-resize-left,
@@ -862,11 +863,12 @@ body[data-simulator="automata"] .statusbar {
   }
 
   body[data-simulator="automata"] .sim-right-panel {
+    top: 0 !important;
     right: 0 !important;
     bottom: 31px !important;
-    left: 58px !important;
-    width: auto !important;
-    height: min(56%, 440px) !important;
+    left: auto !important;
+    width: min(var(--automata-right-width, 360px), calc(100vw - 58px)) !important;
+    height: auto !important;
   }
 
   body[data-simulator="automata"] .sim-panel-drawer-open .sim-panel-scrim { display: none; }

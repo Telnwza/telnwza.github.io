@@ -93,7 +93,7 @@
     focus: false,
     railWidth: Number(initialState.railWidth) || 76,
     leftWidth: Number(initialState.leftWidth) || 286,
-    rightHeight: Number(initialState.rightHeight) || Math.min(430, Math.round(window.innerHeight * 0.44)),
+    rightWidth: Number(initialState.rightWidth) || 360,
   };
   if (window.matchMedia("(max-width: 820px)").matches && typeof initialState.leftOpen !== "boolean") {
     state.leftOpen = false;
@@ -271,7 +271,7 @@
         rightOpen: state.rightOpen,
         railWidth: state.railWidth,
         leftWidth: state.leftWidth,
-        rightHeight: state.rightHeight,
+        rightWidth: state.rightWidth,
       }));
     } catch {
       // UI preferences are optional.
@@ -385,10 +385,10 @@
     const bounds = workspace.getBoundingClientRect();
     state.railWidth = clamp(state.railWidth, 58, Math.min(140, Math.max(58, bounds.width * 0.16)));
     state.leftWidth = clamp(state.leftWidth, 240, Math.min(560, Math.max(240, bounds.width - state.railWidth - 160)));
-    state.rightHeight = clamp(state.rightHeight, 180, Math.min(Math.max(180, bounds.height - 100), bounds.height * 0.82));
+    state.rightWidth = clamp(state.rightWidth, 280, Math.min(600, Math.max(280, bounds.width - state.railWidth - 160)));
     workspace.style.setProperty("--automata-rail-width", `${Math.round(state.railWidth)}px`);
     workspace.style.setProperty("--automata-left-width", `${Math.round(state.leftWidth)}px`);
-    workspace.style.setProperty("--automata-right-height", `${Math.round(state.rightHeight)}px`);
+    workspace.style.setProperty("--automata-right-width", `${Math.round(state.rightWidth)}px`);
   }
 
   function addPanelResizer(target, kind, label) {
@@ -397,14 +397,14 @@
     handle.tabIndex = 0;
     handle.setAttribute("role", "separator");
     handle.setAttribute("aria-label", `${label} · ลากหรือใช้ปุ่มลูกศรเพื่อปรับขนาด · ดับเบิลคลิกเพื่อคืนค่า`);
-    handle.setAttribute("aria-orientation", kind === "right" ? "horizontal" : "vertical");
+    handle.setAttribute("aria-orientation", "vertical");
     target.append(handle);
 
     const updateFromPointer = (event) => {
       const bounds = workspace.getBoundingClientRect();
       if (kind === "rail") state.railWidth = event.clientX - bounds.left;
       if (kind === "left") state.leftWidth = event.clientX - bounds.left - state.railWidth;
-      if (kind === "right") state.rightHeight = bounds.bottom - 31 - event.clientY;
+      if (kind === "right") state.rightWidth = bounds.right - event.clientX;
       applyPanelSizes();
       notifyResize();
     };
@@ -431,22 +431,21 @@
     handle.addEventListener("dblclick", () => {
       if (kind === "rail") state.railWidth = 76;
       if (kind === "left") state.leftWidth = 286;
-      if (kind === "right") state.rightHeight = Math.min(430, Math.round(window.innerHeight * 0.44));
+      if (kind === "right") state.rightWidth = 360;
       applyPanelSizes();
       saveState();
       notifyResize();
     });
     handle.addEventListener("keydown", (event) => {
-      const horizontal = kind !== "right";
-      const decrement = horizontal ? event.key === "ArrowLeft" : event.key === "ArrowDown";
-      const increment = horizontal ? event.key === "ArrowRight" : event.key === "ArrowUp";
+      const decrement = kind === "right" ? event.key === "ArrowRight" : event.key === "ArrowLeft";
+      const increment = kind === "right" ? event.key === "ArrowLeft" : event.key === "ArrowRight";
       if (!decrement && !increment) return;
       event.preventDefault();
       const amount = event.shiftKey ? 32 : 8;
       const direction = decrement ? -1 : 1;
       if (kind === "rail") state.railWidth += direction * amount;
       if (kind === "left") state.leftWidth += direction * amount;
-      if (kind === "right") state.rightHeight += direction * amount;
+      if (kind === "right") state.rightWidth += direction * amount;
       applyPanelSizes();
       saveState();
       notifyResize();
@@ -578,7 +577,7 @@
     workspace.prepend(rail);
     addPanelResizer(rail, "rail", "ความกว้างแถบเครื่องมือ");
     addPanelResizer(workspace, "left", "ความกว้างแผงตั้งค่า");
-    addPanelResizer(workspace, "right", "ความสูงแผงวิเคราะห์");
+    addPanelResizer(workspace, "right", "ความกว้างแผงวิเคราะห์");
 
     const rulerX = create("div", "drafting-ruler drafting-ruler-x");
     const rulerY = create("div", "drafting-ruler drafting-ruler-y");

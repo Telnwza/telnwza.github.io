@@ -131,7 +131,7 @@ The tests cover classroom and legacy Regular Expression notation, lambda spellin
 - The Automata canvas supports cursor-centered zoom, trackpad/mouse-wheel panning, Space-drag panning, content-aware Fit, optional grid snapping, marquee/Shift multi-selection, group dragging, keyboard nudging, and copy/paste/duplicate.
 - Drag the transition handle on the right side of a state to another state for a live transition preview. Selection quick actions provide Initial/Final toggles, alignment, duplication, and deletion.
 - Automata Studio includes Light, Dark, and System themes with persisted preference and reduced-motion support.
-- A visible Dark/Light button sits in the main toolbar. The tool rail, settings drawer, and analysis drawer are resizable on desktop, and their sizes persist locally.
+- A visible Dark/Light button sits in the main toolbar. The tool rail, settings drawer, and right-side analysis drawer are resizable on desktop, and their sizes persist locally.
 
 ### Check a Drawn Automaton Against a Regex
 
