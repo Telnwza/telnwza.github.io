@@ -4147,6 +4147,57 @@ function generateAllVhdl(){
   return out;
 }
 
+/* BEGIN TESTABLE VHDL SEQUENTIAL HELPERS */
+// A bare VHDL character literal such as '1' has no type until context resolves it.
+// Comparing two bare literals (`'1'='0'`) is ambiguous in Vivado because BIT,
+// BOOLEAN/CHARACTER-family, and STD_LOGIC equality overloads can all match. Fold
+// constant-driven FF controls here and only emit equality when one side is a
+// typed signal, so generated VHDL is both smaller and unambiguous.
+function stdLogicLiteralBit(value){
+  const match = /^'([01])'$/.exec(String(value).trim());
+  return match ? match[1] : null;
+}
+function stdLogicEquals(value, bit){
+  const literal = stdLogicLiteralBit(value);
+  if(literal!==null) return literal===String(bit) ? "true" : "false";
+  return `${value}='${bit}'`;
+}
+function jkSequentialBody(J, K, qsig, qnsig){
+  const j = stdLogicLiteralBit(J), k = stdLogicLiteralBit(K);
+  if(j!==null && k!==null){
+    if(j==="0" && k==="0") return `      null; -- J=K=0: hold state`;
+    if(j==="0" && k==="1") return `      ${qsig} <= '0'; ${qnsig} <= '1';`;
+    if(j==="1" && k==="0") return `      ${qsig} <= '1'; ${qnsig} <= '0';`;
+    return `      ${qsig} <= not ${qsig}; ${qnsig} <= ${qsig};`;
+  }
+  const j0 = stdLogicEquals(J,"0"), j1 = stdLogicEquals(J,"1");
+  const k0 = stdLogicEquals(K,"0"), k1 = stdLogicEquals(K,"1");
+  return `      if    (${j0} and ${k1}) then ${qsig} <= '0'; ${qnsig} <= '1';
+      elsif (${j1} and ${k0}) then ${qsig} <= '1'; ${qnsig} <= '0';
+      elsif (${j1} and ${k1}) then ${qsig} <= not ${qsig}; ${qnsig} <= ${qsig};
+      end if;`;
+}
+function tSequentialBody(T, qsig){
+  const t = stdLogicLiteralBit(T);
+  if(t==="0") return `      null; -- T=0: hold state`;
+  if(t==="1") return `      ${qsig} <= not ${qsig};`;
+  return `      if (${stdLogicEquals(T,"1")}) then ${qsig} <= not ${qsig}; end if;`;
+}
+function srSequentialBody(S, R, qsig, qnsig){
+  const s = stdLogicLiteralBit(S), r = stdLogicLiteralBit(R);
+  if(s!==null && r!==null){
+    if(s==="1" && r==="0") return `      ${qsig} <= '1'; ${qnsig} <= '0';`;
+    if(s==="0" && r==="1") return `      ${qsig} <= '0'; ${qnsig} <= '1';`;
+    return `      null; -- S/R constants request hold or the invalid 1/1 state`;
+  }
+  const s0 = stdLogicEquals(S,"0"), s1 = stdLogicEquals(S,"1");
+  const r0 = stdLogicEquals(R,"0"), r1 = stdLogicEquals(R,"1");
+  return `      if    (${s1} and ${r0}) then ${qsig} <= '1'; ${qnsig} <= '0';
+      elsif (${s0} and ${r1}) then ${qsig} <= '0'; ${qnsig} <= '1';
+      end if;`;
+}
+/* END TESTABLE VHDL SEQUENTIAL HELPERS */
+
 function generateSchVhdl(sch){
   const warns = [];
   const ename = sanId(sch.name) || "my_circuit";
@@ -4384,13 +4435,9 @@ function generateSchVhdl(sch){
       processes.push({
         clk: CLK, edge: c.params.edge,
         rst: RST, pre: PRE,
-        // qn is assigned in every branch from the same pre-edge value of q,
-        // so q/qn always stay complementary after the edge
-        body:
-`      if    (${J}='0' and ${K}='1') then ${qsig} <= '0'; ${c._nets.qn} <= '1';
-      elsif (${J}='1' and ${K}='0') then ${qsig} <= '1'; ${c._nets.qn} <= '0';
-      elsif (${J}='1' and ${K}='1') then ${qsig} <= not ${qsig}; ${c._nets.qn} <= ${qsig};
-      end if;`,
+        // Constant J/K inputs are folded before VHDL emission. Besides producing
+        // cleaner code, this avoids Vivado's ambiguous bare-literal equality error.
+        body: jkSequentialBody(J,K,qsig,c._nets.qn),
         rstAssign: `      ${qsig} <= '0';\n      ${c._nets.qn} <= '1';`,
         preAssign: `      ${qsig} <= '1';\n      ${c._nets.qn} <= '0';`
       });
@@ -4408,7 +4455,7 @@ function generateSchVhdl(sch){
       processes.push({
         clk: CLK, edge: c.params.edge,
         rst: RST, pre: PRE,
-        body: `      if (${T}='1') then ${qsig} <= not ${qsig}; end if;`,
+        body: tSequentialBody(T,qsig),
         rstAssign: `      ${qsig} <= '0';`,
         preAssign: `      ${qsig} <= '1';`,
       });
@@ -4422,10 +4469,7 @@ function generateSchVhdl(sch){
       const qsig = c._nets.q;
       processes.push({
         clk: CLK, edge: c.params.edge,
-        body:
-`      if    (${S}='1' and ${R}='0') then ${qsig} <= '1'; ${c._nets.qn} <= '0';
-      elsif (${S}='0' and ${R}='1') then ${qsig} <= '0'; ${c._nets.qn} <= '1';
-      end if;`
+        body: srSequentialBody(S,R,qsig,c._nets.qn)
       });
       return;
     }
