@@ -177,8 +177,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .wire.bus{stroke-width:6.5}
 /* hover any part of a wire → the whole run brightens and lifts, so overlapping
    wires can be told apart by pointing at them */
-.wire-group:hover .wire{stroke-width:3.5;filter:drop-shadow(0 0 5px var(--wire-sel))}
-.wire-group:hover .wire.bus{stroke-width:8}
+.wire-group{transition:opacity .12s ease}
+.wire-group.net-muted{opacity:.18}
+.wire-group.net-hover .wire{stroke-width:3.5;filter:drop-shadow(0 0 5px currentColor)}
+.wire-group.net-hover .wire.bus{stroke-width:8}
+.wire-group.net-selected .wire{filter:drop-shadow(0 0 4px currentColor)}
 .wire-group.sel .wire{filter:drop-shadow(0 0 4px var(--wire-sel))}
 .port:hover rect.port-dot{filter:drop-shadow(0 0 4px var(--wire-bus))}
 .wire.selected{stroke:var(--wire-sel);filter:drop-shadow(0 0 4px var(--wire-sel))}
@@ -367,9 +370,11 @@ const canvas = $("#canvas");
 const GRID = 11;            // snap-to-grid step (px)
 const AUTOSAVE_KEY = "schstudio.autosave.v2";
 const AUTOSAVE_MS = 4000;
-// crossing style: "plain" = clean ISE-style crossings, "hop" = bump over
-let HOP_STYLE = "plain";
-try{ HOP_STYLE = localStorage.getItem("schstudio.hopStyle") || "plain"; }catch(_){}
+// crossing style: "plain" = clean ISE-style crossings, "hop" = bump over.
+// New users get hops because a crossing without a junction must never look
+// electrically connected; an existing explicit preference is still honoured.
+let HOP_STYLE = "hop";
+try{ HOP_STYLE = localStorage.getItem("schstudio.hopStyle") || "hop"; }catch(_){}
 
 /* ---------- helpers ---------- */
 let _uidN = 1;
@@ -1040,6 +1045,7 @@ function healJunctions(sch){
         sch.components = sch.components.filter(c=>c!==j);
         sch.wires = sch.wires.filter(w=>w!==a && w!==b);
         const merged = {id:uid("w"), from:a.from, to:b.to, name:a.name||b.name||""};
+        if(a.netColor||b.netColor) merged.netColor=a.netColor||b.netColor;
         // preserve manual waypoints through the removed junction point
         if(a.pts || b.pts) merged.pts = [...(a.pts||[]), {x:jp.x, y:jp.y}, ...(b.pts||[])];
         sch.wires.push(merged);
@@ -1229,6 +1235,7 @@ const state = {
   view: {x:0,y:0,k:1},
   mouse:{x:0,y:0},
   hover:null,
+  hoverNetKey:null,         // visual tracing only; selection/delete stays segment-based
   history:{stack:[],idx:-1,muted:false},
   autosaveTimer:null,
   clipboard:null,           // {components:[], wires:[]}
@@ -1526,6 +1533,10 @@ function addComp(type, x, y){
   const id = uid("c");
   const nc = { id, type, x:snap(x), y:snap(y), params, label:"" };
   sch.components.push(nc);
+  // A newly placed symbol is an obstacle immediately. Keep auto wires out of its
+  // body; BUSTAP is the exception because it must first be allowed to land on and
+  // attach to the bus underneath it.
+  if(type!=="BUSTAP") routeAutoWires(sch);
   state.selection = new Set([id]);
   snapshot();
   renderAll();
@@ -2027,7 +2038,7 @@ function onPortClick(c, p){
       id: uid("w"),
       from:{cid:fromPort.cid,pid:fromPort.pid},
       to:{cid:toPort.cid,pid:toPort.pid},
-      name:"", pts
+      name:"", pts, routeMode:"manual"
     });
   } else if(!branchFromNet(sch, fromPort, toPort)){
     sch.wires.push({
@@ -2078,7 +2089,7 @@ function finishWireInSpace(){
   const j = { id:uid("c"), type:"JUNCTION", x:endPt.x-6, y:endPt.y-6, params:{endpoint:true} };
   sch.components.push(j);
   const ordered = pw.isOut ? pts : pts.slice().reverse();
-  const nw = { id:uid("w"), name:"", pts:ordered };
+  const nw = { id:uid("w"), name:"", pts:ordered, routeMode:ordered.length?"manual":"auto" };
   if(pw.isOut){ nw.from={cid:pw.cid,pid:pw.pid}; nw.to={cid:j.id,pid:"j"}; }
   else        { nw.from={cid:j.id,pid:"j"};      nw.to={cid:pw.cid,pid:pw.pid}; }
   sch.wires.push(nw);
@@ -2432,13 +2443,13 @@ function splitWireThroughJunction(w, j, sch=activeSch()){
     id: uid("w"),
     from: w.from,
     to: { cid: j.id, pid: "j" },
-    name: w.name, width: w.width
+    name: w.name, width: w.width, netColor:w.netColor
   });
   sch.wires.push({
     id: uid("w"),
     from: { cid: j.id, pid: "j" },
     to: w.to,
-    name: "", width: w.width
+    name: "", width: w.width, netColor:w.netColor
   });
 }
 /* all wires belonging to the net driven by (cid,pid), following junctions */
@@ -2779,6 +2790,7 @@ function healLayout(sch){
   reflowJunctions(sch);
   separateWireOverlaps(sch);
   healJunctions(sch);
+  routeAutoWires(sch);      // final geometry pass; manual/legacy routes stay locked
 }
 
 /* ISE behaviour: a port drives ONE wire; further connections branch off the
@@ -2835,6 +2847,263 @@ function netDriverPort(sch, w, seen){
   seen.add(src.id);
   const up = sch.wires.find(x=>x.to.cid===src.id);
   return up ? netDriverPort(sch, up, seen) : {cid:src.id, pid:"j"};
+}
+
+/* =========================================================================
+   SMART ROUTING + NET VISUAL IDENTITY
+
+   Compatibility contract:
+   - legacy pts/mx/my with no routeMode are MANUAL and are never overwritten
+   - generated routes are stored as ordinary pts plus routeMode:"auto", so an
+     older Schematic Studio can still draw the file even though it ignores mode
+   - automatic colours are derived from topology; an optional netColor override
+     is copied across the net and safely ignored by older app versions
+   ========================================================================= */
+const NET_COLORS = [
+  "#5dd5ff", "#ffb454", "#73d9a5", "#f18bbf",
+  "#9aa7ff", "#e5d36b", "#7ed0d8", "#c59cff"
+];
+function stableNetHash(s){
+  let h = 2166136261;
+  for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function wireNetKey(sch, w){
+  const d = netDriverPort(sch, w);
+  return d ? `${d.cid}.${d.pid}` : `wire.${w.id}`;
+}
+/* BEGIN TESTABLE NET COLOR HELPER */
+function normalizeNetColor(value){
+  const v=String(value||"").trim();
+  return /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : "";
+}
+/* END TESTABLE NET COLOR HELPER */
+function explicitNetColor(sch,w){
+  const key=wireNetKey(sch,w);
+  for(const item of sch.wires){
+    if(wireNetKey(sch,item)!==key) continue;
+    const color=normalizeNetColor(item.netColor);
+    if(color) return color;
+  }
+  return "";
+}
+function wireNetColor(sch, w){
+  return explicitNetColor(sch,w) || NET_COLORS[stableNetHash(wireNetKey(sch, w)) % NET_COLORS.length];
+}
+function setNetColor(sch,w,color){
+  const key=wireNetKey(sch,w), value=normalizeNetColor(color);
+  sch.wires.forEach(item=>{
+    if(wireNetKey(sch,item)!==key) return;
+    if(value) item.netColor=value; else delete item.netColor;
+  });
+}
+function normalizeNetColors(sch){
+  const chosen=new Map();
+  sch.wires.forEach(w=>{
+    const key=wireNetKey(sch,w), color=normalizeNetColor(w.netColor);
+    if(color&&!chosen.has(key)) chosen.set(key,color);
+  });
+  sch.wires.forEach(w=>{
+    const color=chosen.get(wireNetKey(sch,w));
+    if(color) w.netColor=color; else delete w.netColor;
+  });
+}
+/* BEGIN TESTABLE ROUTE COMPATIBILITY HELPER */
+function isManualWire(w){
+  if(w.routeMode === "manual") return true;
+  if(w.routeMode === "auto") return false;
+  return !!((w.pts && w.pts.length) || typeof w.mx === "number" || typeof w.my === "number");
+}
+/* END TESTABLE ROUTE COMPATIBILITY HELPER */
+
+/* BEGIN TESTABLE SMART ROUTING HELPERS */
+function routingEdgeKey(a, b){
+  const ak = `${a.x},${a.y}`, bk = `${b.x},${b.y}`;
+  return ak < bk ? `${ak}|${bk}` : `${bk}|${ak}`;
+}
+function simplifyGridPath(points){
+  const out = [];
+  for(const p of points){
+    const q = {x:p.x,y:p.y};
+    if(!out.length || out[out.length-1].x!==q.x || out[out.length-1].y!==q.y) out.push(q);
+  }
+  for(let i=1;i<out.length-1;){
+    const a=out[i-1], b=out[i], c=out[i+1];
+    if((a.x===b.x && b.x===c.x) || (a.y===b.y && b.y===c.y)) out.splice(i,1);
+    else i++;
+  }
+  return out;
+}
+function routeGridAStar(start, end, bounds, blocked, edgeCost, maxExpanded=30000){
+  const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+  const keyOf = (x,y,d)=>`${x},${y},${d}`;
+  const heap = [];
+  const push = item => {
+    heap.push(item); let i=heap.length-1;
+    while(i){ const p=(i-1)>>1; if(heap[p].f<=item.f) break; heap[i]=heap[p]; i=p; }
+    heap[i]=item;
+  };
+  const pop = () => {
+    const top=heap[0], tail=heap.pop();
+    if(heap.length){ let i=0; heap[0]=tail; while(true){
+      let l=i*2+1, r=l+1, m=i;
+      if(l<heap.length && heap[l].f<heap[m].f) m=l;
+      if(r<heap.length && heap[r].f<heap[m].f) m=r;
+      if(m===i) break; [heap[i],heap[m]]=[heap[m],heap[i]]; i=m;
+    }}
+    return top;
+  };
+  const best = new Map(), records = new Map();
+  const sk=keyOf(start.x,start.y,4);
+  best.set(sk,0); records.set(sk,{x:start.x,y:start.y,d:4,prev:null});
+  push({x:start.x,y:start.y,d:4,g:0,f:Math.abs(end.x-start.x)+Math.abs(end.y-start.y),key:sk});
+  let expanded=0, goal=null;
+  while(heap.length && expanded++<maxExpanded){
+    const cur=pop();
+    if(cur.g!==best.get(cur.key)) continue;
+    if(cur.x===end.x && cur.y===end.y){ goal=cur.key; break; }
+    for(let d=0;d<4;d++){
+      const nx=cur.x+dirs[d].x, ny=cur.y+dirs[d].y;
+      if(nx<bounds.minX||nx>bounds.maxX||ny<bounds.minY||ny>bounds.maxY) continue;
+      if(blocked(nx,ny) && !(nx===end.x&&ny===end.y)) continue;
+      const extra = edgeCost ? edgeCost({x:cur.x,y:cur.y},{x:nx,y:ny},d) : 0;
+      const ng=cur.g+1+(cur.d!==4&&cur.d!==d?4:0)+extra;
+      const nk=keyOf(nx,ny,d);
+      if(ng >= (best.get(nk)??Infinity)) continue;
+      best.set(nk,ng); records.set(nk,{x:nx,y:ny,d,prev:cur.key});
+      push({x:nx,y:ny,d,g:ng,f:ng+Math.abs(end.x-nx)+Math.abs(end.y-ny),key:nk});
+    }
+  }
+  if(!goal) return null;
+  const path=[];
+  for(let k=goal;k;){ const r=records.get(k); path.push({x:r.x,y:r.y}); k=r.prev; }
+  return simplifyGridPath(path.reverse());
+}
+/* END TESTABLE SMART ROUTING HELPERS */
+
+function componentRouteBounds(c, pad=GRID){
+  if(!c || c.type==="JUNCTION") return null;
+  const sz=getSize(c), corners=[[0,0],[sz.w,0],[sz.w,sz.h],[0,sz.h]]
+    .map(([x,y])=>orientLocal(c,x,y)).map(p=>({x:c.x+p.x,y:c.y+p.y}));
+  return {
+    minX:Math.min(...corners.map(p=>p.x))-pad,
+    maxX:Math.max(...corners.map(p=>p.x))+pad,
+    minY:Math.min(...corners.map(p=>p.y))-pad,
+    maxY:Math.max(...corners.map(p=>p.y))+pad
+  };
+}
+function portOutVector(c, pid){
+  if(!c || c.type==="JUNCTION" || (c.type==="BUSTAP"&&pid==="d")) return null;
+  const p=portPos(c,pid), sz=getSize(c), cx=c.x+sz.w/2, cy=c.y+sz.h/2;
+  if(!p) return null;
+  const dx=p.x-cx, dy=p.y-cy;
+  if(Math.abs(dx)>=Math.abs(dy) && Math.abs(dx)>0.5) return {x:Math.sign(dx),y:0};
+  if(Math.abs(dy)>0.5) return {x:0,y:Math.sign(dy)};
+  return null;
+}
+function emptyRoutingOccupancy(){ return {edges:new Map(), nodes:new Map()}; }
+function addRouteOccupancy(occ, r, netKey){
+  routeParts(r).forEach(seg=>{
+    const a = seg.t==="h" ? {x:Math.round(seg.x1/GRID),y:Math.round(seg.y/GRID)} : {x:Math.round(seg.x/GRID),y:Math.round(seg.y1/GRID)};
+    const b = seg.t==="h" ? {x:Math.round(seg.x2/GRID),y:Math.round(seg.y/GRID)} : {x:Math.round(seg.x/GRID),y:Math.round(seg.y2/GRID)};
+    const dx=Math.sign(b.x-a.x), dy=Math.sign(b.y-a.y), dir=dx?"h":"v";
+    let p={x:a.x,y:a.y};
+    while(p.x!==b.x || p.y!==b.y){
+      const q={x:p.x+dx,y:p.y+dy}, ek=routingEdgeKey(p,q);
+      if(!occ.edges.has(ek)) occ.edges.set(ek,new Set());
+      occ.edges.get(ek).add(netKey);
+      const nk=`${q.x},${q.y}`;
+      if(!occ.nodes.has(nk)) occ.nodes.set(nk,[]);
+      occ.nodes.get(nk).push({dir,netKey});
+      p=q;
+    }
+  });
+}
+function routingOccupancyFor(sch, wires){
+  const occ=emptyRoutingOccupancy();
+  wires.forEach(w=>{
+    const a=comp(w.from.cid,sch), b=comp(w.to.cid,sch);
+    const p1=a&&portPos(a,w.from.pid), p2=b&&portPos(b,w.to.pid);
+    if(p1&&p2) addRouteOccupancy(occ,wireRoute(w,p1,p2,wireOpts(w,sch)),wireNetKey(sch,w));
+  });
+  return occ;
+}
+function findSmartRoute(sch, p1, p2, meta, occ){
+  const fromDir=meta.fromDir||null, toDir=meta.toDir||null;
+  const lead1=fromDir ? {x:snap(p1.x+fromDir.x*WIRE_MINLEG),y:snap(p1.y+fromDir.y*WIRE_MINLEG)} : {x:snap(p1.x),y:snap(p1.y)};
+  const lead2=toDir ? {x:snap(p2.x+toDir.x*WIRE_MINLEG),y:snap(p2.y+toDir.y*WIRE_MINLEG)} : {x:snap(p2.x),y:snap(p2.y)};
+  const s={x:Math.round(lead1.x/GRID),y:Math.round(lead1.y/GRID)};
+  const e={x:Math.round(lead2.x/GRID),y:Math.round(lead2.y/GRID)};
+  const boxes=sch.components.map(c=>componentRouteBounds(c)).filter(Boolean);
+  const xs=[s.x,e.x,...boxes.flatMap(b=>[Math.floor(b.minX/GRID),Math.ceil(b.maxX/GRID)])];
+  const ys=[s.y,e.y,...boxes.flatMap(b=>[Math.floor(b.minY/GRID),Math.ceil(b.maxY/GRID)])];
+  const margin=7;
+  const bounds={minX:Math.min(...xs)-margin,maxX:Math.max(...xs)+margin,minY:Math.min(...ys)-margin,maxY:Math.max(...ys)+margin};
+  const blocked=(x,y)=>{
+    if((x===s.x&&y===s.y)||(x===e.x&&y===e.y)) return false;
+    const px=x*GRID, py=y*GRID;
+    return boxes.some(b=>px>=b.minX&&px<=b.maxX&&py>=b.minY&&py<=b.maxY);
+  };
+  const netKey=meta.netKey||"preview", occupancy=occ||emptyRoutingOccupancy();
+  let crossings=0, overlaps=0;
+  const edgeCost=(a,b,d)=>{
+    let cost=0;
+    const owners=occupancy.edges.get(routingEdgeKey(a,b));
+    if(owners){
+      if([...owners].some(k=>k!==netKey)){ cost+=70; overlaps++; }
+      else cost-=0.35;                         // same-net trunk reuse is desirable
+    }
+    const orient=d<2?"h":"v";
+    const at=occupancy.nodes.get(`${b.x},${b.y}`)||[];
+    if(at.some(n=>n.netKey!==netKey&&n.dir!==orient)){ cost+=9; crossings++; }
+    // discourage long, cramped side-by-side runs without making them impossible
+    const near = orient==="h"
+      ? [routingEdgeKey({x:a.x,y:a.y-1},{x:b.x,y:b.y-1}),routingEdgeKey({x:a.x,y:a.y+1},{x:b.x,y:b.y+1})]
+      : [routingEdgeKey({x:a.x-1,y:a.y},{x:b.x-1,y:b.y}),routingEdgeKey({x:a.x+1,y:a.y},{x:b.x+1,y:b.y})];
+    if(near.some(k=>{const o=occupancy.edges.get(k);return o&&[...o].some(n=>n!==netKey)})) cost+=2.5;
+    return cost;
+  };
+  const gridPath=routeGridAStar(s,e,bounds,blocked,edgeCost);
+  if(!gridPath) return null;
+  const middle=gridPath.map(p=>({x:p.x*GRID,y:p.y*GRID}));
+  const points=simplifyGridPath([{x:p1.x,y:p1.y},lead1,...middle,lead2,{x:p2.x,y:p2.y}]);
+  return {points, pts:points.slice(1,-1), crossings, overlaps};
+}
+function routeAutoWires(sch){
+  if(!sch || !sch.wires) return;
+  normalizeNetColors(sch);
+  const fixed=[], autos=[];
+  sch.wires.forEach(w=>(isManualWire(w)?fixed:autos).push(w));
+  // A previous generated path is disposable; legacy paths were classified as
+  // manual above before anything is cleared.
+  autos.forEach(w=>{ delete w.pts; delete w.mx; delete w.my; delete w.zjog; w.routeMode="auto"; });
+  const occ=routingOccupancyFor(sch,fixed);
+  autos.forEach(w=>{
+    const a=comp(w.from.cid,sch), b=comp(w.to.cid,sch);
+    const p1=a&&portPos(a,w.from.pid), p2=b&&portPos(b,w.to.pid);
+    if(!p1||!p2) return;
+    const smart=findSmartRoute(sch,p1,p2,{
+      fromDir:portOutVector(a,w.from.pid), toDir:portOutVector(b,w.to.pid), netKey:wireNetKey(sch,w)
+    },occ);
+    if(smart && smart.pts.length) w.pts=smart.pts;
+    const r=wireRoute(w,p1,p2,wireOpts(w,sch));
+    addRouteOccupancy(occ,r,wireNetKey(sch,w));
+  });
+}
+function pendingSmartPreview(sch, pw, start, end){
+  const target={x:snap(end.x),y:snap(end.y)};
+  const cacheKey=`${Math.round(start.x)},${Math.round(start.y)}:${target.x},${target.y}:${sch.wires.length}`;
+  if(pw._previewKey===cacheKey) return pw._previewRoute;
+  const source=(!pw.onWire&&pw.cid) ? comp(pw.cid,sch) : null;
+  const baseWire=pw.onWire ? sch.wires.find(w=>w.id===pw.onWire) : null;
+  const netKey=baseWire ? wireNetKey(sch,baseWire) : (source ? `${source.id}.${pw.pid}` : "preview");
+  const occ=routingOccupancyFor(sch,sch.wires);
+  const smart=findSmartRoute(sch,start,target,{
+    fromDir:source?portOutVector(source,pw.pid):null, toDir:null, netKey
+  },occ);
+  pw._previewKey=cacheKey;
+  pw._previewRoute=smart;
+  return smart;
 }
 /* start a branch FROM a wire without committing a junction yet — the junction
    is placed optimally (nearest the chosen target) once the target is clicked,
@@ -2916,6 +3185,15 @@ function syncGridBg(){
   host.style.backgroundSize = `${s}px ${s}px, auto`;
   host.style.backgroundPosition = `${mod(state.view.x-1, s)}px ${mod(state.view.y-1, s)}px, 0 0`;
 }
+function applyWireEmphasis(){
+  const groups=Array.from(canvas.querySelectorAll(".wire-group"));
+  const hover=state.hoverNetKey;
+  groups.forEach(g=>{
+    const same=!!hover && g.dataset.netKey===hover;
+    g.classList.toggle("net-hover",same);
+    g.classList.toggle("net-muted",!!hover&&!same);
+  });
+}
 function render(){
   const sch = activeSch();
   while(canvas.firstChild) canvas.removeChild(canvas.firstChild);
@@ -2974,16 +3252,33 @@ function render(){
   // wire widths derived once per frame from the driving ports (never cached)
   const wWidth = new Map();
   sch.wires.forEach(w=>wWidth.set(w.id, netWidth(w, sch)));
+  const selectedNetKeys = new Set(sch.wires.filter(w=>state.selection.has(w.id)).map(w=>wireNetKey(sch,w)));
+  const frameNetColors = new Map();
+  const colorForWire = w => {
+    const key=wireNetKey(sch,w);
+    if(!frameNetColors.has(key)) frameNetColors.set(key,wireNetColor(sch,w));
+    return frameNetColors.get(key);
+  };
   const drawWire = w=>{
     const r = wireRoutes.get(w.id); if(!r) return;
     const isBus = (wWidth.get(w.id)||1)>1;
     const isSel = state.selection.has(w.id);
-    const g = el("g",{class:"wire-group"+(isSel?" sel":"")});
+    const netKey=wireNetKey(sch,w), netColor=colorForWire(w);
+    const isNetSel=selectedNetKeys.has(netKey);
+    const g = el("g",{class:"wire-group"+(isNetSel?" net-selected":"")+(isSel?" sel":"")});
+    g.dataset.netKey=netKey;
+    g.style.color=netColor;
+    g.addEventListener("mouseenter",()=>{ state.hoverNetKey=netKey; applyWireEmphasis(); });
+    g.addEventListener("mouseleave",ev=>{
+      const next=ev.relatedTarget && ev.relatedTarget.closest ? ev.relatedTarget.closest(".wire-group") : null;
+      if(next && next.dataset.netKey===netKey) return;
+      if(state.hoverNetKey===netKey){ state.hoverNetKey=null; applyWireEmphasis(); }
+    });
     // visible path carries hops over crossings so overlaps read clearly
     const D = fastRender ? r.d : hoppedPathD(r, allV, w.id);
     const path = el("path",{d: D,
       class:"wire"+(isBus?" bus":"")+(isSel?" selected":""),
-      stroke: isSel ? "var(--wire-sel)" : (isBus?"var(--wire-bus)":"var(--wire)")});
+      stroke: isSel ? "var(--wire-sel)" : netColor});
     g.appendChild(path);
     // wide invisible hit path (straight route): easy clicking + drag rerouting
     const hit = el("path",{d:r.d, class:"wire-hit"});
@@ -3057,14 +3352,16 @@ function render(){
              ly = (r.kind==="s" ? r.my : r.kind==="h" ? r.y1 : (r.y1+r.y2)/2) - 6; }
       const bw = Math.max(44, labText.length*6.5 + 10);   // fit the text
       const bg = el("rect",{x:lx-bw/2,y:ly-10,width:bw,height:14,rx:3,fill:"#0008","pointer-events":"none"});
-      root.appendChild(bg);
-      const lbl = txt(lx, ly, labText, {anchor:"middle", fill:"var(--ink-dim)", size:10});
+      g.appendChild(bg);
+      const lbl = txt(lx, ly, labText, {anchor:"middle", fill:netColor, size:10});
       lbl.setAttribute("class","wire-label");
-      root.appendChild(lbl);
+      g.appendChild(lbl);
     }
   };
-  // draw unselected first, selected last so the highlighted wire sits on top
-  sch.wires.forEach(w=>{ if(!state.selection.has(w.id)) drawWire(w); });
+  // draw unrelated nets first, then the selected net, then the exact selected
+  // segment last so its handles remain reachable.
+  sch.wires.forEach(w=>{ if(!selectedNetKeys.has(wireNetKey(sch,w))) drawWire(w); });
+  sch.wires.forEach(w=>{ if(selectedNetKeys.has(wireNetKey(sch,w))&&!state.selection.has(w.id)) drawWire(w); });
   sch.wires.forEach(w=>{ if(state.selection.has(w.id)) drawWire(w); });
 
   // wire being drawn — show committed corners plus the live orthogonal segment
@@ -3080,13 +3377,21 @@ function render(){
       if(c) start = portPos(c, pw.pid);
     }
     if(start){
-      const chain = [start, ...(pw.pts||[])];
-      const last = chain[chain.length-1];
-      const step = orthoStep(last, state.mouse);          // current H/V segment
-      const pts = orthoPolyline([...chain, step, state.mouse], true, true);
+      let pts, smart=false;
+      if(!(pw.pts&&pw.pts.length)){
+        const preview=pendingSmartPreview(sch,pw,start,state.mouse);
+        if(preview){ pts=preview.points; smart=true; }
+      }
+      if(!pts){
+        const chain = [start, ...(pw.pts||[])];
+        const last = chain[chain.length-1];
+        const step = orthoStep(last, state.mouse);          // current H/V segment
+        pts = orthoPolyline([...chain, step, state.mouse], true, true);
+      }
       root.appendChild(el("path",{
         d:"M"+pts.map(p=>`${p.x},${p.y}`).join("L"), fill:"none",
-        stroke:"var(--accent-2)","stroke-width":2,"stroke-dasharray":"6 4",
+        class:"motion-current-wire",
+        stroke:smart?"var(--ok)":"var(--warn)","stroke-width":2,"stroke-dasharray":"6 4",
         "pointer-events":"none"   // never swallow the click that places the next corner
       }));
       // committed corner dots
@@ -3123,7 +3428,6 @@ function render(){
     // instead of standing out cyan
     if(c.type==="JUNCTION"){
       const jWires = sch.wires.filter(w=>w.from.cid===c.id||w.to.cid===c.id);
-      const busJ = jWires.some(w=>(wWidth.get(w.id)||1)>1);
       const isBusDef = c.params && c.params.busName && c.params.busWidth;
       const dot = body.querySelector("rect,circle");
       // ISE bus RIPPER: where a bit taps a bus, ISE draws a short 45° "rip"
@@ -3133,18 +3437,19 @@ function render(){
         const oc = comp(w.from.cid===c.id ? w.to.cid : w.from.cid, sch);
         return oc && oc.type==="BUSTAP";
       });
+      const jColor = jWires.length ? colorForWire(jWires[0]) : "var(--wire)";
       if(tapW && dot){
         dot.remove();
         // a short 45° "/" rip slash in bus colour, centred on the join
         body.appendChild(el("line",{ x1:-2, y1:14, x2:14, y2:-2,
-          stroke:"var(--wire-bus)","stroke-width":2.6,"stroke-linecap":"round" }));
-      } else if(dot && (busJ || isBusDef)) dot.setAttribute("fill","var(--wire-bus)");
+          stroke:jColor,"stroke-width":2.6,"stroke-linecap":"round" }));
+      } else if(dot && jWires.length) dot.setAttribute("fill",jColor);
       // a free wire end reads as a hollow marker — judged LIVE (exactly one
       // wire attached), so a later-connected end goes back to a solid join;
       // a bus-definition node always stays solid + gets its ISE-style label
       if(dot && c.params && c.params.endpoint && jWires.length===1 && !isBusDef){
         dot.setAttribute("fill","var(--bg-0)");
-        dot.setAttribute("stroke", busJ ? "var(--wire-bus)" : "var(--wire)");
+        dot.setAttribute("stroke", jColor);
         dot.setAttribute("stroke-width","1.6");
       }
       if(isBusDef){
@@ -3167,7 +3472,7 @@ function render(){
         const bgx = anchor==="start" ? lx-3 : lx-tw+3;
         body.appendChild(el("rect",{x:bgx, y:ly-11, width:tw, height:14, rx:3,
           fill:"#0008","pointer-events":"none"}));
-        const lbl = txt(lx, ly, text, {anchor, fill:"var(--wire-bus)", size:11});
+        const lbl = txt(lx, ly, text, {anchor, fill:jColor, size:11});
         lbl.setAttribute("font-family","monospace");
         body.appendChild(lbl);
       }
@@ -3252,6 +3557,7 @@ function render(){
     root.appendChild(g);
   });
 
+  applyWireEmphasis();
   updateStatus();
 }
 
@@ -3342,14 +3648,15 @@ canvas.addEventListener("mousemove",ev=>{
   } else if(state.cornerDrag){
     const cd = state.cornerDrag;
     cd.w.pts[cd.index] = { x:snap(state.mouse.x), y:snap(state.mouse.y) };
+    cd.w.routeMode = "manual";
     cd.moved = true;
     render();
   } else if(state.wireDrag){
     const wd = state.wireDrag;
     if(!wd.moved && Math.abs(state.mouse.x-wd.m0.x)+Math.abs(state.mouse.y-wd.m0.y) > 4) wd.moved = true;
     if(wd.moved){
-      if(wd.kind==="z"){ wd.w.mx = snap(state.mouse.x); render(); }
-      else if(wd.kind==="s"){ wd.w.my = snap(state.mouse.y); render(); }
+      if(wd.kind==="z"){ wd.w.mx = snap(state.mouse.x); wd.w.routeMode="manual"; render(); }
+      else if(wd.kind==="s"){ wd.w.my = snap(state.mouse.y); wd.w.routeMode="manual"; render(); }
     }
   } else if(state.pendingWire){
     render();
@@ -3862,18 +4169,40 @@ function renderInspector(){
     // wire?
     const w = sch.wires.find(x=>x.id===id);
     if(w){
-      const hasCustomRoute = (typeof w.mx==="number") || (typeof w.my==="number");
+      const hasCustomRoute = isManualWire(w);
       const nw = netWidth(w, sch);
+      const customColor = explicitNetColor(sch,w);
+      const shownColor = customColor || wireNetColor(sch,w);
       root.innerHTML = `<div class="insp">
         <h3>Wire ${nw>1?`<span style="color:var(--wire-bus)">bus (${nw-1}:0)</span>`:""}</h3>
         <div class="row"><label>Net name</label><input id="iWireName" value="${esc(w.name||"")}" placeholder="เช่น data หรือ data(7:0)"></div>
+        <div class="row"><label>สีของ Net</label><span style="display:flex;gap:5px;align-items:center">
+          <input type="color" id="iWireColor" value="${shownColor}" title="เลือกสีให้ทุกช่วงของ net นี้" style="width:48px;height:28px;padding:2px;cursor:pointer">
+          <button class="btn" id="iWireColorAuto" ${customColor?"":"disabled"} title="กลับไปใช้สีอัตโนมัติ">Auto</button>
+        </span></div>
         <div class="row"><label>เส้นทาง</label><button class="btn" id="iWireRoute" ${hasCustomRoute?"":"disabled"} title="ลบตำแหน่งที่ลากไว้ ให้ระบบจัดแนวเอง">↺ จัดแนวอัตโนมัติ</button></div>
         <div class="row"><label></label><button class="btn" data-act="delete-sel">🗑 Delete</button></div>
         <div style="padding:4px 2px;font-size:11px;color:var(--muted)">${nw>1?"สายบัส — ใช้เครื่องมือ ≣ (หรือคลิกขวา) คลิกสายเพื่อดึงบิต · หรือลาก Bus Ripper มาวางบนสาย":"ลากที่ตัวสายเพื่อเลื่อนแนวท่อนกลางได้ · บัสต้องลากจากพอร์ต >1 bit ของ component (ตั้งชื่อบัสได้แต่ความกว้างมาจากต้นทาง)"}</div>
       </div>`;
       $("#iWireName").addEventListener("change",ev=>{ applyWireName(w, ev.target.value); });
+      $("#iWireColor").addEventListener("input",ev=>{
+        setNetColor(sch,w,ev.target.value);
+        render();
+      });
+      $("#iWireColor").addEventListener("change",ev=>{
+        setNetColor(sch,w,ev.target.value);
+        snapshot(); autosave(); render(); renderInspector();
+        toast(`เปลี่ยนสีทั้ง net เป็น ${normalizeNetColor(ev.target.value)}`,"ok");
+      });
+      $("#iWireColorAuto").addEventListener("click",()=>{
+        setNetColor(sch,w,"");
+        snapshot(); autosave(); render(); renderInspector();
+        toast("กลับไปใช้สี net อัตโนมัติแล้ว","ok");
+      });
       $("#iWireRoute").addEventListener("click",()=>{
-        delete w.mx; delete w.my;
+        delete w.pts; delete w.mx; delete w.my; delete w.zjog;
+        w.routeMode="auto";
+        routeAutoWires(sch);
         snapshot(); render(); renderInspector();
         toast("จัดแนวสายอัตโนมัติแล้ว","ok");
       });
@@ -4784,6 +5113,10 @@ function deserialize(json){
   state.activeId = (o.activeId && proj.schematics[o.activeId]) ? o.activeId : Object.keys(proj.schematics)[0];
   state.openTabs = (o.openTabs||[]).filter(id=>proj.schematics[id]);
   if(!state.openTabs.length) state.openTabs = [state.activeId];
+  // Route only auto/route-less wires. Legacy files with pts/mx/my remain manual,
+  // so opening an old project never destroys the user's hand-drawn geometry.
+  Object.values(proj.schematics).forEach(s=>routeAutoWires(s));
+  Object.values(proj.customs||{}).forEach(cc=>{ if(cc.schematic) routeAutoWires(cc.schematic); });
   state.selection.clear();
   state.pendingWire = null;
   reseedUid();                     // avoid new-id collisions with loaded ids
@@ -5578,6 +5911,7 @@ function init(){
       {id:uid("w"),from:{cid:an.id,pid:"o"},to:{cid:oc.id,pid:"i"},name:"carry",width:1}
     );
     normalizePortFanout(sch);   // fanout from a/b shows connection dots
+    routeAutoWires(sch);
     snapshot();
   }
   if(restored){
@@ -5939,8 +6273,9 @@ init();
   .canvas-toolbar hr{border-top-color:#37404d}
   .canvas-hint{left:10px;bottom:10px;max-width:590px;padding:6px 27px 6px 9px;border-radius:3px;background:#11161de8;border-color:#323b47;color:#8491a2;backdrop-filter:none}
   .node.selected .body :where(rect,path,polygon,circle,line){filter:drop-shadow(0 0 2px #70a8ff)}
-  .wire-group:hover .wire{filter:none;stroke-width:3}
-  .wire-group:hover .wire.bus{stroke-width:7}
+  .wire-group.net-hover .wire{filter:none;stroke-width:3}
+  .wire-group.net-hover .wire.bus{stroke-width:7}
+  .wire-group.net-selected .wire{filter:drop-shadow(0 0 2px currentColor)}
   .wire-group.sel .wire,.wire.selected{filter:drop-shadow(0 0 2px #e9c25d)}
   .port:hover .port-dot{r:5px}
   .ux-minimap{right:10px;bottom:10px;width:160px;height:102px;border-radius:3px;background:#10151bdd;border-color:#343e4c;box-shadow:0 5px 18px #0009;opacity:.86}
@@ -6254,8 +6589,8 @@ init();
   body.ux-wiring-active .port.pending .port-dot{filter:drop-shadow(0 0 5px #8db7ff)}
   @keyframes wireMarch{to{stroke-dashoffset:-20}}
   .motion-current-wire{animation:wireMarch 550ms linear infinite}
-  .wire-group:hover .wire{stroke-dasharray:8 3;animation:wireMarch 700ms linear infinite}
-  .wire-group:hover .wire.bus{stroke-dasharray:12 4}
+  .wire-group.net-hover .wire{stroke-dasharray:8 3;animation:wireMarch 700ms linear infinite}
+  .wire-group.net-hover .wire.bus{stroke-dasharray:12 4}
 
   @keyframes issueEnter{from{opacity:0;transform:translateX(7px)}to{opacity:1;transform:translateX(0)}}
   @keyframes errorNudge{0%,100%{transform:translateX(0)}35%{transform:translateX(-2px)}70%{transform:translateX(2px)}}
