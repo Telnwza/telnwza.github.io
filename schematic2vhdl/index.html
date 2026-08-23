@@ -4493,12 +4493,10 @@ function render(){
         body.appendChild(el("rect",{x:-3, y:-3, width:18, height:18, fill:"transparent"}));
       }
     }
-    body.addEventListener("mousedown",ev=>startDrag(ev,c));
-    if(c.type==="IN"||c.type==="OUT"){
-      body.addEventListener("dblclick",ev=>openInspectorFor(c));
-    } else {
-      body.addEventListener("dblclick",ev=>openInspectorFor(c));
-    }
+    body.addEventListener("mousedown",ev=>{
+      if(handleComponentDoubleClick(ev,c)) return;
+      startDrag(ev,c);
+    });
     body.addEventListener("contextmenu",ev=>{
       ev.preventDefault();
       openInspectorFor(c);
@@ -4575,6 +4573,28 @@ function render(){
 }
 
 /* dragging */
+let lastComponentClick = null;
+
+/* A normal browser dblclick listener is not reliable here: startDrag() renders
+   after the first press, replacing the SVG node before the second press arrives.
+   Keep the click pair outside the rendered DOM so mouse and trackpad double-clicks
+   still resolve to the same component. */
+function handleComponentDoubleClick(ev, c){
+  if(ev.button!==0) return false;
+  const now = performance.now();
+  const key = state.activeId + ":" + c.id;
+  const prev = lastComponentClick;
+  const isDouble = !!prev && prev.key===key && now-prev.time<=650 &&
+    Math.hypot(ev.clientX-prev.x, ev.clientY-prev.y)<=12;
+  lastComponentClick = isDouble ? null : {
+    key, time:now, x:ev.clientX, y:ev.clientY
+  };
+  if(!isDouble) return false;
+  state.drag = null;
+  openComponentOnDoubleClick(ev,c);
+  return true;
+}
+
 function svgPoint(ev){
   const r = canvas.getBoundingClientRect();
   return { x:(ev.clientX-r.left - state.view.x)/state.view.k,
@@ -4644,6 +4664,7 @@ canvas.addEventListener("mousemove",ev=>{
     // 6-pixel threshold avoids accidental drags from tiny hand jitter
     if(!state.drag.moved && Math.abs(dx)+Math.abs(dy) > 6){
       state.drag.moved = true;
+      lastComponentClick = null;
       // user clearly wants to drag → if anchor was originally part of a multi-
       // selection, restore that selection so the whole group moves together
       if(state.drag.prevMulti){
@@ -5043,6 +5064,21 @@ function openInspectorFor(c){
   // also switch to inspector tab
   setRightTab("inspector");
   render(); renderInspector();
+}
+function openComponentOnDoubleClick(ev, c){
+  ev.preventDefault();
+  ev.stopPropagation();
+  if(typeof c.type==="string" && c.type.startsWith("SCH:")){
+    const targetId = c.type.slice(4);
+    const target = state.project.schematics[targetId];
+    if(target){
+      openSchTab(targetId);
+      toast("เปิด schematic: " + target.name, "ok", 1500);
+      return;
+    }
+    toast("ไม่พบ schematic ต้นทางของ sub-block นี้", "warn", 2600);
+  }
+  openInspectorFor(c);
 }
 function renderInspector(){
   const root = $("#inspectorPane");
