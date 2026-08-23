@@ -351,14 +351,14 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
         <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
         <div class="overlay">
           <div class="canvas-toolbar" id="canvasToolbar">
-            <button data-tool="select" class="active" title="เลือก / ย้าย  (Esc)">➤</button>
+            <button data-tool="select" class="active" title="เลือก / ย้าย (Esc / 1)">➤</button>
             <hr>
-            <button data-tool="wire"     title="Add Wire (W) — คลิกพอร์ต→พอร์ต ต่อสาย, คลิกกลางสาย = แยกสาย">╱</button>
-            <button data-tool="netname"  title="Add Net Name (N) — คลิกสายเพื่อตั้งชื่อ · พิมพ์ data(7:0) เพื่อกำหนดบัส">ab</button>
-            <button data-tool="iomarker" title="Add I/O Marker (I) — คลิกขาที่ว่างเพื่อติด INPUT/OUTPUT">⇥</button>
-            <button data-tool="bustap"   title="Bus Tap (B) — ลากสายไว้ก่อน แล้วคลิกบนสายบัสตรงจุดที่สายมาเจอกัน">≣</button>
+            <button data-tool="wire"     title="Add Wire (W / 2) — คลิกพอร์ต→พอร์ต ต่อสาย, คลิกกลางสาย = แยกสาย">╱</button>
+            <button data-tool="netname"  title="Add Net Name (N / 3) — คลิกสายเพื่อตั้งชื่อ · พิมพ์ data(7:0) เพื่อกำหนดบัส">ab</button>
+            <button data-tool="iomarker" title="Add I/O Marker (I / 4) — คลิกขาที่ว่างเพื่อติด INPUT/OUTPUT">⇥</button>
+            <button data-tool="bustap"   title="Bus Tap (B / 5) — ลากสายไว้ก่อน แล้วคลิกบนสายบัสตรงจุดที่สายมาเจอกัน">≣</button>
             <hr>
-            <button data-tool="symbol"   title="Add Symbol — เปิดแผง Components">⊞</button>
+            <button data-tool="symbol"   title="Add Symbol (S / 6) — เปิดแผง Components">⊞</button>
             <hr>
             <button data-act="lock-layout" id="btnLockLayout" title="ล็อกการจัดวาง — สายและจุดจะอยู่กับที่ ไม่มีการจัดใหม่อัตโนมัติ">🔓</button>
             <button data-act="relayout" id="btnRelayout" title="จัดสายใหม่ทั้งแผ่น (ทำครั้งเดียวตามสั่ง)">↻</button>
@@ -2377,6 +2377,15 @@ const TOOL_INFO = {
   iomarker:{cur:"crosshair", msg:"Add I/O Marker — คลิกขาที่ยังว่างเพื่อติด INPUT/OUTPUT อัตโนมัติ",
     hint:"<b>คลิกขาที่ยังว่าง</b> เพื่อติด INPUT/OUTPUT marker อัตโนมัติ (บัสได้ด้วย)"},
 };
+// Number keys follow the toolbar from top to bottom; Numpad mirrors the same layout.
+const NUMBER_TOOL_SHORTCUTS = Object.freeze({
+  Digit1:"select",   Numpad1:"select",
+  Digit2:"wire",     Numpad2:"wire",
+  Digit3:"netname",  Numpad3:"netname",
+  Digit4:"iomarker", Numpad4:"iomarker",
+  Digit5:"bustap",   Numpad5:"bustap",
+  Digit6:"symbol",   Numpad6:"symbol",
+});
 function setTool(t, silent){
   if(t==="symbol"){ setLeftTab("palette"); toast("ลาก component จากแผง Components ไปวางบน canvas","info",2200); return; }
   if(!TOOL_INFO[t]) t = "select";
@@ -4834,6 +4843,7 @@ window.addEventListener("keydown",ev=>{
   const code = ev.code;
   const k = (ev.key||"").toLowerCase();
   const ctl = ev.ctrlKey||ev.metaKey;
+  const numberTool = !ctl && !ev.altKey && !ev.shiftKey ? NUMBER_TOOL_SHORTCUTS[code] : null;
   if(ev.key==="Enter" && state.pendingWire && state.pendingWire.pts){
     finishWireInSpace();   // end the wire in open space (free bus stub)
     ev.preventDefault();
@@ -4854,10 +4864,12 @@ window.addEventListener("keydown",ev=>{
       setTool("select", true);
       renderInspector();
     }
-  } else if(!ctl && (code==="KeyW" || k==="w")){ setTool("wire"); ev.preventDefault(); }
+  } else if(numberTool){ setTool(numberTool); ev.preventDefault(); }
+  else if(!ctl && (code==="KeyW" || k==="w")){ setTool("wire"); ev.preventDefault(); }
   else if(!ctl && (code==="KeyN" || k==="n")){ setTool("netname"); ev.preventDefault(); }
   else if(!ctl && (code==="KeyB" || k==="b")){ setTool("bustap"); ev.preventDefault(); }
   else if(!ctl && (code==="KeyI" || k==="i")){ setTool("iomarker"); ev.preventDefault(); }
+  else if(!ctl && (code==="KeyS" || k==="s")){ setTool("symbol"); ev.preventDefault(); }
   else if(!ctl && (code==="KeyR" || k==="r")){ rotateSelection(ev.shiftKey?-1:1); ev.preventDefault(); }
   else if(!ctl && (code==="KeyM" || k==="m")){ mirrorSelection(); ev.preventDefault(); }
   else if(ctl && (code==="KeyZ" || k==="z")){
