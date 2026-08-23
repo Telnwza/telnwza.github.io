@@ -5080,6 +5080,17 @@ function openComponentOnDoubleClick(ev, c){
   }
   openInspectorFor(c);
 }
+
+/* Only offer replacements whose port ids and directions are identical. Keeping
+   those ids stable means every existing wire can remain attached to the component. */
+const GATE_SWAP_GROUPS = [
+  ["AND","OR","NAND","NOR","XOR","XNOR"],
+  ["NOT","BUF"],
+];
+function compatibleGateTypes(type){
+  return GATE_SWAP_GROUPS.find(group=>group.includes(type)) || [];
+}
+
 function renderInspector(){
   const root = $("#inspectorPane");
   const sch = activeSch();
@@ -5124,7 +5135,13 @@ function renderInspector(){
     if(c){
       const td = typeDef(c);
       const schema = td && td.paramSchema || [];
+      const gateTypes = compatibleGateTypes(c.type);
       let html = `<div class="insp"><h3>${esc(td?td.label:c.type)} <span style="font-size:11px;color:var(--muted);font-weight:normal">${esc(c.id)}</span></h3>`;
+      if(gateTypes.length){
+        html += `<div class="row"><label>Gate type</label><select id="iGateType">
+          ${gateTypes.map(type=>`<option value="${type}" ${type===c.type?"selected":""}>${esc(TYPES[type].label)}</option>`).join("")}
+        </select></div>`;
+      }
       html += `<div class="row"><label>Position</label>
         <span><input style="width:62px" id="iX" value="${c.x}"> <input style="width:62px" id="iY" value="${c.y}"></span></div>`;
       // a free-text name for THIS block: shown on the canvas, used as the signal /
@@ -5154,6 +5171,15 @@ function renderInspector(){
       html += `<div class="row"><label></label><button class="btn" data-act="delete-sel">🗑 Delete</button></div>`;
       html += `</div>`;
       root.innerHTML = html;
+      if($("#iGateType")) $("#iGateType").addEventListener("change",ev=>{
+        const nextType = ev.target.value;
+        const allowed = compatibleGateTypes(c.type);
+        if(nextType===c.type || !allowed.includes(nextType)) return;
+        const oldType = c.type;
+        c.type = nextType;
+        snapshot(); render(); renderInspector();
+        toast(`${oldType} → ${nextType} · เก็บ input/output และสายเดิมไว้แล้ว`, "ok", 2200);
+      });
       $("#iX").addEventListener("change",ev=>{ c.x = snap(+ev.target.value||0); snapshot(); render(); renderInspector(); });
       $("#iY").addEventListener("change",ev=>{ c.y = snap(+ev.target.value||0); snapshot(); render(); renderInspector(); });
       if($("#iLabel")) $("#iLabel").addEventListener("change",ev=>{
