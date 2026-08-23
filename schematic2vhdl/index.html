@@ -163,6 +163,11 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
 .tree-item:hover .acts{display:flex}
 .tree-item .acts button{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:2px 4px;border-radius:3px}
 .tree-item .acts button:hover{color:var(--ink);background:var(--bg-2)}
+.tree-item[data-sch-order]{cursor:grab;position:relative;touch-action:none}
+.tree-item[data-sch-order]:active{cursor:grabbing}
+.tree-item.sch-dragging{opacity:.42}
+.tree-item.sch-drop-before{box-shadow:inset 0 2px 0 var(--accent)}
+.tree-item.sch-drop-after{box-shadow:inset 0 -2px 0 var(--accent)}
 
 /* ---------- Palette ---------- */
 .palette{padding:6px}
@@ -2063,6 +2068,26 @@ function redo(){ if(state.history.idx<state.history.stack.length-1){ state.histo
 /* =========================================================================
    PROJECT TREE (left pane "Project")
    ========================================================================= */
+function reorderSchematics(movingId, targetId, placeAfter){
+  const oldOrder = Object.keys(state.project.schematics);
+  if(movingId===targetId || !oldOrder.includes(movingId) || !oldOrder.includes(targetId)) return false;
+  const newOrder = oldOrder.filter(id=>id!==movingId);
+  let targetIndex = newOrder.indexOf(targetId);
+  if(placeAfter) targetIndex++;
+  newOrder.splice(targetIndex, 0, movingId);
+  if(newOrder.every((id,i)=>id===oldOrder[i])) return false;
+
+  const previous = state.project.schematics;
+  state.project.schematics = Object.fromEntries(newOrder.map(id=>[id, previous[id]]));
+  // Open tabs mirror the project order while retaining only the tabs already open.
+  const wasOpen = new Set(state.openTabs);
+  state.openTabs = newOrder.filter(id=>wasOpen.has(id));
+  snapshot();
+  renderAll();
+  toast("จัดลำดับ schematic แล้ว", "ok", 1500);
+  return true;
+}
+
 function renderProjectTree(){
   const root = $("#projectPane");
   const p = state.project;
@@ -2076,7 +2101,8 @@ function renderProjectTree(){
     const sch = p.schematics[id];
     const isTop = id===p.topId;
     const isActive = id===state.activeId;
-    html.push(`<div class="tree-item ${isActive?"active":""} ${isTop?"top":""}" data-open="${id}">
+    html.push(`<div class="tree-item ${isActive?"active":""} ${isTop?"top":""}"
+      data-open="${id}" data-sch-order="${id}" title="ลากขึ้นหรือลงเพื่อจัดลำดับ · คลิกเพื่อเปิด">
       <span class="star">★</span>
       <span class="ico">◆</span>
       <span class="label">${esc(sch.name)}</span>
@@ -2129,8 +2155,64 @@ function renderProjectTree(){
   root.innerHTML = html.join("");
 
   // wire up
+  const orderRows = Array.from(root.querySelectorAll("[data-sch-order]"));
+  const clearOrderMarkers = ()=>orderRows.forEach(row=>{
+    row.classList.remove("sch-dragging", "sch-drop-before", "sch-drop-after");
+    row.removeAttribute("aria-grabbed");
+  });
+  let orderDrag = null;
+  let suppressOrderClick = false;
+  orderRows.forEach(row=>{
+    row.addEventListener("pointerdown",ev=>{
+      if(ev.button!==0 || ev.target.closest(".acts")) return;
+      orderDrag = {
+        id:row.dataset.schOrder, row, pointerId:ev.pointerId,
+        x0:ev.clientX, y0:ev.clientY, moved:false, targetId:null, placeAfter:false
+      };
+      try{ row.setPointerCapture(ev.pointerId); }catch(_){}
+    });
+    row.addEventListener("pointermove",ev=>{
+      if(!orderDrag || orderDrag.pointerId!==ev.pointerId) return;
+      if(!orderDrag.moved && Math.hypot(ev.clientX-orderDrag.x0, ev.clientY-orderDrag.y0)<5) return;
+      orderDrag.moved = true;
+      orderDrag.row.classList.add("sch-dragging");
+      orderDrag.row.setAttribute("aria-grabbed", "true");
+      ev.preventDefault();
+      const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest("[data-sch-order]");
+      orderRows.forEach(x=>x.classList.remove("sch-drop-before", "sch-drop-after"));
+      if(!target || target.dataset.schOrder===orderDrag.id){
+        orderDrag.targetId = null;
+        return;
+      }
+      const r = target.getBoundingClientRect();
+      orderDrag.targetId = target.dataset.schOrder;
+      orderDrag.placeAfter = ev.clientY >= r.top+r.height/2;
+      target.classList.add(orderDrag.placeAfter ? "sch-drop-after" : "sch-drop-before");
+    });
+    const finishOrderDrag = ev=>{
+      if(!orderDrag || orderDrag.pointerId!==ev.pointerId) return;
+      const drag = orderDrag;
+      orderDrag = null;
+      try{ drag.row.releasePointerCapture(ev.pointerId); }catch(_){}
+      clearOrderMarkers();
+      if(!drag.moved || !drag.targetId) return;
+      suppressOrderClick = true;
+      ev.preventDefault();
+      ev.stopPropagation();
+      reorderSchematics(drag.id, drag.targetId, drag.placeAfter);
+      setTimeout(()=>{ suppressOrderClick = false; }, 0);
+    };
+    row.addEventListener("pointerup", finishOrderDrag);
+    row.addEventListener("pointercancel",ev=>{
+      if(!orderDrag || orderDrag.pointerId!==ev.pointerId) return;
+      const drag = orderDrag;
+      orderDrag = null;
+      try{ drag.row.releasePointerCapture(ev.pointerId); }catch(_){}
+      clearOrderMarkers();
+    });
+  });
   root.querySelectorAll("[data-open]").forEach(e=>e.addEventListener("click",ev=>{
-    if(ev.target.closest(".acts")) return;
+    if(suppressOrderClick || ev.target.closest(".acts")) return;
     const id = e.dataset.open;
     openSchTab(id);
   }));
