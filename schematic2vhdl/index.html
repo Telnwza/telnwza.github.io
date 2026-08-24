@@ -4644,15 +4644,17 @@ function svgPoint(ev){
            y:(ev.clientY-r.top  - state.view.y)/state.view.k };
 }
 
-/* Manual wire waypoints are absolute canvas coordinates. When every component at
-   both ends belongs to a marquee/group drag, those waypoints are part of the group
-   too and must move by the same delta; otherwise the wire stays behind, crosses its
-   own symbols and trips the body-overlap guard. */
-function captureInternalDragWires(sch, movingIds){
+/* Manual wire waypoints are absolute canvas coordinates. A wire whose two endpoint
+   components move, or which the marquee explicitly selected, is part of the group
+   and its waypoints must move by the same delta; otherwise the route stays behind,
+   crosses the selected symbols and trips the body-overlap guard. */
+function captureInternalDragWires(sch, movingIds, selectionIds){
   const ids = new Set();
   const routes = [];
   sch.wires.forEach(w=>{
-    if(!movingIds.has(w.from.cid) || !movingIds.has(w.to.cid)) return;
+    const fullyInside = movingIds.has(w.from.cid) && movingIds.has(w.to.cid);
+    const explicitlySelected = selectionIds && selectionIds.has(w.id);
+    if(!fullyInside && !explicitlySelected) return;
     ids.add(w.id);
     if(!(w.pts || w.autoPts || typeof w.mx==="number" || typeof w.my==="number")) return;
     routes.push({
@@ -4681,12 +4683,12 @@ function beginSelectionDrag(ev, anchorId, selectionIds, prevMulti){
     .map(c=>({c, x0:c.x, y0:c.y, ox:m.x-c.x, oy:m.y-c.y}));
   if(!items.length) return false;
   const movingIds = new Set(items.map(d=>d.c.id));
-  const internal = captureInternalDragWires(sch, movingIds);
+  const internal = captureInternalDragWires(sch, movingIds, selectionIds);
   const coverAtStart = compsCoverWire(sch, items.map(d=>d.c), internal.ids);
   state.drag = {items, anchor:anchorId, sx:m.x, sy:m.y, moved:false,
     shift:ev.shiftKey, prevMulti, coverAtStart,
     internalWireIds:internal.ids, internalWireRoutes:internal.routes,
-    lastDx:0, lastDy:0};
+    lastDx:0, lastDy:0, freeGroup:items.length>1};
   return true;
 }
 /* Selection model — optimistic single-select with multi-restore on drag:
@@ -4771,7 +4773,7 @@ canvas.addEventListener("mousemove",ev=>{
       // the other half of "สายไฟห้ามทับ logic gate": a symbol may not be parked ON a
       // wire either. Same end state, opposite gesture — so the same answer: hold the
       // last clear position and let the symbol stop against the wire.
-      if(!state.drag.coverAtStart && compsCoverWire(activeSch(), state.drag.items.map(d=>d.c), state.drag.internalWireIds)){
+      if(!state.drag.freeGroup && !state.drag.coverAtStart && compsCoverWire(activeSch(), state.drag.items.map(d=>d.c), state.drag.internalWireIds)){
         state.drag.items.forEach((d,i)=>{ d.c.x = was[i].x; d.c.y = was[i].y; });
         placeInternalDragWires(state.drag.internalWireRoutes, state.drag.lastDx, state.drag.lastDy);
         bodyBlockNudge();
