@@ -17,6 +17,14 @@ const tools = [
   },
   {
     number: "03",
+    title: "Architecture Studio",
+    description: "Map hierarchical digital systems before translating them into HDL or paper schematics.",
+    category: "Digital systems",
+    path: "./architecture-studio/",
+    topics: ["Architecture", "FPGA", "Modules", "Buses", "Top-down Design"],
+  },
+  {
+    number: "04",
     title: "Vector Addition",
     description: "Explore magnitude, direction, and composition across two and three dimensions.",
     category: "Mathematics",
@@ -89,7 +97,7 @@ document.addEventListener("keydown", (event) => {
     searchInput.select();
   }
 
-  if (event.altKey && /^[1-3]$/.test(event.key) && !isEditing) {
+  if (event.altKey && /^[1-4]$/.test(event.key) && !isEditing) {
     const tool = tools[Number(event.key) - 1];
     if (tool) window.location.href = tool.path;
   }

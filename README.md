@@ -18,6 +18,10 @@ visual-learning/
 │   └── index.html
 ├── vectors/
 │   └── index.html
+├── architecture-studio/
+│   ├── index.html
+│   ├── style.css
+│   └── app.js
 └── logic-gates/
     ├── index.html
     ├── style.css
@@ -101,6 +105,7 @@ This keeps the site compatible with GitHub Pages project URLs and direct browser
 - Automata Studio: DFA, NFA, lambda-NFA, PDA, and Turing Machine creation and simulation, including classroom Regular Expression notation, output as a minimal DFA, compact lambda-free NFA, or Thompson lambda-NFA, DFA/NFA generation from transition equations, and exact Canvas automata-to-Regex language equivalence checking with shortest counterexamples.
 - Vector Addition Visualizer: 2D and 3D vector addition, resultant vectors, magnitude, ordering, import/export, and local browser saving.
 - Logic Gates Lab: drag-and-drop combinational circuits, live signal simulation, circuit-to-truth-table analysis, Boolean equation parsing and minimization, truth-table-to-circuit synthesis, presets, autosave, and JSON/image/table export.
+- Architecture Studio: local-first hierarchical digital-system drawing with reusable module definitions and instances, typed ports, buses, orthogonal signals, hierarchy/breadcrumb navigation, design-contract checks, autosave, JSON import/export, and SVG/PNG export.
 
 ## Logic Gates Lab Tests
 
