@@ -6,6 +6,9 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const STORAGE_KEY = "block-schematic-studio.project.v1";
 const UI_STORAGE_KEY = "block-schematic-studio.ui.v1";
 const GRID = 20;
+const FRAME_BLOCK_PADDING_X = 180;
+const FRAME_BLOCK_PADDING_Y = 120;
+const FRAME_WIRE_PADDING = 70;
 const PAGE_INTERFACE_BLOCK_ID = "__page_interface__";
 const HISTORY_LIMIT = 100;
 const MIN_ZOOM = 0.25;
@@ -1090,11 +1093,30 @@ function renderInspector() {
 }
 
 function schematicBounds(page = currentPage()) {
-  if (!page.blocks.length) return { x: -100, y: -60, w: 700, h: 460 };
-  const minX = Math.min(...page.blocks.map((block) => block.x)) - 60;
-  const minY = Math.min(...page.blocks.map((block) => block.y)) - 80;
-  const maxX = Math.max(...page.blocks.map((block) => block.x + block.w)) + 60;
-  const maxY = Math.max(...page.blocks.map((block) => block.y + block.h)) + 60;
+  let minX = -140;
+  let minY = -100;
+  let maxX = 660;
+  let maxY = 440;
+
+  if (page.blocks.length) {
+    minX = Math.min(...page.blocks.map((block) => block.x - FRAME_BLOCK_PADDING_X));
+    minY = Math.min(...page.blocks.map((block) => block.y - FRAME_BLOCK_PADDING_Y));
+    maxX = Math.max(...page.blocks.map((block) => block.x + block.w + FRAME_BLOCK_PADDING_X));
+    maxY = Math.max(...page.blocks.map((block) => block.y + block.h + FRAME_BLOCK_PADDING_Y));
+  }
+
+  const routedPoints = page.wires.flatMap((wire) => wire.waypoints || []);
+  if (routedPoints.length) {
+    minX = Math.min(minX, ...routedPoints.map((point) => point.x - FRAME_WIRE_PADDING));
+    minY = Math.min(minY, ...routedPoints.map((point) => point.y - FRAME_WIRE_PADDING));
+    maxX = Math.max(maxX, ...routedPoints.map((point) => point.x + FRAME_WIRE_PADDING));
+    maxY = Math.max(maxY, ...routedPoints.map((point) => point.y + FRAME_WIRE_PADDING));
+  }
+
+  minX = Math.floor(minX / GRID) * GRID;
+  minY = Math.floor(minY / GRID) * GRID;
+  maxX = Math.ceil(maxX / GRID) * GRID;
+  maxY = Math.ceil(maxY / GRID) * GRID;
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
