@@ -5,14 +5,61 @@ const {
   EPSILON,
   compareLanguages,
   determinizeNfa,
+  equationNotationToParserExpression,
+  equationNotationToSet,
+  enumerateAcceptedWords,
+  finiteLanguageToRegex,
   layoutAutomaton,
   mergeParallelTransitions,
   minimizeDfa,
+  parseFiniteLanguageSet,
   parseTransitionEquations,
   regexToMinimalDfa,
   regexToNfa,
   regexToPositionNfa,
+  setNotationToEquation,
 } = require("./automata-equation.js");
+
+test("converts Set-style and equation notation exactly in both directions", () => {
+  const setStyle = "{ab*,bb}*";
+  const equation = setNotationToEquation(setStyle);
+  const setRoundTrip = equationNotationToSet(equation);
+  const equationParserSource = equationNotationToParserExpression(equation);
+
+  assert.equal(equation, "(a.b* + b.b)*");
+  assert.equal(setRoundTrip, setStyle);
+  assert.equal(equationParserSource, "(a.b* | b.b)*");
+  assert.equal(
+    compareLanguages(regexToNfa(setStyle), regexToNfa(equationParserSource)).equivalent,
+    true,
+  );
+});
+
+test("keeps equation literals escaped and expands Set-style one-or-more without ambiguity", () => {
+  assert.equal(equationNotationToSet("a.\\+"), "a\\+");
+  assert.equal(setNotationToEquation("{a,b}+"), "(a + b).(a + b)*");
+});
+
+test("converts finite language sets to equivalent regular expressions", () => {
+  const words = parseFiniteLanguageSet("L = {λ, 0, 01, '10', 01}");
+  const expression = finiteLanguageToRegex(words);
+  const model = regexToPositionNfa(expression);
+  const accepted = enumerateAcceptedWords(model, 3).words;
+
+  assert.deepEqual(words, ["", "0", "01", "10"]);
+  assert.deepEqual(accepted, ["", "0", "01", "10"]);
+  assert.equal(compareLanguages(model, regexToNfa("{λ,0,01,10}")).equivalent, true);
+});
+
+test("supports the empty language symbol and empty finite sets", () => {
+  const expression = finiteLanguageToRegex(parseFiniteLanguageSet("{}"));
+  const model = regexToPositionNfa(expression);
+
+  assert.equal(expression, "∅");
+  assert.deepEqual(model.finals, []);
+  assert.deepEqual(enumerateAcceptedWords(model, 4).words, []);
+  assert.equal(runNfa(model, ""), false);
+});
 
 function runDfa(model, input) {
   const transitions = new Map(

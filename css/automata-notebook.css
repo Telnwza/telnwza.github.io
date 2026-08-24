@@ -398,6 +398,12 @@ body[data-simulator="automata"] .sim-shell-menu > summary:hover,
 body[data-simulator="automata"] .sim-shell-header button:hover { color: var(--notebook-ink); background: var(--notebook-sheet); border-color: var(--notebook-ink); }
 body[data-simulator="automata"] .sim-shell-button[aria-pressed="true"],
 body[data-simulator="automata"] .sim-shell-menu[open] > summary { color: #fff; background: var(--notebook-ink); border-color: var(--notebook-ink); }
+body[data-simulator="automata"] #themeToggleBtn {
+  min-width: 78px;
+  color: var(--notebook-ink);
+  border-color: var(--notebook-accent);
+}
+body[data-simulator="automata"] #themeToggleBtn[aria-pressed="true"] { color: #fff; background: #172238; border-color: #172238; }
 body[data-simulator="automata"] .sim-shell-menu-panel {
   color: var(--notebook-ink);
   background: var(--notebook-paper);
@@ -488,7 +494,7 @@ body[data-simulator="automata"].sim-shell-ready .sim-workspace.sim-left-collapse
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  grid-template-columns: 76px minmax(0, 1fr) !important;
+  grid-template-columns: var(--automata-rail-width, 76px) minmax(0, 1fr) !important;
   grid-template-rows: minmax(0, 1fr) !important;
 }
 
@@ -498,6 +504,7 @@ body[data-simulator="automata"].sim-focus-mode .sim-workspace.sim-left-collapsed
 }
 
 .automata-tool-rail {
+  position: relative;
   z-index: 30;
   display: flex;
   min-width: 0;
@@ -594,8 +601,13 @@ body[data-simulator="automata"] .sim-canvas-region {
   min-height: 0;
   grid-column: 2;
   grid-row: 1;
-  grid-template-rows: 43px minmax(0, 1fr) 31px;
+  grid-template-rows: 43px auto minmax(0, 1fr) 31px;
 }
+
+body[data-simulator="automata"] .sim-canvas-region > .toolbar { grid-row: 1; }
+body[data-simulator="automata"] .sim-canvas-region > .practice-strip { grid-row: 2; }
+body[data-simulator="automata"] .sim-canvas-region > .canvas-shell { grid-row: 3; }
+body[data-simulator="automata"] .sim-canvas-region > .statusbar { grid-row: 4; }
 
 body[data-simulator="automata"].sim-focus-mode .sim-canvas-region { grid-column: 1; }
 
@@ -627,23 +639,24 @@ body[data-simulator="automata"] .sim-right-panel {
 body[data-simulator="automata"] .sim-left-panel {
   top: 0 !important;
   bottom: 0 !important;
-  left: 76px !important;
-  width: 286px !important;
+  left: var(--automata-rail-width, 76px) !important;
+  width: var(--automata-left-width, 286px) !important;
   max-height: none !important;
   transform: translateX(0);
 }
 
 body[data-simulator="automata"] .sim-right-panel {
+  top: 0 !important;
   right: 0 !important;
   bottom: 31px !important;
-  left: 76px !important;
-  width: auto !important;
-  height: min(44%, 430px) !important;
-  max-height: 430px !important;
+  left: auto !important;
+  width: var(--automata-right-width, 360px) !important;
+  height: auto !important;
+  max-height: none !important;
   padding: 0 16px 16px;
-  border-width: 1px 0 0 !important;
-  box-shadow: 0 -8px 0 rgba(23, 34, 56, 0.07) !important;
-  transform: translateY(0);
+  border-width: 0 0 0 1px !important;
+  box-shadow: -8px 0 0 rgba(23, 34, 56, 0.07) !important;
+  transform: translateX(0);
 }
 
 body[data-simulator="automata"] .sim-workspace.sim-left-collapsed .sim-left-panel,
@@ -659,10 +672,66 @@ body[data-simulator="automata"].sim-focus-mode .sim-right-panel {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(calc(100% + 42px));
+  transform: translateX(calc(100% + 42px));
 }
 
 body[data-simulator="automata"].sim-focus-mode .automata-tool-rail { display: none; }
+
+.panel-resize-handle {
+  position: absolute;
+  z-index: 48;
+  touch-action: none;
+  user-select: none;
+}
+
+.panel-resize-handle::after {
+  position: absolute;
+  content: "";
+  background: var(--notebook-line);
+  opacity: 0;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.panel-resize-handle:hover::after,
+.panel-resize-handle:focus-visible::after,
+body[data-simulator="automata"].is-resizing-panel .panel-resize-handle::after {
+  background: var(--notebook-accent);
+  opacity: 1;
+}
+
+.panel-resize-rail {
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+}
+
+.panel-resize-left {
+  top: 0;
+  bottom: 0;
+  left: calc(var(--automata-rail-width, 76px) + var(--automata-left-width, 286px) - 5px);
+  width: 10px;
+  cursor: col-resize;
+}
+
+.panel-resize-rail::after,
+.panel-resize-left::after { top: 0; bottom: 0; left: 4px; width: 2px; }
+
+.panel-resize-right {
+  top: 0;
+  right: calc(var(--automata-right-width, 360px) - 5px);
+  bottom: 31px;
+  width: 10px;
+  cursor: col-resize;
+}
+
+.panel-resize-right::after { top: 0; bottom: 0; left: 4px; width: 2px; }
+
+body[data-simulator="automata"].is-resizing-panel { user-select: none; }
+body[data-simulator="automata"] .sim-workspace.sim-left-collapsed > .panel-resize-left,
+body[data-simulator="automata"] .sim-workspace.sim-right-collapsed > .panel-resize-right,
+body[data-simulator="automata"].sim-focus-mode .panel-resize-handle { display: none; }
 
 body[data-simulator="automata"] .sim-left-panel > h2:first-child {
   position: sticky;
@@ -716,6 +785,17 @@ body[data-simulator="automata"] .sim-right-panel .tabs {
   background: var(--notebook-paper);
 }
 
+body[data-simulator="automata"] .simulation-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+body[data-simulator="automata"] .simulation-actions button { min-width: 0; }
+body[data-simulator="automata"] .simulation-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .drafting-ruler {
   position: absolute;
   z-index: 3;
@@ -762,6 +842,16 @@ body[data-simulator="automata"] .statusbar {
 }
 
 @media (max-width: 820px) {
+  body[data-simulator="automata"] .sim-shell-essentials { display: flex; }
+  body[data-simulator="automata"] .sim-shell-essentials > :not(#themeToggleBtn) { display: none; }
+  body[data-simulator="automata"] #themeToggleBtn {
+    width: 38px;
+    min-width: 38px;
+    padding: 0;
+    overflow: hidden;
+  }
+  body[data-simulator="automata"] #themeToggleBtn .theme-toggle-label { display: none; }
+
   body[data-simulator="automata"].sim-shell-ready .sim-workspace,
   body[data-simulator="automata"].sim-shell-ready .sim-workspace.sim-left-collapsed,
   body[data-simulator="automata"].sim-shell-ready .sim-workspace.sim-right-collapsed,
@@ -784,14 +874,16 @@ body[data-simulator="automata"] .statusbar {
   }
 
   body[data-simulator="automata"] .sim-right-panel {
+    top: 0 !important;
     right: 0 !important;
     bottom: 31px !important;
-    left: 58px !important;
-    width: auto !important;
-    height: min(56%, 440px) !important;
+    left: auto !important;
+    width: min(var(--automata-right-width, 360px), calc(100vw - 58px)) !important;
+    height: auto !important;
   }
 
   body[data-simulator="automata"] .sim-panel-drawer-open .sim-panel-scrim { display: none; }
+  body[data-simulator="automata"] .panel-resize-handle { display: none; }
   .drafting-coordinates { display: none; }
   body[data-simulator="automata"] .statusbar { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 }
@@ -803,5 +895,396 @@ body[data-simulator="automata"] .statusbar {
     grid-template-rows: 24px auto;
   }
   .automata-rail-glyph { font-size: 17px; }
-  body[data-simulator="automata"] .sim-right-panel { height: min(52%, 340px) !important; }
+}
+
+/* Language converter and practice lab */
+body[data-simulator="automata"] .language-converter-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+body[data-simulator="automata"] .converter-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  background: var(--notebook-panel);
+  border: 1px solid var(--notebook-line);
+  border-radius: 6px;
+}
+
+body[data-simulator="automata"] .converter-card.active-source {
+  background: #fffaf3;
+  border-color: var(--notebook-accent);
+  box-shadow: inset 3px 0 0 var(--notebook-accent);
+}
+
+body[data-simulator="automata"] .converter-card-head,
+body[data-simulator="automata"] .practice-meta,
+body[data-simulator="automata"] .practice-answer-actions,
+body[data-simulator="automata"] .practice-strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+body[data-simulator="automata"] .converter-card-head { justify-content: space-between; }
+body[data-simulator="automata"] .converter-card-head label { margin: 0; }
+body[data-simulator="automata"] .converter-card textarea { min-height: 112px; }
+
+body[data-simulator="automata"] .source-badge,
+body[data-simulator="automata"] .practice-kicker {
+  color: var(--notebook-accent);
+  font: 800 9px/1 var(--notebook-mono);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+body[data-simulator="automata"] .source-badge {
+  padding: 4px 6px;
+  background: var(--notebook-accent-soft);
+  border-radius: 999px;
+}
+
+body[data-simulator="automata"] .converter-swap {
+  display: grid;
+  place-items: center;
+  color: var(--notebook-accent);
+  font: 800 22px/1 var(--notebook-mono);
+}
+
+body[data-simulator="automata"] .set-preview-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin-top: 9px;
+  padding: 8px 10px;
+  color: var(--notebook-muted);
+  background: var(--notebook-sheet);
+  border: 1px dashed var(--notebook-line);
+  font-size: 11px;
+}
+
+body[data-simulator="automata"] .set-preview-options label { margin: 0; }
+body[data-simulator="automata"] .set-preview-options span:last-child { text-align: left; }
+
+body[data-simulator="automata"] .practice-modal {
+  width: min(900px, 95vw);
+  max-height: 92vh;
+  overflow: auto;
+}
+
+body[data-simulator="automata"] .practice-controls {
+  display: grid;
+  grid-template-columns: 1.35fr 0.8fr 0.8fr auto;
+  gap: 9px;
+  align-items: end;
+  margin: 14px 0 10px;
+  padding: 12px;
+  background: var(--notebook-panel);
+  border: 1px solid var(--notebook-line);
+}
+
+body[data-simulator="automata"] .practice-meta {
+  padding: 2px 0 10px;
+  color: var(--notebook-muted);
+  font: 650 10px/1 var(--notebook-mono);
+}
+
+body[data-simulator="automata"] .practice-meta #practiceScore { margin-left: auto; }
+
+body[data-simulator="automata"] .practice-question-card {
+  padding: 14px;
+  background: var(--notebook-sheet);
+  border: 1px solid var(--notebook-ink);
+  border-radius: 5px;
+}
+
+body[data-simulator="automata"] .practice-question-card h3 {
+  margin: 0 0 12px;
+  font-family: var(--notebook-serif);
+  font-size: 18px;
+}
+
+body[data-simulator="automata"] .practice-diagram-shell {
+  margin-bottom: 12px;
+  overflow: hidden;
+  background-color: var(--notebook-sheet);
+  background-image: linear-gradient(var(--notebook-grid) 1px, transparent 1px), linear-gradient(90deg, var(--notebook-grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border: 1px solid var(--notebook-line);
+}
+
+body[data-simulator="automata"] #practiceDiagram {
+  width: 100%;
+  height: auto;
+  min-height: 310px;
+  max-height: 380px;
+}
+
+body[data-simulator="automata"] .practice-answer-actions { margin-top: 9px; }
+body[data-simulator="automata"] .practice-answer-actions button:first-child { flex: 1; }
+
+body[data-simulator="automata"] .practice-prompt-card {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 12px;
+  padding: 22px;
+  color: var(--notebook-sheet);
+  background: var(--notebook-ink);
+  text-align: center;
+}
+
+body[data-simulator="automata"] .practice-prompt-card span {
+  color: #f4a18c;
+  font: 750 9px/1 var(--notebook-mono);
+  letter-spacing: 0.1em;
+}
+
+body[data-simulator="automata"] .practice-prompt-card strong {
+  overflow-wrap: anywhere;
+  font: 750 clamp(18px, 4vw, 28px)/1.4 var(--notebook-mono);
+}
+
+body[data-simulator="automata"] .practice-feedback { margin-top: 10px; }
+body[data-simulator="automata"] .practice-feedback.match,
+body[data-simulator="automata"] .practice-strip-feedback.match { color: var(--notebook-success); }
+body[data-simulator="automata"] .practice-feedback.mismatch,
+body[data-simulator="automata"] .practice-strip-feedback.mismatch { color: var(--notebook-danger); }
+
+body[data-simulator="automata"] .practice-strip {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 9px 14px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fff8ed;
+  border-bottom: 1px solid var(--notebook-accent);
+  box-shadow: inset 4px 0 0 var(--notebook-accent);
+}
+
+body[data-simulator="automata"] .practice-strip strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--notebook-ink);
+  font: 750 13px/1.35 var(--notebook-mono);
+}
+
+body[data-simulator="automata"] .practice-strip-actions { flex-wrap: wrap; justify-content: flex-end; }
+body[data-simulator="automata"] .practice-strip-actions button { padding: 6px 8px; font-size: 10px; }
+body[data-simulator="automata"] .practice-strip-feedback {
+  grid-column: 1 / -1;
+  color: var(--notebook-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  body[data-simulator="automata"] .language-converter-grid { grid-template-columns: 1fr; }
+  body[data-simulator="automata"] .converter-swap { height: 20px; transform: rotate(90deg); }
+  body[data-simulator="automata"] .set-preview-options { grid-template-columns: minmax(0, 1fr); }
+  body[data-simulator="automata"] .practice-controls { grid-template-columns: 1fr 1fr; }
+  body[data-simulator="automata"] .practice-controls > div:first-child { grid-column: 1 / -1; }
+  body[data-simulator="automata"] .practice-strip { grid-template-columns: 1fr; }
+  body[data-simulator="automata"] .practice-strip-actions { justify-content: flex-start; }
+}
+
+/* Canvas workbench interactions */
+body[data-simulator="automata"] .canvas-shell { background-image: none; }
+body[data-simulator="automata"] #canvasGrid { pointer-events: none; }
+body[data-simulator="automata"] .grid-minor { stroke: var(--notebook-grid); stroke-width: 0.65; }
+body[data-simulator="automata"] .grid-major { stroke: var(--notebook-grid-major); stroke-width: 1; }
+
+body[data-simulator="automata"] .transition-handle {
+  fill: var(--notebook-accent);
+  stroke: var(--notebook-sheet);
+  stroke-width: 3;
+  opacity: 0;
+  cursor: crosshair;
+  transform: scale(0.65);
+  transform-origin: 38px 0;
+  transition: opacity 120ms ease, transform 150ms cubic-bezier(.2,.8,.2,1), filter 120ms ease;
+}
+body[data-simulator="automata"] .state:hover .transition-handle,
+body[data-simulator="automata"] .state.selected .transition-handle {
+  opacity: 1;
+  transform: scale(1);
+}
+body[data-simulator="automata"] .transition-handle:hover { filter: drop-shadow(0 0 5px var(--notebook-accent)); }
+body[data-simulator="automata"] .state.connection-target circle.outer {
+  stroke: var(--notebook-accent);
+  stroke-dasharray: 5 4;
+  animation: automataTarget 800ms linear infinite;
+}
+body[data-simulator="automata"] .transition-preview {
+  fill: none;
+  stroke: var(--notebook-accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 8 5;
+  marker-end: url(#arrow);
+  filter: drop-shadow(0 2px 3px color-mix(in srgb, var(--notebook-accent) 35%, transparent));
+  animation: automataDash 520ms linear infinite;
+}
+body[data-simulator="automata"] .marquee-rect {
+  fill: color-mix(in srgb, var(--notebook-accent) 10%, transparent);
+  stroke: var(--notebook-accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+body[data-simulator="automata"] #canvas.pan-ready { cursor: grab; }
+body[data-simulator="automata"] #canvas.is-panning { cursor: grabbing; }
+body[data-simulator="automata"] #canvas.dragging-states .state.selected { filter: drop-shadow(0 7px 7px rgba(23,34,56,.18)); }
+
+body[data-simulator="automata"] .selection-quickbar {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 8;
+  display: flex;
+  max-width: calc(100% - 36px);
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  overflow-x: auto;
+  color: var(--notebook-ink);
+  background: color-mix(in srgb, var(--notebook-paper) 92%, transparent);
+  border: 1px solid var(--notebook-ink);
+  border-radius: 6px;
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--notebook-ink) 12%, transparent);
+  backdrop-filter: blur(10px);
+  transform: translateX(-50%);
+  animation: automataQuickbarIn 180ms cubic-bezier(.2,.8,.2,1) both;
+}
+body[data-simulator="automata"] .selection-quickbar span {
+  padding: 0 7px;
+  color: var(--notebook-muted);
+  font: 700 9px/1 var(--notebook-mono);
+  white-space: nowrap;
+}
+body[data-simulator="automata"] .selection-quickbar button { flex: none; padding: 6px 8px; font-size: 10px; }
+
+body[data-simulator="automata"] .state-enter { animation: automataStateIn 220ms cubic-bezier(.2,.9,.2,1) both; }
+body[data-simulator="automata"] .state.flash-accept circle.outer {
+  animation: automataAccept 720ms cubic-bezier(.2,.8,.2,1) both;
+}
+body[data-simulator="automata"] .state.sim-active circle.outer {
+  fill: color-mix(in srgb, var(--notebook-accent) 16%, var(--notebook-sheet));
+  stroke: var(--notebook-accent);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--notebook-accent) 62%, transparent));
+  animation: automataSimulationPulse 760ms ease-in-out infinite alternate;
+}
+body[data-simulator="automata"] .state.sim-accepted circle.outer {
+  fill: color-mix(in srgb, var(--notebook-success) 20%, var(--notebook-sheet));
+  stroke: var(--notebook-success);
+  animation: automataSimulationFinish 420ms cubic-bezier(.2,.8,.2,1) both;
+}
+body[data-simulator="automata"] .state.sim-rejected circle.outer {
+  fill: color-mix(in srgb, var(--notebook-danger) 16%, var(--notebook-sheet));
+  stroke: var(--notebook-danger);
+  animation: automataSimulationFinish 420ms cubic-bezier(.2,.8,.2,1) both;
+}
+body[data-simulator="automata"] .edge.sim-active path:not(.edge-hit) {
+  stroke: var(--notebook-accent);
+  stroke-width: 4;
+  stroke-dasharray: 9 7;
+  animation: automataDash 520ms linear infinite;
+}
+body[data-simulator="automata"] .edge.sim-active text {
+  fill: var(--notebook-accent);
+  font-weight: 850;
+}
+body[data-simulator="automata"] .edge-enter path:not(.edge-hit) {
+  stroke-dasharray: 900;
+  stroke-dashoffset: 900;
+  animation: automataEdgeIn 330ms ease-out forwards;
+}
+body[data-simulator="automata"] .edge-enter text { animation: automataLabelIn 260ms 160ms ease-out both; }
+
+@keyframes automataTarget { to { stroke-dashoffset: -18; } }
+@keyframes automataDash { to { stroke-dashoffset: -26; } }
+@keyframes automataStateIn { from { opacity: 0; filter: blur(2px) drop-shadow(0 0 10px var(--notebook-accent)); } to { opacity: 1; filter: none; } }
+@keyframes automataAccept { 0%,100% { fill: var(--notebook-sheet); stroke: var(--notebook-success); } 45% { fill: color-mix(in srgb, var(--notebook-success) 24%, var(--notebook-sheet)); stroke-width: 5; filter: drop-shadow(0 0 9px var(--notebook-success)); } }
+@keyframes automataEdgeIn { to { stroke-dashoffset: 0; } }
+@keyframes automataLabelIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes automataQuickbarIn { from { opacity: 0; transform: translate(-50%,-8px) scale(.98); } to { opacity: 1; transform: translate(-50%,0) scale(1); } }
+@keyframes automataSimulationPulse { to { filter: drop-shadow(0 0 13px color-mix(in srgb, var(--notebook-accent) 78%, transparent)); } }
+@keyframes automataSimulationFinish { from { transform: scale(.9); } 70% { transform: scale(1.08); } to { transform: scale(1); } }
+
+/* Dark drafting-table theme */
+html[data-automata-theme="dark"] body[data-simulator="automata"] {
+  --notebook-paper: #0b1119;
+  --notebook-sheet: #101923;
+  --notebook-panel: #0e1721;
+  --notebook-ink: #e6edf7;
+  --notebook-ink-soft: #b4c0cf;
+  --notebook-muted: #8493a6;
+  --notebook-line: #344255;
+  --notebook-line-soft: #263445;
+  --notebook-grid: #1d2a38;
+  --notebook-grid-major: #2b3a4c;
+  --notebook-accent: #ff7657;
+  --notebook-accent-soft: #3b211d;
+  --notebook-success: #67d6a5;
+  --notebook-warning: #efbd63;
+  --notebook-danger: #ff8b7b;
+  --sim-shell-bg: rgba(11,17,25,.96);
+  color-scheme: dark;
+  background: var(--notebook-paper);
+}
+html[data-automata-theme="dark"] body[data-simulator="automata"] button:hover { background: #182434; border-color: #788aa0; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] button.primary,
+html[data-automata-theme="dark"] body[data-simulator="automata"] button.active { color: #fff; background: #2f68ad; border-color: #6095d2; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .panel,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-left-panel,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-right-panel,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .automata-tool-rail { border-color: var(--notebook-line) !important; box-shadow: none !important; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-shell-header { border-color: var(--notebook-line); }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-shell-button[aria-pressed="true"],
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-shell-menu[open] > summary { color: #fff; background: #2f68ad; border-color: #6095d2; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .result,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .chip,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .help,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .compare-guide,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-guide div,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-output-choice,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-code-help { color: var(--notebook-ink-soft); background: #111c28; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .result.ok,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .compare-result.match,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-feedback.ready { color: var(--notebook-success); background: #10251f; border-color: #2d6c55; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .result.bad,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .compare-result.mismatch,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-feedback.bad { color: var(--notebook-danger); background: #2a1718; border-color: #79443e; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .result.warn,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .compare-result.error,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .equation-feedback.warn { color: var(--notebook-warning); background: #292214; border-color: #756036; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] th { background: #172330; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .converter-card.active-source,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .practice-strip { background: #241a17; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .statusbar { color: #afbac9; background: #070b11; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .statusbar span:first-child,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .practice-prompt-card span { color: #ff9b82; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .practice-prompt-card { color: #fff; background: #070b11; }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .modal-backdrop { background: rgba(0,0,0,.72); }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .modal,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-shell-menu-panel,
+html[data-automata-theme="dark"] body[data-simulator="automata"] .sim-help-dialog { border-color: var(--notebook-line); box-shadow: 10px 10px 0 rgba(0,0,0,.28); }
+html[data-automata-theme="dark"] body[data-simulator="automata"] .state line { stroke: var(--notebook-accent) !important; }
+
+body[data-simulator="automata"],
+body[data-simulator="automata"] .app,
+body[data-simulator="automata"] .panel,
+body[data-simulator="automata"] .canvas-shell,
+body[data-simulator="automata"] .modal,
+body[data-simulator="automata"] input,
+body[data-simulator="automata"] select,
+body[data-simulator="automata"] textarea,
+body[data-simulator="automata"] button { transition: color 150ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+
+@media (max-width: 700px) {
+  body[data-simulator="automata"] .selection-quickbar { top: 8px; }
+  body[data-simulator="automata"] .selection-quickbar #quickAlignH,
+  body[data-simulator="automata"] .selection-quickbar #quickAlignV { display: none; }
 }

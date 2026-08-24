@@ -14,19 +14,22 @@
       left: "main.workspace > aside:first-of-type",
       right: "main.workspace > aside:last-of-type",
       canvas: ".canvas-panel",
-      essentials: ["machineType", "undoBtn", "redoBtn"],
-      advanced: ["saveBtn", "loadBtn", "exportBtn", "importBtn", "exportSvgBtn", "importFile", "clearBtn"],
+      essentials: ["machineType", "themeToggleBtn", "undoBtn", "redoBtn"],
+      advanced: ["themeMode", "saveBtn", "loadBtn", "exportBtn", "importBtn", "exportSvgBtn", "importFile", "clearBtn"],
       leftLabel: "ตั้งค่า",
       rightLabel: "วิเคราะห์",
       defaultLeft: false,
       defaultRight: false,
       storageVersion: "drafting-v2",
       tips: [
-        "ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state ได้ทันที",
-        "กด Regex → Automata แล้วเลือกผลลัพธ์เป็น Minimal DFA, NFA หรือ λ-NFA ได้",
+        "ดับเบิลคลิกพื้นที่ว่างเพื่อเพิ่ม state และลากจุดด้านขวาเพื่อสร้าง transition",
+        "กด Space ค้างแล้วลากเพื่อเลื่อนจอ และใช้ Ctrl+ล้อเมาส์เพื่อซูม",
+        "ลากกรอบบนพื้นที่ว่างหรือ Shift+คลิกเพื่อเลือกหลาย state",
+        "กด Regex / Set เพื่อแปลงภาษาและสร้าง Minimal DFA, NFA หรือ λ-NFA ได้",
+        "กดสุ่มโจทย์เพื่อฝึกทั้งรูป → Regex และสมการ → วาด DFA/NFA",
         "แท็บ ตรวจ Regex ใช้พิสูจน์ว่ารูปที่วาดรับภาษาเดียวกับ Regular Expression หรือไม่",
         "เลือก state หรือ transition แล้วตัวแก้ไขที่เกี่ยวข้องจึงจะแสดง",
-        "กด Shift ค้างแล้วเลือก state สองตัวเพื่อสร้าง transition",
+        "ใช้ Ctrl/Cmd+C, V และ D เพื่อคัดลอก วาง และทำสำเนา state ที่เลือก",
       ],
     },
     logic: {
@@ -88,6 +91,9 @@
     leftOpen: typeof initialState.leftOpen === "boolean" ? initialState.leftOpen : definition.defaultLeft,
     rightOpen: typeof initialState.rightOpen === "boolean" ? initialState.rightOpen : definition.defaultRight,
     focus: false,
+    railWidth: Number(initialState.railWidth) || 76,
+    leftWidth: Number(initialState.leftWidth) || 286,
+    rightWidth: Number(initialState.rightWidth) || 360,
   };
   if (window.matchMedia("(max-width: 820px)").matches && typeof initialState.leftOpen !== "boolean") {
     state.leftOpen = false;
@@ -173,6 +179,7 @@
   document.body.append(helpDialog);
 
   enhanceSimulator();
+  applyPanelSizes();
   updatePanels(false);
   updateFocus(false);
   document.body.classList.add("sim-shell-ready");
@@ -220,11 +227,12 @@
       canvasShell.style.setProperty("--canvas-x", `${event.clientX - bounds.left}px`);
       canvasShell.style.setProperty("--canvas-y", `${event.clientY - bounds.top}px`);
       const svgCanvas = canvasShell.querySelector("svg");
-      if (coordinateReadout && svgCanvas?.createSVGPoint && svgCanvas.getScreenCTM()) {
+      const viewport = svgCanvas?.querySelector("#viewport");
+      if (coordinateReadout && svgCanvas?.createSVGPoint && (viewport?.getScreenCTM() || svgCanvas.getScreenCTM())) {
         const point = svgCanvas.createSVGPoint();
         point.x = event.clientX;
         point.y = event.clientY;
-        const position = point.matrixTransform(svgCanvas.getScreenCTM().inverse());
+        const position = point.matrixTransform((viewport?.getScreenCTM() || svgCanvas.getScreenCTM()).inverse());
         coordinateReadout.textContent = `X ${Math.round(position.x)} · Y ${Math.round(position.y)}`;
       }
     }, { passive: true });
@@ -261,6 +269,9 @@
         headerMode: state.headerMode,
         leftOpen: state.leftOpen,
         rightOpen: state.rightOpen,
+        railWidth: state.railWidth,
+        leftWidth: state.leftWidth,
+        rightWidth: state.rightWidth,
       }));
     } catch {
       // UI preferences are optional.
@@ -304,6 +315,7 @@
   }
 
   function updatePanels(persist = true) {
+    applyPanelSizes();
     workspace.classList.toggle("sim-left-collapsed", !state.leftOpen);
     workspace.classList.toggle("sim-right-collapsed", !state.rightOpen || !rightPanel);
     leftButton.setAttribute("aria-pressed", String(state.leftOpen));
@@ -362,6 +374,82 @@
 
   function notifyResize() {
     window.requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+  }
+
+  function clamp(value, minimum, maximum) {
+    return Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
+  }
+
+  function applyPanelSizes() {
+    if (simulator !== "automata") return;
+    const bounds = workspace.getBoundingClientRect();
+    state.railWidth = clamp(state.railWidth, 58, Math.min(140, Math.max(58, bounds.width * 0.16)));
+    state.leftWidth = clamp(state.leftWidth, 240, Math.min(560, Math.max(240, bounds.width - state.railWidth - 160)));
+    state.rightWidth = clamp(state.rightWidth, 280, Math.min(600, Math.max(280, bounds.width - state.railWidth - 160)));
+    workspace.style.setProperty("--automata-rail-width", `${Math.round(state.railWidth)}px`);
+    workspace.style.setProperty("--automata-left-width", `${Math.round(state.leftWidth)}px`);
+    workspace.style.setProperty("--automata-right-width", `${Math.round(state.rightWidth)}px`);
+  }
+
+  function addPanelResizer(target, kind, label) {
+    if (!target) return;
+    const handle = create("div", `panel-resize-handle panel-resize-${kind}`);
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-label", `${label} · ลากหรือใช้ปุ่มลูกศรเพื่อปรับขนาด · ดับเบิลคลิกเพื่อคืนค่า`);
+    handle.setAttribute("aria-orientation", "vertical");
+    target.append(handle);
+
+    const updateFromPointer = (event) => {
+      const bounds = workspace.getBoundingClientRect();
+      if (kind === "rail") state.railWidth = event.clientX - bounds.left;
+      if (kind === "left") state.leftWidth = event.clientX - bounds.left - state.railWidth;
+      if (kind === "right") state.rightWidth = bounds.right - event.clientX;
+      applyPanelSizes();
+      notifyResize();
+    };
+
+    handle.addEventListener("pointerdown", (event) => {
+      if (isMobile()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handle.setPointerCapture(event.pointerId);
+      document.body.classList.add("is-resizing-panel");
+      updateFromPointer(event);
+    });
+    handle.addEventListener("pointermove", (event) => {
+      if (!handle.hasPointerCapture(event.pointerId)) return;
+      updateFromPointer(event);
+    });
+    const finish = (event) => {
+      if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+      document.body.classList.remove("is-resizing-panel");
+      saveState();
+    };
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+    handle.addEventListener("dblclick", () => {
+      if (kind === "rail") state.railWidth = 76;
+      if (kind === "left") state.leftWidth = 286;
+      if (kind === "right") state.rightWidth = 360;
+      applyPanelSizes();
+      saveState();
+      notifyResize();
+    });
+    handle.addEventListener("keydown", (event) => {
+      const decrement = kind === "right" ? event.key === "ArrowRight" : event.key === "ArrowLeft";
+      const increment = kind === "right" ? event.key === "ArrowLeft" : event.key === "ArrowRight";
+      if (!decrement && !increment) return;
+      event.preventDefault();
+      const amount = event.shiftKey ? 32 : 8;
+      const direction = decrement ? -1 : 1;
+      if (kind === "rail") state.railWidth += direction * amount;
+      if (kind === "left") state.leftWidth += direction * amount;
+      if (kind === "right") state.rightWidth += direction * amount;
+      applyPanelSizes();
+      saveState();
+      notifyResize();
+    });
   }
 
   function isMobile() {
@@ -474,7 +562,8 @@
       ["addTool", "+", "State", "A"],
       ["connectTool", "→", "Transition", "T"],
       ["deleteTool", "×", "ลบ", "X"],
-      ["equationBtn", "∑", "Regex", "R"],
+      ["equationBtn", "∑", "Regex/Set", "R"],
+      ["practiceBtn", "?", "Practice", "P"],
     ];
     toolDefinitions.forEach(([id, glyph, label, shortcut]) => {
       const button = document.getElementById(id);
@@ -486,6 +575,9 @@
     });
     sourceToolbar?.remove();
     workspace.prepend(rail);
+    addPanelResizer(rail, "rail", "ความกว้างแถบเครื่องมือ");
+    addPanelResizer(workspace, "left", "ความกว้างแผงตั้งค่า");
+    addPanelResizer(workspace, "right", "ความกว้างแผงวิเคราะห์");
 
     const rulerX = create("div", "drafting-ruler drafting-ruler-x");
     const rulerY = create("div", "drafting-ruler drafting-ruler-y");

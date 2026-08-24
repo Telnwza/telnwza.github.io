@@ -17,27 +17,27 @@ const tools = [
   },
   {
     number: "03",
-    title: "Architecture Studio",
-    description: "Map hierarchical digital systems before translating them into HDL or paper schematics.",
-    category: "Digital systems",
-    path: "./architecture-studio/",
-    topics: ["Architecture", "FPGA", "Modules", "Buses", "Top-down Design"],
-  },
-  {
-    number: "04",
-    title: "Block Schematic Studio",
-    description: "Draw hierarchical digital systems with buses, real logic symbols, editable routes, and reusable sub-pages.",
-    category: "Digital systems",
-    path: "./block-schematic-studio/",
-    topics: ["Schematic", "FPGA", "Logic Symbols", "Buses", "Sub-pages"],
-  },
-  {
-    number: "05",
     title: "Vector Addition",
     description: "Explore magnitude, direction, and composition across two and three dimensions.",
     category: "Mathematics",
     path: "./vectors/",
     topics: ["Vectors", "2D", "3D", "Resultant", "Geometry"],
+  },
+  {
+    number: "04",
+    title: "Schematic Studio",
+    description: "Design digital schematics and generate VHDL for Spartan-7 and Vivado.",
+    category: "FPGA design",
+    path: "./schematic2vhdl/",
+    topics: ["VHDL", "Schematic", "FPGA", "Spartan-7", "Vivado"],
+  },
+  {
+    number: "05",
+    title: "Block Schematic Studio",
+    description: "Draw hierarchical digital systems with buses, real logic symbols, editable routes, and reusable sub-pages.",
+    category: "Digital systems",
+    path: "./block-schematic-studio/",
+    topics: ["Schematic", "FPGA", "Logic Symbols", "Buses", "Sub-pages"],
   },
 ];
 
