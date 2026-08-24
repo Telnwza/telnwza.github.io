@@ -3259,17 +3259,50 @@ function routePoints(r){
   });
   return pts;
 }
-/* Move segment i of a route perpendicular to itself to `val`, keeping BOTH pins
-   exactly where they are (a segment touching a pin grows a new leg instead of
-   dragging the pin along). Returns the interior waypoints for w.pts. */
-function segmentMovePts(base, i, t, val){
+/* Move segment i of a route perpendicular to itself to `val`. Real component pins
+   stay fixed and grow a new leg; a junction endpoint may opt in to moving with the
+   grabbed run so the connection dot never gets stranded behind its own wire.
+   Returns the interior waypoints for w.pts. */
+function segmentMovePts(base, i, t, val, moveStart=false, moveEnd=false){
   const atStart = (i===0), atEnd = (i+1===base.length-1);
   const pts = base.map(p=>({x:p.x,y:p.y}));
   if(t==="h"){ pts[i].y = val; pts[i+1].y = val; }
   else       { pts[i].x = val; pts[i+1].x = val; }
-  if(atStart) pts.unshift({x:base[0].x, y:base[0].y});
-  if(atEnd)   pts.push({x:base[base.length-1].x, y:base[base.length-1].y});
+  if(atStart && !moveStart) pts.unshift({x:base[0].x, y:base[0].y});
+  if(atEnd && !moveEnd)     pts.push({x:base[base.length-1].x, y:base[base.length-1].y});
   return pts.slice(1,-1);
+}
+/* If the grabbed run physically touches a junction, that dot is part of the run.
+   Capture the other collinear host half as well: moving one side of a T must move
+   the whole bar at the dot, while the perpendicular branch simply grows/shrinks.
+   This keeps 3-way (and larger) fan-outs as true Manhattan junctions. */
+function junctionFollowersForRun(sch, w, basePts, segIndex, segT){
+  const ends = [];
+  const lastSeg = basePts.length-2;
+  const add = (ref, atStart)=>{
+    if((atStart && segIndex!==0) || (!atStart && segIndex!==lastSeg)) return;
+    const j = comp(ref.cid, sch);
+    if(!j || j.type!=="JUNCTION" || ends.some(e=>e.j===j)) return;
+    const jp = portPos(j, "j");
+    if(!jp) return;
+    const siblings = [];
+    sch.wires.forEach(sw=>{
+      if(sw===w || (sw.from.cid!==j.id && sw.to.cid!==j.id)) return;
+      const pts = drawnPoints(sch, sw);
+      if(!pts || pts.length<2) return;
+      const starts = sw.from.cid===j.id;
+      const a = starts ? pts[0] : pts[pts.length-1];
+      const b = starts ? pts[1] : pts[pts.length-2];
+      const t = Math.abs(a.y-b.y)<0.5 ? "h" : "v";
+      if(t!==segT) return;                 // perpendicular branch follows the dot naturally
+      siblings.push({w:sw, basePts:pts, segIndex:starts?0:pts.length-2,
+        moveStart:starts, moveEnd:!starts});
+    });
+    ends.push({j, moveStart:atStart, moveEnd:!atStart, siblings});
+  };
+  add(w.from, true);
+  add(w.to, false);
+  return ends;
 }
 function routeParts(r){
   if(r.kind==="poly"){
@@ -4374,9 +4407,11 @@ function render(){
       let gi = 0, gd = Infinity;
       parts.forEach((p,i)=>{ const d = distTo(p); if(d < gd){ gd = d; gi = i; } });
       if(layoutLocked()){ lockedNudge(); return; }        // 🔒 — the run stays put
+      const basePts = routePoints(r);
+      const segT = parts.length ? parts[gi].t : "h";
       state.wireDrag = { w, kind:r.kind, m0, moved:false, shift:ev.shiftKey,
-                         segIndex: gi, segT: parts.length ? parts[gi].t : "h",
-                         basePts: routePoints(r) };
+                         segIndex:gi, segT, basePts,
+                         junctionEnds:junctionFollowersForRun(sch, w, basePts, gi, segT) };
     });
     hit.addEventListener("dblclick",ev=>{
       // rename only when not mid-gesture (drawing/branching)
@@ -4811,19 +4846,40 @@ canvas.addEventListener("mousemove",ev=>{
       // jogs instead of being unmovable. Recomputed from the geometry captured at
       // mousedown (never cumulatively) so the wire tracks the cursor exactly.
       const val = wd.segT==="h" ? snap(state.mouse.y) : snap(state.mouse.x);
-      const pts = segmentMovePts(wd.basePts, wd.segIndex, wd.segT, val);
+      const followers = wd.junctionEnds || [];
+      const moveStart = followers.some(e=>e.moveStart);
+      const moveEnd = followers.some(e=>e.moveEnd);
+      const affected = [wd.w, ...followers.flatMap(e=>e.siblings.map(s=>s.w))];
+      const uniqueAffected = [...new Set(affected)];
+      // Keep the last accepted shape for every host half. If any new run would cut
+      // a component, the dot and every participating wire roll back together.
+      const keepWires = uniqueAffected.map(w=>({w, pts:w.pts, mx:w.mx, my:w.my,
+        zjog:w.zjog, autoPts:w.autoPts}));
+      const keepJunctions = followers.map(e=>({j:e.j, x:e.j.x, y:e.j.y}));
+      followers.forEach(e=>{
+        if(wd.segT==="h") e.j.y = val-6;
+        else               e.j.x = val-6;
+      });
       // a hand-drawn route supersedes the auto staircase (and any auto body detour)
-      const keep = { pts:wd.w.pts, mx:wd.w.mx, my:wd.w.my, zjog:wd.w.zjog, autoPts:wd.w.autoPts };
       delete wd.w.mx; delete wd.w.my; delete wd.w.zjog; delete wd.w.autoPts;
-      wd.w.pts = pts;
+      wd.w.pts = segmentMovePts(wd.basePts, wd.segIndex, wd.segT, val, moveStart, moveEnd);
+      // The collinear wire on the other side of a T follows the same moved bar.
+      // Perpendicular branches need no waypoint rewrite: their endpoint is the dot.
+      followers.forEach(e=>e.siblings.forEach(s=>{
+        delete s.w.mx; delete s.w.my; delete s.w.zjog; delete s.w.autoPts;
+        s.w.pts = segmentMovePts(s.basePts, s.segIndex, wd.segT, val, s.moveStart, s.moveEnd);
+      }));
       // a run dragged onto a gate would read as connecting to it — refuse the move and
       // hold the last clear position, so the wire slides up to the symbol and stops
-      if(routeCutsBody(activeSch(), wd.w)){
-        if(keep.pts) wd.w.pts = keep.pts; else delete wd.w.pts;
-        if(keep.mx!==undefined) wd.w.mx = keep.mx;
-        if(keep.my!==undefined) wd.w.my = keep.my;
-        if(keep.zjog!==undefined) wd.w.zjog = keep.zjog;
-        if(keep.autoPts) wd.w.autoPts = keep.autoPts;
+      if(uniqueAffected.some(w=>routeCutsBody(activeSch(), w))){
+        keepJunctions.forEach(k=>{ k.j.x=k.x; k.j.y=k.y; });
+        keepWires.forEach(k=>{
+          if(k.pts) k.w.pts=k.pts; else delete k.w.pts;
+          if(k.mx!==undefined) k.w.mx=k.mx; else delete k.w.mx;
+          if(k.my!==undefined) k.w.my=k.my; else delete k.w.my;
+          if(k.zjog!==undefined) k.w.zjog=k.zjog; else delete k.w.zjog;
+          if(k.autoPts) k.w.autoPts=k.autoPts; else delete k.w.autoPts;
+        });
         bodyBlockNudge();
       }
       render();
@@ -4903,6 +4959,9 @@ window.addEventListener("mouseup",ev=>{
     const wd = state.wireDrag;
     state.wireDrag = null;
     if(wd.moved){
+      // A junction carried by a hand-routed run now belongs at that exact split.
+      // Pin it so a later local healer cannot retap it away from the user's T.
+      (wd.junctionEnds||[]).forEach(e=>{ (e.j.params || (e.j.params={})).fixed=true; });
       snapshot();   // any wire can be re-routed by hand now
     } else {
       // Plain click selects ONLY the piece under the cursor — so you can rename or
