@@ -17,14 +17,22 @@ const tools = [
   },
   {
     number: "03",
-    title: "Block Schematic Studio",
-    description: "Draw hierarchical digital systems with buses, gates, flip-flops, and reusable sub-pages.",
+    title: "Architecture Studio",
+    description: "Map hierarchical digital systems before translating them into HDL or paper schematics.",
     category: "Digital systems",
     path: "./architecture-studio/",
-    topics: ["Schematic", "FPGA", "Flip-Flops", "Buses", "Sub-pages"],
+    topics: ["Architecture", "FPGA", "Modules", "Buses", "Top-down Design"],
   },
   {
     number: "04",
+    title: "Block Schematic Studio",
+    description: "Draw hierarchical digital systems with buses, real logic symbols, editable routes, and reusable sub-pages.",
+    category: "Digital systems",
+    path: "./block-schematic-studio/",
+    topics: ["Schematic", "FPGA", "Logic Symbols", "Buses", "Sub-pages"],
+  },
+  {
+    number: "05",
     title: "Vector Addition",
     description: "Explore magnitude, direction, and composition across two and three dimensions.",
     category: "Mathematics",
@@ -97,7 +105,7 @@ document.addEventListener("keydown", (event) => {
     searchInput.select();
   }
 
-  if (event.altKey && /^[1-4]$/.test(event.key) && !isEditing) {
+  if (event.altKey && /^[1-5]$/.test(event.key) && !isEditing) {
     const tool = tools[Number(event.key) - 1];
     if (tool) window.location.href = tool.path;
   }

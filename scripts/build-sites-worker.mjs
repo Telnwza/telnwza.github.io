@@ -20,6 +20,9 @@ const sourceFiles = [
   "architecture-studio/index.html",
   "architecture-studio/style.css",
   "architecture-studio/app.js",
+  "block-schematic-studio/index.html",
+  "block-schematic-studio/style.css",
+  "block-schematic-studio/app.js",
 ];
 
 const mimeTypes = {

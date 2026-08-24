@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A local-first hierarchical digital logic schematic editor.">
+  <title>Block Schematic Studio</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="../" aria-label="Back to Visual Learning home">
+      <span class="brand-mark" aria-hidden="true">S</span>
+      <span class="brand-copy"><strong>Block Schematic Studio</strong><small>TOP-DOWN LOGIC DESIGN</small></span>
+    </a>
+    <nav class="toolbar" aria-label="Project and canvas tools">
+      <button type="button" data-action="new-page" title="Create page"><span>＋</span> New page</button>
+      <button type="button" data-action="save" title="Save project JSON"><span>⇩</span> Save</button>
+      <button type="button" data-action="load" title="Load project JSON"><span>⇧</span> Load</button>
+      <span class="toolbar-divider" aria-hidden="true"></span>
+      <button type="button" data-action="undo" title="Undo (Cmd/Ctrl+Z)"><span>↶</span> Undo</button>
+      <button type="button" data-action="redo" title="Redo (Cmd/Ctrl+Shift+Z)"><span>↷</span> Redo</button>
+      <span class="toolbar-divider" aria-hidden="true"></span>
+      <button type="button" class="is-active" data-toggle="grid" aria-pressed="true"><span>▦</span> Grid</button>
+      <button type="button" class="is-active" data-toggle="snap" aria-pressed="true"><span>⌗</span> Snap</button>
+      <button type="button" data-action="fit" title="Fit view (F)"><span>⌖</span> Fit</button>
+      <button type="button" data-action="export-svg"><span>◇</span> SVG</button>
+      <button type="button" data-action="export-png"><span>▧</span> PNG</button>
+      <span class="toolbar-divider" aria-hidden="true"></span>
+      <button type="button" class="is-active" data-action="toggle-left-panel" aria-pressed="true" title="Show or hide Pages / Parts"><span>◧</span> Pages</button>
+      <button type="button" class="is-active" data-action="toggle-right-panel" aria-pressed="true" title="Show or hide Inspector"><span>◨</span> Inspector</button>
+    </nav>
+    <div class="status-cluster">
+      <span id="save-status" class="save-status"><i></i> Autosaved</span>
+      <span id="zoom-status" class="zoom-status">100%</span>
+    </div>
+  </header>
+
+  <main class="studio-shell">
+    <aside class="left-panel panel">
+      <div class="tabs" role="tablist" aria-label="Library panels">
+        <button id="pages-tab" type="button" role="tab" aria-selected="true" aria-controls="pages-panel" data-tab="pages">Pages</button>
+        <button id="parts-tab" type="button" role="tab" aria-selected="false" aria-controls="parts-panel" data-tab="parts">Parts</button>
+      </div>
+
+      <section id="pages-panel" class="tab-panel" role="tabpanel" aria-labelledby="pages-tab">
+        <div class="panel-heading">
+          <div><small>PROJECT STRUCTURE</small><strong>Design hierarchy</strong></div>
+          <button type="button" class="icon-button" data-action="new-page" title="Create page" aria-label="Create page">＋</button>
+        </div>
+        <div id="page-tree" class="page-tree" aria-label="Page hierarchy"></div>
+        <section class="design-method" aria-label="Top-down design method">
+          <small>TOP-DOWN METHOD</small>
+          <ol>
+            <li><span>01</span><div><strong>Define interface</strong><small>Ports, widths, polarity</small></div></li>
+            <li><span>02</span><div><strong>Decompose</strong><small>Split by responsibility</small></div></li>
+            <li><span>03</span><div><strong>Refine</strong><small>Open each block as a page</small></div></li>
+            <li><span>04</span><div><strong>Verify</strong><small>Clock, rollover, drivers</small></div></li>
+          </ol>
+          <button type="button" data-action="load-clock-example">Open corrected clock example</button>
+        </section>
+        <p class="panel-hint">Drag a page onto the canvas to reuse it as a block. Double-click an instance to refine its definition.</p>
+      </section>
+
+      <section id="parts-panel" class="tab-panel" role="tabpanel" aria-labelledby="parts-tab" hidden>
+        <label class="search-field" for="parts-search">
+          <span aria-hidden="true">⌕</span>
+          <input id="parts-search" type="search" placeholder="Find a part…" autocomplete="off">
+        </label>
+        <div id="parts-library" class="parts-library"></div>
+        <p class="panel-hint">Click to place at the center of the current view, or drag a part onto the canvas.</p>
+      </section>
+    </aside>
+
+    <div class="panel-resizer panel-resizer-left" data-resize-panel="left" role="separator" aria-orientation="vertical" aria-label="Resize Pages and Parts panel" tabindex="0"></div>
+
+    <section class="workspace" aria-label="Schematic workspace">
+      <div class="canvas-header">
+        <div class="canvas-context">
+          <nav id="breadcrumbs" class="breadcrumbs" aria-label="Page breadcrumb"></nav>
+          <span id="layer-context" class="layer-context">LEVEL 0 · TOP</span>
+        </div>
+        <div class="selection-tools" aria-label="Selection arrangement">
+          <button type="button" data-arrange="left" title="Align left">⇤</button>
+          <button type="button" data-arrange="right" title="Align right">⇥</button>
+          <button type="button" data-arrange="top" title="Align top">↥</button>
+          <button type="button" data-arrange="bottom" title="Align bottom">↧</button>
+          <button type="button" data-arrange="distribute-h" title="Distribute horizontally">↔</button>
+          <button type="button" data-arrange="distribute-v" title="Distribute vertically">↕</button>
+          <button type="button" data-arrange="forward" title="Bring forward">△</button>
+          <button type="button" data-arrange="backward" title="Send backward">▽</button>
+        </div>
+      </div>
+
+      <div id="canvas-wrap" class="canvas-wrap" tabindex="0" aria-label="Schematic canvas">
+        <svg id="schematic" xmlns="http://www.w3.org/2000/svg" aria-label="Current schematic page">
+          <defs>
+            <pattern id="minor-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--grid-minor)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+            </pattern>
+            <pattern id="major-grid" width="100" height="100" patternUnits="userSpaceOnUse">
+              <rect width="100" height="100" fill="url(#minor-grid)"/>
+              <path d="M 100 0 L 0 0 0 100" fill="none" stroke="var(--grid-major)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+            </pattern>
+          </defs>
+          <g id="viewport-layer">
+            <rect id="grid-plane" x="-10000" y="-10000" width="20000" height="20000" fill="url(#major-grid)"/>
+            <g id="page-frame-layer"></g>
+            <g id="wire-layer"></g>
+            <g id="block-layer"></g>
+            <g id="overlay-layer"></g>
+          </g>
+        </svg>
+        <div id="empty-page" class="empty-page" hidden>
+          <span>EMPTY PAGE</span>
+          <strong>Place a block to begin</strong>
+          <button type="button" data-open-parts>Open Parts</button>
+        </div>
+        <div id="interaction-tip" class="interaction-tip">Double-click wire to add bend · Drag a bend or segment · Space + drag to pan</div>
+        <div id="draft-status" class="draft-status" hidden>Choose a compatible destination port · Esc to cancel</div>
+        <div id="wire-tooltip" class="wire-tooltip" role="status" hidden></div>
+        <div id="minimap" class="minimap" aria-label="Page minimap">
+          <svg id="minimap-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div class="zoom-controls" aria-label="Zoom controls">
+          <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
+          <button type="button" data-action="fit" aria-label="Fit page">⌖</button>
+          <button type="button" data-action="zoom-in" aria-label="Zoom in">＋</button>
+        </div>
+      </div>
+      <footer class="canvas-footer">
+        <span id="page-summary">0 blocks · 0 nets</span>
+        <button id="validation-status" type="button" data-action="show-validation">✓ Structural checks pass</button>
+        <span>ORTHOGONAL · GRID 20 · SNAP ON</span>
+      </footer>
+    </section>
+
+    <div class="panel-resizer panel-resizer-right" data-resize-panel="right" role="separator" aria-orientation="vertical" aria-label="Resize Inspector panel" tabindex="0"></div>
+
+    <aside class="right-panel panel" aria-label="Inspector">
+      <div class="inspector-heading">
+        <div><small>INSPECTOR</small><strong id="inspector-title">PAGE</strong></div>
+        <span id="selection-count">No selection</span>
+      </div>
+      <div id="inspector" class="inspector"></div>
+    </aside>
+  </main>
+
+  <input id="project-file" type="file" accept="application/json,.json" hidden>
+  <div id="page-action-menu" class="page-action-menu" role="menu" aria-label="Page actions" hidden></div>
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <dialog id="validation-dialog">
+    <div class="dialog-heading">
+      <div><small>DESIGN CHECK</small><strong>Validation summary</strong></div>
+      <button type="button" data-close-dialog aria-label="Close">×</button>
+    </div>
+    <div id="validation-list" class="validation-list"></div>
+  </dialog>
+</body>
+</html>
