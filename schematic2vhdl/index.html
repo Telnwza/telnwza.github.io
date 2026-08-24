@@ -1939,6 +1939,22 @@ function schPortList(sch){
   (sch.components||[]).filter(c=>c.type==="OUT").forEach(c=>out.push({id:uq(c.params.name||"out"), name:c.params.name, dir:"out", width:c.params.width||1}));
   return out;
 }
+/* Apply a per-instance manual port order without changing the port ids themselves.
+   Missing/new ports are appended in the schematic's canonical order, so editing the
+   child sheet never makes a stored order hide a pin. reverseLegacy keeps autosaves
+   made by the short-lived whole-side reverse control readable. */
+function orderedSchPortList(list, order, reverseLegacy){
+  const byId = new Map(list.map(p=>[p.id,p]));
+  const used = new Set();
+  const out = [];
+  if(Array.isArray(order)) order.forEach(id=>{
+    const p = byId.get(id);
+    if(p && !used.has(id)){ out.push(p); used.add(id); }
+  });
+  list.forEach(p=>{ if(!used.has(p.id)) out.push(p); });
+  if((!Array.isArray(order) || !order.length) && reverseLegacy) out.reverse();
+  return out;
+}
 function customPorts(cc){
   // new format: cc.schematic — use the shared, deduped list (name kept for the API)
   if(cc.schematic) return schPortList(cc.schematic).map(p=>({name:p.id, dir:p.dir, width:p.width}));
@@ -1978,26 +1994,41 @@ function schTypeDef(sch){
   // GRID-aligned like the gates: pins every 22px starting at 22, width a multiple
   // of 11 — a snapped instance then has every pin exactly ON a grid point, so
   // wires meet the block dead straight (off-grid pins were a "สายหัก" source)
-  const w = 121, h = 22*(n+1);
+  const defaultW = 121, defaultH = 22*(n+1);
+  const minW = 88, minH = GRID*Math.max(n+1, 4);
+  const maxW = 440, maxH = 660;
+  const gridValue = (value, fallback, min, max)=>{
+    const raw = Number(value);
+    return clamp(Math.round((Number.isFinite(raw) ? raw : fallback)/GRID)*GRID, min, max);
+  };
+  const geometry = p=>({
+    w:gridValue(p&&p.moduleWidth, defaultW, minW, maxW),
+    h:gridValue(p&&p.moduleHeight, defaultH, minH, maxH),
+  });
+  const pinY = (i, count, h)=>Math.round((h*(i+1)/(count+1))/GRID)*GRID;
   return {
     label: sch.name, category:"sch",
-    defaultParams:{}, paramSchema:[],
-    size:_=>({w,h}),
-    ports(){
+    defaultParams:{moduleWidth:defaultW, moduleHeight:defaultH, inputOrder:[], outputOrder:[]},
+    paramSchema:[],
+    size:p=>geometry(p),
+    ports(p){
+      const {w,h} = geometry(p);
       // ids come from the shared deduped list so port-map formals match the
       // sub-entity exactly (an IN+OUT with one name become foo/foo_1, not foo×2)
       const list = schPortList(sch);
-      const insL = list.filter(p=>p.dir==="in"), outsL = list.filter(p=>p.dir==="out");
+      const insL = orderedSchPortList(list.filter(p=>p.dir==="in"), p&&p.inputOrder, p&&p.reverseInputs);
+      const outsL = orderedSchPortList(list.filter(p=>p.dir==="out"), p&&p.outputOrder, p&&p.reverseOutputs);
       const out = [];
-      insL.forEach((p,i)=>out.push({id:p.id,dir:"in",dx:0,dy:22*(i+1),label:p.name,width:p.width}));
-      outsL.forEach((p,i)=>out.push({id:p.id,dir:"out",dx:w,dy:22*(i+1),label:p.name,width:p.width}));
+      insL.forEach((port,i)=>out.push({id:port.id,dir:"in",dx:0,dy:pinY(i,insL.length,h),label:port.name,width:port.width}));
+      outsL.forEach((port,i)=>out.push({id:port.id,dir:"out",dx:w,dy:pinY(i,outsL.length,h),label:port.name,width:port.width}));
       return out;
     },
-    shape:_=>`<rect class="glow" x="6" y="6" width="${w-12}" height="${h-12}" rx="4"
+    shape:p=>{ const {w,h} = geometry(p); return `<rect class="glow" x="6" y="6" width="${w-12}" height="${h-12}" rx="4"
               fill="#1f2a3a" stroke="#5dd5ff" stroke-width="1.7"/>
               <text x="${w/2}" y="${h/2}" text-anchor="middle" font-size="11" font-weight="700" fill="#cfeaff">${esc(sch.name)}</text>
-              <text x="${w/2}" y="${h/2+14}" text-anchor="middle" font-size="9" fill="var(--ink-dim)">(sub-schematic)</text>`,
-    _sch: sch
+              <text x="${w/2}" y="${h/2+14}" text-anchor="middle" font-size="9" fill="var(--ink-dim)">(sub-schematic)</text>`; },
+    _sch: sch,
+    _sizeLimits:{minW,minH,maxW,maxH},
   };
 }
 
@@ -2418,6 +2449,7 @@ function addComp(type, x, y){
     const why = subBlockBlockedWhy(type.slice(4), sch.id);
     if(why){ toast(why, "warn", 3600); return; }
     typeDef0 = schTypeDef(state.project.schematics[type.slice(4)]);
+    params = JSON.parse(JSON.stringify(typeDef0.defaultParams||{}));
   } else {
     if(!TYPES[type]) return;
     typeDef0 = TYPES[type];
@@ -3832,11 +3864,12 @@ function routeCutsBody(sch, w, boxes){
    of routeCutsBody: same rule, checked from the symbol's side, for when it is the GATE
    being moved rather than the wire. Wires touching any dragged component are exempt —
    those are its own connections and they follow its pins by design. */
-function compsCoverWire(sch, comps){
+function compsCoverWire(sch, comps, ignoredWireIds){
   const moving = new Set(comps.map(c=>c && c.id).filter(Boolean));
   const boxes = symbolBoxes(sch).filter(b=>moving.has(b.id));
   if(!boxes.length) return false;
   for(const w of sch.wires){
+    if(ignoredWireIds && ignoredWireIds.has(w.id)) continue;
     const a = comp(w.from.cid, sch), b = comp(w.to.cid, sch);
     if(!a || !b) continue;
     const p1 = portPos(a, w.from.pid), p2 = portPos(b, w.to.pid);
@@ -4296,8 +4329,9 @@ function render(){
     g.appendChild(path);
     // wide invisible hit path (straight route): easy clicking + drag rerouting
     const hit = el("path",{d:r.d, class:"wire-hit"});
+    const movesSelectedGroup = isSel && Array.from(state.selection).some(id=>!!comp(id,sch));
     hit.style.cursor = state.tool==="select"
-      ? (r.kind==="z" ? "ew-resize" : r.kind==="s" ? "ns-resize" : "pointer")
+      ? (movesSelectedGroup ? "move" : r.kind==="z" ? "ew-resize" : r.kind==="s" ? "ns-resize" : "pointer")
       : "inherit";
     hit.addEventListener("mousedown",ev=>{
       if(ev.button !== 0) return;
@@ -4313,6 +4347,15 @@ function render(){
       if(state.pendingWire){ tapWire(w, svgPoint(ev)); return; }
       // shift+alt+click → tap (start a new wire from this point on the wire)
       if(ev.shiftKey && ev.altKey){ tapWire(w, svgPoint(ev)); return; }
+      // After a marquee selection, grabbing any selected wire should move the WHOLE
+      // selected drawing. Previously it rerouted only that segment, immediately ran
+      // into the selected components/junctions and looked "stuck".
+      if(state.selection.has(w.id) && Array.from(state.selection).some(id=>!!comp(id,sch))){
+        if(layoutLocked()){ lockedNudge(); return; }
+        const selected = new Set(state.selection);
+        beginSelectionDrag(ev, null, selected, selected);
+        return;
+      }
       // click = select (on mouseup); drag = move the run you grabbed. Work out WHICH
       // segment is under the cursor so any wire shape can be dragged, not just the
       // single adjustable leg a z/s route happens to have.
@@ -4600,6 +4643,52 @@ function svgPoint(ev){
   return { x:(ev.clientX-r.left - state.view.x)/state.view.k,
            y:(ev.clientY-r.top  - state.view.y)/state.view.k };
 }
+
+/* Manual wire waypoints are absolute canvas coordinates. When every component at
+   both ends belongs to a marquee/group drag, those waypoints are part of the group
+   too and must move by the same delta; otherwise the wire stays behind, crosses its
+   own symbols and trips the body-overlap guard. */
+function captureInternalDragWires(sch, movingIds){
+  const ids = new Set();
+  const routes = [];
+  sch.wires.forEach(w=>{
+    if(!movingIds.has(w.from.cid) || !movingIds.has(w.to.cid)) return;
+    ids.add(w.id);
+    if(!(w.pts || w.autoPts || typeof w.mx==="number" || typeof w.my==="number")) return;
+    routes.push({
+      w,
+      pts:w.pts ? w.pts.map(p=>({x:p.x,y:p.y})) : null,
+      autoPts:w.autoPts ? w.autoPts.map(p=>({x:p.x,y:p.y})) : null,
+      mx:typeof w.mx==="number" ? w.mx : null,
+      my:typeof w.my==="number" ? w.my : null,
+    });
+  });
+  return {ids,routes};
+}
+function placeInternalDragWires(routes, dx, dy){
+  routes.forEach(base=>{
+    if(base.pts) base.w.pts = base.pts.map(p=>({x:p.x+dx,y:p.y+dy})); else delete base.w.pts;
+    if(base.autoPts) base.w.autoPts = base.autoPts.map(p=>({x:p.x+dx,y:p.y+dy})); else delete base.w.autoPts;
+    if(base.mx!==null) base.w.mx = base.mx+dx; else delete base.w.mx;
+    if(base.my!==null) base.w.my = base.my+dy; else delete base.w.my;
+  });
+}
+function beginSelectionDrag(ev, anchorId, selectionIds, prevMulti){
+  const sch = activeSch();
+  const m = svgPoint(ev);
+  const items = Array.from(selectionIds)
+    .map(id=>comp(id,sch)).filter(Boolean)
+    .map(c=>({c, x0:c.x, y0:c.y, ox:m.x-c.x, oy:m.y-c.y}));
+  if(!items.length) return false;
+  const movingIds = new Set(items.map(d=>d.c.id));
+  const internal = captureInternalDragWires(sch, movingIds);
+  const coverAtStart = compsCoverWire(sch, items.map(d=>d.c), internal.ids);
+  state.drag = {items, anchor:anchorId, sx:m.x, sy:m.y, moved:false,
+    shift:ev.shiftKey, prevMulti, coverAtStart,
+    internalWireIds:internal.ids, internalWireRoutes:internal.routes,
+    lastDx:0, lastDy:0};
+  return true;
+}
 /* Selection model — optimistic single-select with multi-restore on drag:
      - Click component        → IMMEDIATELY shows only that one highlighted
      - Release without drag   → selection stays as single (clean click)
@@ -4638,19 +4727,13 @@ function startDrag(ev, c){
     state.selection.clear();
     state.selection.add(c.id);
   }
-  const m = svgPoint(ev);
   // 🔒 freezes POSITIONS: selecting, wiring, renaming and deleting all still work, but
   // nothing already placed can be dragged out of position — by the app OR by hand
   if(layoutLocked()){ lockedNudge(); render(); renderInspector(); return; }
-  const items = Array.from(state.selection)
-    .map(id=>comp(id))
-    .filter(Boolean)
-    .map(cc=>({c:cc, ox:m.x-cc.x, oy:m.y-cc.y}));
-  // If the symbol ALREADY sits on a wire (an old file, a paste, a drop) the no-covering
-  // rule must not trap it there forever — only a drag that CREATES an overlap is
-  // refused, so a bad position can always be dragged out of.
-  const coverAtStart = compsCoverWire(activeSch(), items.map(d=>d.c));
-  state.drag = { items, anchor: c.id, sx: m.x, sy: m.y, moved: false, shift: ev.shiftKey, prevMulti, coverAtStart };
+  // Keep the full pre-click group as the drag payload from mouse-down onward. The
+  // selection highlight is still optimistic/single until movement crosses the
+  // threshold, but the group's offsets never get reset halfway through the gesture.
+  beginSelectionDrag(ev, c.id, prevMulti || new Set(state.selection), prevMulti);
   render(); renderInspector();
 }
 function updateMouseStat(){
@@ -4669,9 +4752,6 @@ canvas.addEventListener("mousemove",ev=>{
       // selection, restore that selection so the whole group moves together
       if(state.drag.prevMulti){
         state.selection = new Set(state.drag.prevMulti);
-        state.drag.items = Array.from(state.selection)
-          .map(id=>comp(id)).filter(Boolean)
-          .map(cc=>({c:cc, ox: state.mouse.x - cc.x, oy: state.mouse.y - cc.y}));
       }
     }
     if(state.drag.moved){
@@ -4685,12 +4765,19 @@ canvas.addEventListener("mousemove",ev=>{
         d.c.x = snap(state.mouse.x - d.ox + q) - q;
         d.c.y = snap(state.mouse.y - d.oy + q) - q;
       });
+      const moveDx = state.drag.items[0].c.x - state.drag.items[0].x0;
+      const moveDy = state.drag.items[0].c.y - state.drag.items[0].y0;
+      placeInternalDragWires(state.drag.internalWireRoutes, moveDx, moveDy);
       // the other half of "สายไฟห้ามทับ logic gate": a symbol may not be parked ON a
       // wire either. Same end state, opposite gesture — so the same answer: hold the
       // last clear position and let the symbol stop against the wire.
-      if(!state.drag.coverAtStart && compsCoverWire(activeSch(), state.drag.items.map(d=>d.c))){
+      if(!state.drag.coverAtStart && compsCoverWire(activeSch(), state.drag.items.map(d=>d.c), state.drag.internalWireIds)){
         state.drag.items.forEach((d,i)=>{ d.c.x = was[i].x; d.c.y = was[i].y; });
+        placeInternalDragWires(state.drag.internalWireRoutes, state.drag.lastDx, state.drag.lastDy);
         bodyBlockNudge();
+      } else {
+        state.drag.lastDx = moveDx;
+        state.drag.lastDy = moveDy;
       }
       render();
     }
@@ -4783,6 +4870,8 @@ window.addEventListener("mouseup",ev=>{
       // a dangling end dragged onto a wire welds into a real junction (and its
       // square then tracks the connection); also cleans up any freed junctions
       const movedComps = state.drag.items.map(d=>d.c);
+      const internalWireIds = new Set(state.drag.internalWireIds || []);
+      const rigidGroup = movedComps.length > 1;
       const draggedJunction = state.drag.items.some(d=>d.c.type==="JUNCTION");
       const anchor = comp(state.drag.anchor);
       state.drag = null;
@@ -4796,7 +4885,12 @@ window.addEventListener("mouseup",ev=>{
       // moving a component/junction reroutes wires — re-slide branch junctions so
       // the connection square stays exactly where the wires diverge (not left
       // behind, and not stranded below a long shared stub of overlapping branches)
-      healLayout(activeSch(), scopeOf(activeSch(), {comps: movedComps}));
+      const moveScope = scopeOf(activeSch(), {comps: movedComps});
+      // A marquee/group drag is a rigid move: its internal junctions and hand-routed
+      // wires already moved by the same delta, so do not immediately auto-retap them
+      // into a different shape. External wires are still healed/rerouted normally.
+      if(rigidGroup) internalWireIds.forEach(id=>moveScope.delete(id));
+      healLayout(activeSch(), moveScope);
       snapshot();
     } else {
       state.drag = null;
@@ -5136,11 +5230,35 @@ function renderInspector(){
       const td = typeDef(c);
       const schema = td && td.paramSchema || [];
       const gateTypes = compatibleGateTypes(c.type);
+      const isSubSchematic = c.type.startsWith("SCH:") && td && td._sch;
+      const subSize = isSubSchematic ? td.size(c.params||{}) : null;
+      const subPorts = isSubSchematic ? schPortList(td._sch) : [];
+      const subInputs = isSubSchematic ? orderedSchPortList(subPorts.filter(p=>p.dir==="in"), c.params&&c.params.inputOrder, c.params&&c.params.reverseInputs) : [];
+      const subOutputs = isSubSchematic ? orderedSchPortList(subPorts.filter(p=>p.dir==="out"), c.params&&c.params.outputOrder, c.params&&c.params.reverseOutputs) : [];
       let html = `<div class="insp"><h3>${esc(td?td.label:c.type)} <span style="font-size:11px;color:var(--muted);font-weight:normal">${esc(c.id)}</span></h3>`;
       if(gateTypes.length){
         html += `<div class="row"><label>Gate type</label><select id="iGateType">
           ${gateTypes.map(type=>`<option value="${type}" ${type===c.type?"selected":""}>${esc(TYPES[type].label)}</option>`).join("")}
         </select></div>`;
+      }
+      if(isSubSchematic){
+        const lim = td._sizeLimits;
+        html += `<div class="row"><label>ขนาด module</label><span style="display:flex;align-items:center;gap:4px">
+          <input id="iModuleWidth" style="width:62px" type="number" step="${GRID}" min="${lim.minW}" max="${lim.maxW}" value="${subSize.w}" title="ความกว้าง">
+          <span style="color:var(--muted)">×</span>
+          <input id="iModuleHeight" style="width:62px" type="number" step="${GRID}" min="${lim.minH}" max="${lim.maxH}" value="${subSize.h}" title="ความสูง">
+        </span></div>`;
+        const orderGroup = (title,dir,ports)=>`<div style="margin-bottom:7px">
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">${title} · บน → ล่าง</div>
+          ${ports.length ? ports.map((port,i)=>`<div style="display:flex;align-items:center;gap:4px;margin:2px 0">
+            <span style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis" title="${esc(port.name||port.id)}">${esc(port.name||port.id)}${port.width>1?` <small>(${port.width} bit)</small>`:""}</span>
+            <button class="btn" data-port-dir="${dir}" data-port-index="${i}" data-port-delta="-1" ${i===0?"disabled":""} title="เลื่อนขึ้น">↑</button>
+            <button class="btn" data-port-dir="${dir}" data-port-index="${i}" data-port-delta="1" ${i===ports.length-1?"disabled":""} title="เลื่อนลง">↓</button>
+          </div>`).join("") : `<span style="font-size:10px;color:var(--muted)">— ไม่มีพอร์ต —</span>`}
+        </div>`;
+        html += `<div class="row" style="align-items:flex-start"><label>จัดพอร์ตเอง</label><span style="min-width:0;flex:1">
+          ${orderGroup("Input","in",subInputs)}${orderGroup("Output","out",subOutputs)}
+        </span></div>`;
       }
       html += `<div class="row"><label>Position</label>
         <span><input style="width:62px" id="iX" value="${c.x}"> <input style="width:62px" id="iY" value="${c.y}"></span></div>`;
@@ -5180,6 +5298,40 @@ function renderInspector(){
         snapshot(); render(); renderInspector();
         toast(`${oldType} → ${nextType} · เก็บ input/output และสายเดิมไว้แล้ว`, "ok", 2200);
       });
+      if(isSubSchematic){
+        const commitSize = (key, input, min, max)=>{
+          const raw = Number(input.value);
+          const value = clamp(Math.round((Number.isFinite(raw)?raw:min)/GRID)*GRID, min, max);
+          c.params = c.params || {};
+          c.params[key] = value;
+          snapshot(); render(); renderInspector();
+        };
+        const bindSizeInput = (selector,key,min,max)=>{
+          const input = $(selector);
+          input.addEventListener("change",()=>commitSize(key,input,min,max));
+          input.addEventListener("keydown",ev=>{
+            if(ev.key!=="Enter") return;
+            ev.preventDefault();
+            commitSize(key,input,min,max);
+          });
+        };
+        bindSizeInput("#iModuleWidth","moduleWidth",td._sizeLimits.minW,td._sizeLimits.maxW);
+        bindSizeInput("#iModuleHeight","moduleHeight",td._sizeLimits.minH,td._sizeLimits.maxH);
+        root.querySelectorAll("[data-port-dir]").forEach(button=>button.addEventListener("click",()=>{
+          const dir = button.dataset.portDir;
+          const ports = dir==="in" ? subInputs : subOutputs;
+          const index = +button.dataset.portIndex;
+          const target = index + (+button.dataset.portDelta);
+          if(target<0 || target>=ports.length) return;
+          const ids = ports.map(p=>p.id);
+          [ids[index],ids[target]] = [ids[target],ids[index]];
+          c.params = c.params || {};
+          c.params[dir==="in" ? "inputOrder" : "outputOrder"] = ids;
+          delete c.params[dir==="in" ? "reverseInputs" : "reverseOutputs"];
+          snapshot(); render(); renderInspector();
+          toast(`จัดตำแหน่ง ${dir==="in"?"Input":"Output"} แล้ว`, "ok", 1400);
+        }));
+      }
       $("#iX").addEventListener("change",ev=>{ c.x = snap(+ev.target.value||0); snapshot(); render(); renderInspector(); });
       $("#iY").addEventListener("change",ev=>{ c.y = snap(+ev.target.value||0); snapshot(); render(); renderInspector(); });
       if($("#iLabel")) $("#iLabel").addEventListener("change",ev=>{
