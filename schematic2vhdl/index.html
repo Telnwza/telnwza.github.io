@@ -11,7 +11,7 @@
   --ink:#e9eef9; --ink-dim:#a8b5d1; --muted:#6c7a99;
   --accent:#5b8def; --accent-2:#7c5cff;
   --ok:#34d399; --warn:#fbbf24; --err:#f87171; --info:#38bdf8;
-  --wire:#5dd5ff; --wire-bus:#c084fc; --wire-sel:#fde68a;
+  --wire:#5dd5ff; --wire-bus:#c084fc; --wire-sel:#fde68a; --wire-open:#fb923c;
   --gate-fill:#1d2940; --gate-stroke:#9bb0d8;
   --in-fill:#14342a; --in-stroke:#34d399; --in-text:#bff0db;
   --out-fill:#3a1f2b; --out-stroke:#f87171; --out-text:#ffd2dc;
@@ -31,7 +31,7 @@
   --ink:#16181d; --ink-dim:#4a5060; --muted:#7c8494;
   --accent:#1a4fd6; --accent-2:#3a2fb0;
   --ok:#0a7d4a; --warn:#9a6400; --err:#c0202a; --info:#0b6ea8;
-  --wire:#0000c8; --wire-bus:#0000c8; --wire-sel:#c0202a;
+  --wire:#0000c8; --wire-bus:#0000c8; --wire-sel:#c0202a; --wire-open:#e14b18;
   --gate-fill:#ffffff; --gate-stroke:#0000c8;
   --in-fill:#ffffff; --in-stroke:#0000c8; --in-text:#0000c8;
   --out-fill:#ffffff; --out-stroke:#0000c8; --out-text:#0000c8;
@@ -251,6 +251,7 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
 .wire-group:hover .wire{stroke-width:3.5;filter:drop-shadow(0 0 5px var(--wire-sel))}
 .wire-group.net-hi .wire{stroke-width:3.5;filter:drop-shadow(0 0 5px var(--wire-sel))}
 .wire-group.sel .wire{filter:drop-shadow(0 0 4px var(--wire-sel))}
+.wire.incomplete{stroke:var(--wire-open)}
 .wire.selected{stroke:var(--wire-sel);filter:drop-shadow(0 0 4px var(--wire-sel))}
 .wire-label{fill:var(--ink-dim);font-size:10.5px;font-family:"JetBrains Mono",monospace;pointer-events:none;text-anchor:middle}
 
@@ -4539,6 +4540,81 @@ function netHasDriver(sch, w, seen){
   return up ? netHasDriver(sch, up, seen) : false;      // a dot with nothing coming in
 }
 
+/* Canvas-only electrical status. Geometry never creates connectivity: two paths may
+   cross or touch, but only shared component/port references and real JUNCTION nodes
+   belong to the same VHDL net. Colour a segment when the generator cannot trace a
+   driver to it, or when that segment ends at a one-wire/free endpoint. This is built
+   once per render (linear apart from small junction walks) rather than calling the
+   recursive validation helpers for every SVG segment. */
+function wireCompletionMap(sch){
+  const result=new Map();
+  if(!sch) return result;
+  const byJ=new Map(), incoming=new Map();
+  const junctionWires=cid=>{
+    if(!byJ.has(cid)) byJ.set(cid,[]);
+    return byJ.get(cid);
+  };
+  sch.wires.forEach(w=>{
+    [w.from,w.to].forEach(ref=>{ const c=comp(ref.cid,sch); if(c&&c.type==="JUNCTION") junctionWires(c.id).push(w); });
+    const tc=comp(w.to.cid,sch);
+    if(tc&&tc.type==="JUNCTION"){
+      if(!incoming.has(tc.id)) incoming.set(tc.id,[]);
+      incoming.get(tc.id).push(w);
+    }
+  });
+  const groupOf=new Map(), groups=[];
+  sch.wires.forEach(seed=>{
+    if(groupOf.has(seed.id)) return;
+    const group={id:groups.length,wires:[],mergeDriven:false}, stack=[seed];
+    groups.push(group);
+    while(stack.length){
+      const w=stack.pop(); if(!w||groupOf.has(w.id)) continue;
+      groupOf.set(w.id,group); group.wires.push(w);
+      [w.from,w.to].forEach(ref=>{
+        const c=comp(ref.cid,sch);
+        if(c&&c.type==="JUNCTION") (byJ.get(c.id)||[]).forEach(x=>{ if(!groupOf.has(x.id)) stack.push(x); });
+        if(c&&c.type==="BUSTAP"&&(c.params||{}).mode!=="split") group.mergeDriven=true;
+      });
+    }
+  });
+  const memo=new Map();
+  const hasDriver=(w,visiting)=>{
+    const group=groupOf.get(w.id);
+    if(group&&group.mergeDriven) return true;
+    if(memo.has(w.id)) return memo.get(w.id);
+    visiting=visiting||new Set();
+    if(visiting.has(w.id)) return false;
+    visiting.add(w.id);
+    const src=comp(w.from.cid,sch);
+    let ok=false;
+    if(src&&src.type!=="JUNCTION"){
+      const p=getPort(src,w.from.pid); ok=!!(p&&p.dir==="out");
+    }else if(src){
+      // Match the VHDL generator's directed junction walk: exactly one upstream
+      // wire should enter a junction; validation reports a separate multi-driver
+      // error when there are several.
+      const up=(incoming.get(src.id)||[])[0];
+      ok=!!(up&&hasDriver(up,visiting));
+    }
+    visiting.delete(w.id); memo.set(w.id,ok); return ok;
+  };
+  const isLoose=ref=>{
+    const c=comp(ref.cid,sch); if(!c||c.type!=="JUNCTION") return false;
+    const degree=(byJ.get(c.id)||[]).length;
+    return !!((c.params||{}).endpoint)||degree<=1;
+  };
+  sch.wires.forEach(w=>{
+    const a=comp(w.from.cid,sch), b=comp(w.to.cid,sch);
+    if(!a||!b||!getPort(a,w.from.pid)||!getPort(b,w.to.pid)){
+      result.set(w.id,"ปลายสายอ้างอิง component หรือ pin ที่ไม่มีอยู่"); return;
+    }
+    const group=groupOf.get(w.id);
+    if(!hasDriver(w)) result.set(w.id,"ไม่มี driver เชื่อมมาถึงสายนี้");
+    else if(!(group&&group.mergeDriven)&&(isLoose(w.from)||isLoose(w.to))) result.set(w.id,"ปลายสายยังลอยอยู่");
+  });
+  return result;
+}
+
 function netDriverPort(sch, w, seen){
   seen = seen || new Set();
   const src = comp(w.from.cid, sch);
@@ -4728,6 +4804,7 @@ function render(){
   // widths are also used by Bus Tap/Junction component rendering below
   const wWidth = new Map();
   sch.wires.forEach(w=>wWidth.set(w.id, wireWidth(w, sch)));
+  const wCompletion = placing ? new Map() : wireCompletionMap(sch);
   if(placing){
     renderPlacementAirwires(root,sch,placement);
   } else {
@@ -4782,12 +4859,17 @@ function render(){
     const r = wireRoutes.get(w.id); if(!r) return;
     const isBus = (wWidth.get(w.id)||1) > 1;
     const isSel = state.selection.has(w.id);
-    const g = el("g",{class:"wire-group"+(isSel?" sel":""), "data-wid": w.id});
+    const incomplete=wCompletion.get(w.id)||"";
+    const g = el("g",{class:"wire-group"+(isSel?" sel":"")+(incomplete?" incomplete":""), "data-wid": w.id});
+    if(incomplete){
+      g.setAttribute("data-incomplete",incomplete);
+      const title=el("title",{}); title.textContent="สายยังต่อไม่ครบ: "+incomplete; g.appendChild(title);
+    }
     // visible path carries hops over crossings so overlaps read clearly
     const D = fastRender ? r.d : hoppedPathD(r, allV, w.id);
     const path = el("path",{d: D,
-      class:"wire"+(isBus?" bus":"")+(isSel?" selected":""),
-      stroke: isSel ? "var(--wire-sel)" : (isBus?"var(--wire-bus)":"var(--wire)")});
+      class:"wire"+(isBus?" bus":"")+(incomplete?" incomplete":"")+(isSel?" selected":""),
+      stroke: isSel ? "var(--wire-sel)" : incomplete ? "var(--wire-open)" : (isBus?"var(--wire-bus)":"var(--wire)")});
     g.appendChild(path);
     // wide invisible hit path (straight route): easy clicking + drag rerouting
     const hit = el("path",{d:r.d, class:"wire-hit"});
@@ -5920,8 +6002,10 @@ function renderInspector(){
     const w = sch.wires.find(x=>x.id===id);
     if(w){
       const hasCustomRoute = (typeof w.mx==="number") || (typeof w.my==="number") || !!(w.pts && w.pts.length);
+      const incompleteReason=wireCompletionMap(sch).get(w.id)||"";
       root.innerHTML = `<div class="insp">
         <h3>Wire</h3>
+        ${incompleteReason?`<div style="margin:0 12px 10px;padding:8px 9px;border:1px solid var(--wire-open);color:var(--wire-open);border-radius:6px;font-size:11px">⚠ สายยังต่อไม่ครบ — ${esc(incompleteReason)}</div>`:""}
         <div class="row"><label>Net name</label><input id="iWireName" value="${esc(w.name||"")}" placeholder="เช่น data หรือ data(7:0)"></div>
         <div class="row"><label>เส้นทาง</label><button class="btn" id="iWireRoute" ${hasCustomRoute?"":"disabled"} title="ลบตำแหน่งที่ลากไว้ ให้ระบบจัดแนวเอง">↺ จัดแนวอัตโนมัติ</button></div>
         <div class="row"><label></label><button class="btn" data-act="delete-sel">🗑 Delete</button></div>
@@ -8189,6 +8273,7 @@ function drawMinimap(){
     return node;
   };
 
+  const minimapCompletion=placementPlacing()?new Map():wireCompletionMap(sch);
   if(!placementPlacing()) sch.wires.forEach(w=>{
     const a=comp(w.from.cid,sch), b=comp(w.to.cid,sch);
     const p=a&&portPos(a,w.from.pid), q=b&&portPos(b,w.to.pid);
@@ -8196,7 +8281,7 @@ function drawMinimap(){
     let bus=false; try{ bus=wireWidth(w,sch)>1; }catch(_){}
     minimapSvg.appendChild(make("line",{
       x1:p.x,y1:p.y,x2:q.x,y2:q.y,
-      stroke:bus?"var(--wire-bus)":"var(--wire)","stroke-width":lineW,opacity:.72
+      stroke:minimapCompletion.has(w.id)?"var(--wire-open)":bus?"var(--wire-bus)":"var(--wire)","stroke-width":lineW,opacity:.72
     }));
   });
   sch.components.filter(c=>c.type!=="JUNCTION").forEach(c=>{
