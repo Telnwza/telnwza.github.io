@@ -555,6 +555,18 @@ path.notation { fill: none; }
 .page-frame { fill: rgba(17, 23, 27, .2); stroke: #566169; stroke-width: 1.2; stroke-dasharray: 8 6; vector-effect: non-scaling-stroke; }
 .page-frame-label-bg { fill: #080a0c; }
 .page-frame-label { fill: #7f8a8b; font: 9px var(--mono); letter-spacing: .08em; }
+.page-frame,
+.page-frame-label-bg,
+.page-frame-label { pointer-events: none; }
+.page-interface-terminal .port-hit-target { pointer-events: all; }
+.page-interface-terminal .port-terminal { stroke: #b7c2c0; stroke-width: 1.8; }
+.page-port-drag-handle { cursor: ns-resize; }
+.page-port-label-hit { fill: transparent; stroke: transparent; pointer-events: all; }
+.page-port-drag-handle:hover .page-port-label-hit { fill: rgba(82, 198, 176, .08); stroke: rgba(82, 198, 176, .34); }
+.page-port-label { fill: #d2dcda; font: 600 10px var(--mono); pointer-events: none; paint-order: stroke; stroke: #080a0c; stroke-width: 4; }
+.page-port-width { fill: #7d8989; font: 8px var(--mono); pointer-events: none; paint-order: stroke; stroke: #080a0c; stroke-width: 3; }
+.page-port-grip { fill: none; stroke: var(--accent); stroke-width: 1.2; pointer-events: none; vector-effect: non-scaling-stroke; }
+.page-interface-port:hover .page-port-label { fill: var(--accent-bright); }
 
 .empty-page {
   position: absolute;
@@ -693,6 +705,12 @@ path.notation { fill: none; }
 .design-rules li::before { content: "-"; position: absolute; left: 0; color: var(--accent-bright); font-family: var(--mono); }
 
 .port-editor { display: grid; gap: 5px; }
+.page-port-editor { gap: 7px; }
+.page-port-help { margin: 0 0 2px; color: var(--dim); font: 8px/1.45 var(--mono); }
+.page-port-editor-row { display: grid; gap: 4px; padding: 5px; border: 1px solid #252d32; background: rgba(8, 11, 13, .46); }
+.page-port-edge-note { color: #738080; font: 8px/1.2 var(--mono); }
+.page-port-side-editor { display: grid; grid-template-columns: 1fr 78px; align-items: center; gap: 6px; color: var(--dim); font: 8px/1 var(--mono); }
+.page-port-side-editor select { padding: 4px 5px; font-size: 8px; }
 .port-row { display: grid; grid-template-columns: minmax(0, 1fr) 54px 42px 55px 22px; gap: 3px; align-items: center; }
 .port-row input,
 .port-row select { padding: 5px 3px; font-size: 8px; }

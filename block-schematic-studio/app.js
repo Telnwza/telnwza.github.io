@@ -6,6 +6,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const STORAGE_KEY = "block-schematic-studio.project.v1";
 const UI_STORAGE_KEY = "block-schematic-studio.ui.v1";
 const GRID = 20;
+const PAGE_INTERFACE_BLOCK_ID = "__page_interface__";
 const HISTORY_LIMIT = 100;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
@@ -18,6 +19,7 @@ const els = {
   svg: document.querySelector("#schematic"),
   viewport: document.querySelector("#viewport-layer"),
   pageFrameLayer: document.querySelector("#page-frame-layer"),
+  pagePortLayer: document.querySelector("#page-port-layer"),
   wireLayer: document.querySelector("#wire-layer"),
   blockLayer: document.querySelector("#block-layer"),
   overlayLayer: document.querySelector("#overlay-layer"),
@@ -46,8 +48,8 @@ const els = {
 };
 
 const library = [
-  { category: "Ports and nets", type: "INPUT", label: "Input", symbol: "IN" },
-  { category: "Ports and nets", type: "OUTPUT", label: "Output", symbol: "OUT" },
+  { category: "Ports and nets", type: "INPUT", label: "Input", symbol: "IN", legacyOnly: true },
+  { category: "Ports and nets", type: "OUTPUT", label: "Output", symbol: "OUT", legacyOnly: true },
   { category: "Ports and nets", type: "INOUT", label: "InOut", symbol: "↔" },
   { category: "Ports and nets", type: "NET_LABEL", label: "Net label", symbol: "N" },
   { category: "Ports and nets", type: "BUS", label: "Bus", symbol: "B8" },
@@ -155,6 +157,24 @@ function clone(value) { return structuredClone(value); }
 
 function port(name, direction, width = 1, notation = "normal", required = true) {
   return { id: id("port"), name, direction, width, notation, required };
+}
+
+function pagePortSide(targetPort) {
+  if (targetPort.direction === "inout") return targetPort.side === "right" ? "right" : "left";
+  return targetPort.direction === "output" ? "right" : "left";
+}
+
+function internalPagePort(targetPort) {
+  if (!targetPort) return null;
+  const direction = targetPort.direction === "input" ? "output" : targetPort.direction === "output" ? "input" : "inout";
+  return { ...targetPort, direction };
+}
+
+function defaultPagePortPosition(page, targetPort) {
+  const side = pagePortSide(targetPort);
+  const sameSide = page.ports.filter((item) => pagePortSide(item) === side);
+  const index = Math.max(0, sameSide.findIndex((item) => item.id === targetPort.id));
+  return .14 + .72 * (index + 1) / (sameSide.length + 1);
 }
 
 function portsForType(type, inputCount = 2) {
@@ -390,17 +410,54 @@ function createSampleProject() {
 
   for (const page of [enables, time, counters, display, scanner, bcdTo7]) page.view.autoFit = true;
 
-  return { schema: "block-schematic-studio", version: 1, name: "Corrected Top-Down Clock", currentPageId: top.id, pages: [top, enables, time, counters, display, scanner, bcdTo7], updatedAt: new Date().toISOString() };
+  return normalizeProject({ schema: "block-schematic-studio", version: 1, name: "Corrected Top-Down Clock", currentPageId: top.id, pages: [top, enables, time, counters, display, scanner, bcdTo7], updatedAt: new Date().toISOString() });
 }
 
 function validProject(candidate) {
   return candidate && candidate.schema === "block-schematic-studio" && Number(candidate.version) === 1 && Array.isArray(candidate.pages) && candidate.pages.length > 0;
 }
 
+function normalizeProject(candidate) {
+  for (const page of candidate.pages || []) {
+    page.ports ||= [];
+    page.blocks ||= [];
+    page.wires ||= [];
+    page.view ||= { x: 100, y: 80, zoom: 1 };
+    const legacyBounds = schematicBounds(page);
+    const removable = new Set();
+    for (const block of page.blocks) {
+      if (!["INPUT", "OUTPUT"].includes(block.type) || block.ports?.length !== 1) continue;
+      const blockPort = block.ports[0];
+      const expectedDirection = block.type === "INPUT" ? "input" : "output";
+      const targetPort = page.ports.find((item) => item.direction === expectedDirection && item.name.trim().toLowerCase() === blockPort.name.trim().toLowerCase());
+      if (!targetPort) continue;
+      if (!Number.isFinite(targetPort.edgePosition)) {
+        targetPort.edgePosition = clamp((block.y + block.h / 2 - legacyBounds.y) / legacyBounds.h, .08, .92);
+      }
+      for (const wire of page.wires) {
+        for (const endpoint of [wire.from, wire.to]) {
+          if (endpoint.blockId === block.id && endpoint.portId === blockPort.id) {
+            endpoint.blockId = PAGE_INTERFACE_BLOCK_ID;
+            endpoint.portId = targetPort.id;
+          }
+        }
+      }
+      removable.add(block.id);
+    }
+    if (removable.size) page.blocks = page.blocks.filter((block) => !removable.has(block.id));
+    for (const targetPort of page.ports) {
+      if (targetPort.direction === "inout" && !["left", "right"].includes(targetPort.side)) targetPort.side = "left";
+      if (!Number.isFinite(targetPort.edgePosition)) targetPort.edgePosition = defaultPagePortPosition(page, targetPort);
+      targetPort.edgePosition = clamp(targetPort.edgePosition, .08, .92);
+    }
+  }
+  return candidate;
+}
+
 function loadInitialProject() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (validProject(stored)) return stored;
+    if (validProject(stored)) return normalizeProject(stored);
   } catch (error) {
     console.warn("Stored project could not be loaded; using the sample project.", error);
   }
@@ -415,6 +472,7 @@ function getPage(pageId) { return project.pages.find((page) => page.id === pageI
 function getBlock(blockId, page = currentPage()) { return page.blocks.find((block) => block.id === blockId); }
 function blockPorts(block) { return block.definitionPageId ? (getPage(block.definitionPageId)?.ports || block.ports) : block.ports; }
 function getPort(blockId, portId, page = currentPage()) {
+  if (blockId === PAGE_INTERFACE_BLOCK_ID) return internalPagePort(page.ports.find((item) => item.id === portId));
   const block = getBlock(blockId, page);
   return block ? blockPorts(block).find((item) => item.id === portId) : null;
 }
@@ -497,6 +555,10 @@ function portPosition(block, targetPort) {
 }
 
 function endpointPosition(endpoint, page = currentPage()) {
+  if (endpoint?.blockId === PAGE_INTERFACE_BLOCK_ID) {
+    const targetPort = page.ports.find((item) => item.id === endpoint.portId);
+    return targetPort ? pagePortPosition(page, targetPort, schematicBounds(page)) : null;
+  }
   const block = getBlock(endpoint?.blockId, page);
   const targetPort = block ? getPort(block.id, endpoint?.portId, page) : null;
   return block && targetPort ? portPosition(block, targetPort) : null;
@@ -636,6 +698,12 @@ function getValidationIssues() {
   const issues = [];
   for (const page of project.pages) {
     const inputDrivers = new Map();
+    for (const targetPort of page.ports) {
+      const connected = page.wires.some((wire) => [wire.from, wire.to].some((endpoint) => endpoint.blockId === PAGE_INTERFACE_BLOCK_ID && endpoint.portId === targetPort.id));
+      if (targetPort.required !== false && !connected) {
+        issues.push({ type: "Unconnected page port", message: `${page.name}.${targetPort.name} is not connected inside the page.`, pageId: page.id });
+      }
+    }
     for (const block of page.blocks) {
       if (block.definitionPageId && !getPage(block.definitionPageId)) {
         issues.push({ type: "Missing page definition", message: `${block.name} refers to a page that does not exist.`, pageId: page.id, blockId: block.id });
@@ -668,7 +736,7 @@ function getValidationIssues() {
       if (driven) {
         const count = (inputDrivers.get(driven) || 0) + 1;
         inputDrivers.set(driven, count);
-        if (count > 1) issues.push({ type: "Multiple drivers", message: `${getBlock(wire.to.blockId, page)?.name}.${toPort.name} has more than one driver.`, pageId: page.id, wireId: wire.id });
+        if (count > 1) issues.push({ type: "Multiple drivers", message: `${endpointLabel(wire.to, page)} has more than one driver.`, pageId: page.id, wireId: wire.id });
       }
     }
   }
@@ -733,7 +801,7 @@ function renderPageTree() {
 
 function renderPartsLibrary() {
   const query = els.partsSearch.value.trim().toLowerCase();
-  const filtered = library.filter((part) => `${part.label} ${part.type} ${part.category}`.toLowerCase().includes(query));
+  const filtered = library.filter((part) => !part.legacyOnly && `${part.label} ${part.type} ${part.category}`.toLowerCase().includes(query));
   const categories = [...new Set(filtered.map((part) => part.category))];
   els.partsLibrary.innerHTML = categories.map((category) => `<details class="part-section" open>
     <summary>${escapeHtml(category)}</summary>
@@ -849,14 +917,15 @@ function renderCanvas() {
   const bounds = schematicBounds(page);
   els.viewport.setAttribute("transform", `translate(${page.view.x} ${page.view.y}) scale(${page.view.zoom})`);
   els.pageFrameLayer.innerHTML = pageFrameMarkup(page, bounds);
+  els.pagePortLayer.innerHTML = pagePortsMarkup(page, bounds);
   els.blockLayer.innerHTML = [...page.blocks].sort((a, b) => a.z - b.z).map(blockMarkup).join("");
   els.wireLayer.innerHTML = page.wires.map((wire) => wireMarkup(wire, errorWireIds)).join("");
   els.overlayLayer.innerHTML = renderOverlay();
   els.canvasWrap.classList.toggle("grid-off", !ui.grid);
-  els.emptyPage.hidden = page.blocks.length > 0;
+  els.emptyPage.hidden = page.blocks.length > 0 || page.ports.length > 0;
   els.draftStatus.hidden = !ui.wireDraft;
   els.zoomStatus.textContent = `${Math.round(page.view.zoom * 100)}%`;
-  els.pageSummary.textContent = `${page.blocks.length} block${page.blocks.length === 1 ? "" : "s"} · ${page.wires.length} net${page.wires.length === 1 ? "" : "s"}`;
+  els.pageSummary.textContent = `${page.ports.length} page port${page.ports.length === 1 ? "" : "s"} · ${page.blocks.length} block${page.blocks.length === 1 ? "" : "s"} · ${page.wires.length} net${page.wires.length === 1 ? "" : "s"}`;
   const pageIssues = issues.filter((issue) => issue.pageId === page.id);
   els.validationStatus.textContent = pageIssues.length ? `${pageIssues.length} design issue${pageIssues.length === 1 ? "" : "s"}` : "✓ Structural checks pass";
   els.validationStatus.classList.toggle("has-issues", pageIssues.length > 0);
@@ -952,13 +1021,16 @@ function pageInspector(page, issues) {
 }
 
 function renderPagePortEditor(page) {
-  return `<div class="port-editor">${page.ports.map((targetPort, index) => `<div class="port-row" data-page-port-row="${targetPort.id}">
-    <input aria-label="Port name" data-port-field="name" value="${escapeHtml(targetPort.name)}">
-    <select aria-label="Port direction" data-port-field="direction">${["input", "output", "inout"].map((value) => `<option ${targetPort.direction === value ? "selected" : ""}>${value}</option>`).join("")}</select>
-    <input aria-label="Port width" data-port-field="width" type="number" min="1" max="64" value="${targetPort.width}">
-    <select aria-label="Port notation" data-port-field="notation">${["normal", "not", "clock", "rising", "falling", "pulse"].map((value) => `<option ${targetPort.notation === value ? "selected" : ""}>${value}</option>`).join("")}</select>
-    <button type="button" data-delete-page-port="${targetPort.id}" aria-label="Delete ${escapeHtml(targetPort.name)}">×</button>
-    <span class="port-reorder"><button type="button" data-move-page-port="${targetPort.id}" data-offset="-1" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-move-page-port="${targetPort.id}" data-offset="1" ${index === page.ports.length - 1 ? "disabled" : ""}>↓</button></span>
+  return `<div class="port-editor page-port-editor"><p class="page-port-help">Input appears on the left, output on the right. Drag its label on the canvas to move it vertically.</p>${page.ports.map((targetPort, index) => `<div class="page-port-editor-row" data-page-port-row="${targetPort.id}">
+    <div class="port-row">
+      <input aria-label="Port name" data-port-field="name" value="${escapeHtml(targetPort.name)}">
+      <select aria-label="Port direction" data-port-field="direction">${["input", "output", "inout"].map((value) => `<option ${targetPort.direction === value ? "selected" : ""}>${value}</option>`).join("")}</select>
+      <input aria-label="Port width" data-port-field="width" type="number" min="1" max="64" value="${targetPort.width}">
+      <select aria-label="Port notation" data-port-field="notation">${["normal", "not", "clock", "rising", "falling", "pulse"].map((value) => `<option ${targetPort.notation === value ? "selected" : ""}>${value}</option>`).join("")}</select>
+      <button type="button" data-delete-page-port="${targetPort.id}" aria-label="Delete ${escapeHtml(targetPort.name)}">×</button>
+      <span class="port-reorder"><button type="button" data-move-page-port="${targetPort.id}" data-offset="-1" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-move-page-port="${targetPort.id}" data-offset="1" ${index === page.ports.length - 1 ? "disabled" : ""}>↓</button></span>
+    </div>
+    ${targetPort.direction === "inout" ? `<label class="page-port-side-editor">Canvas edge <select aria-label="InOut canvas edge" data-port-field="side"><option value="left" ${pagePortSide(targetPort) === "left" ? "selected" : ""}>Left</option><option value="right" ${pagePortSide(targetPort) === "right" ? "selected" : ""}>Right</option></select></label>` : `<span class="page-port-edge-note">${pagePortSide(targetPort) === "left" ? "Left edge · source inside page" : "Right edge · destination inside page"}</span>`}
   </div>`).join("")}<button type="button" class="add-port-button" data-add-page-port>＋ Add page port</button></div>`;
 }
 
@@ -1026,13 +1098,56 @@ function schematicBounds(page = currentPage()) {
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
+function pagePortPosition(page, targetPort, bounds = schematicBounds(page)) {
+  const side = pagePortSide(targetPort);
+  const rawY = bounds.y + clamp(Number(targetPort.edgePosition) || defaultPagePortPosition(page, targetPort), .08, .92) * bounds.h;
+  return {
+    x: side === "right" ? bounds.x + bounds.w : bounds.x,
+    y: clamp(snap(rawY), bounds.y + 28, bounds.y + bounds.h - 28),
+    side,
+  };
+}
+
+function pagePortMarkup(page, targetPort, bounds) {
+  const point = pagePortPosition(page, targetPort, bounds);
+  const side = point.side;
+  const inside = side === "right" ? -1 : 1;
+  const labelX = point.x + inside * 24;
+  const anchor = side === "right" ? "end" : "start";
+  const endpoint = { blockId: PAGE_INTERFACE_BLOCK_ID, portId: targetPort.id };
+  let compatibility = "";
+  if (ui.wireDraft) compatibility = isConnectionCompatible(ui.wireDraft.endpoint, endpoint) ? "is-compatible" : "is-incompatible";
+  const internalDirection = internalPagePort(targetPort).direction;
+  const widthText = targetPort.width > 1 ? ` [${targetPort.width}]` : "";
+  const roleText = targetPort.direction === "input" ? "source inside this page" : targetPort.direction === "output" ? "destination inside this page" : "bidirectional page terminal";
+  const handleX = side === "right" ? point.x - 150 : point.x + 18;
+  return `<g class="page-interface-port" data-page-port-id="${targetPort.id}">
+    <title>${escapeHtml(`${targetPort.name}${widthText} · ${roleText} · drag label vertically`)}</title>
+    <g class="port page-interface-terminal ${compatibility}" data-block-id="${PAGE_INTERFACE_BLOCK_ID}" data-port-id="${targetPort.id}" data-direction="${internalDirection}">
+      <rect class="port-hit-target" x="${point.x - 9}" y="${point.y - 9}" width="18" height="18"/>
+      <line class="port-terminal" x1="${point.x}" y1="${point.y}" x2="${point.x + inside * 16}" y2="${point.y}"/>
+      ${notationMarkup(targetPort, point.x, point.y, side)}
+    </g>
+    <g class="page-port-drag-handle" data-page-port-id="${targetPort.id}" role="slider" aria-label="Move ${escapeHtml(targetPort.name)} vertically">
+      <rect class="page-port-label-hit" x="${handleX}" y="${point.y - 12}" width="132" height="24" rx="2"/>
+      <path class="page-port-grip" d="M ${point.x + inside * 19} ${point.y - 4} v 8 M ${point.x + inside * 22} ${point.y - 4} v 8"/>
+      <text class="page-port-label" x="${labelX}" y="${point.y - 2}" text-anchor="${anchor}">${escapeHtml(targetPort.name)}</text>
+      ${targetPort.width > 1 ? `<text class="page-port-width" x="${labelX}" y="${point.y + 9}" text-anchor="${anchor}">[${targetPort.width}]</text>` : ""}
+    </g>
+  </g>`;
+}
+
 function pageFrameMarkup(page, bounds = schematicBounds(page)) {
   const label = `LEVEL ${pageDepth(page)} · ${layerRole(page)} · ${page.name}`;
-  return `<g class="page-frame-group" aria-hidden="true">
+  return `<g class="page-frame-group">
     <rect class="page-frame" x="${bounds.x}" y="${bounds.y}" width="${bounds.w}" height="${bounds.h}"/>
     <rect class="page-frame-label-bg" x="${bounds.x + 16}" y="${bounds.y - 12}" width="${Math.max(164, label.length * 7.2)}" height="24"/>
     <text class="page-frame-label" x="${bounds.x + 26}" y="${bounds.y + 4}">${escapeHtml(label)}</text>
   </g>`;
+}
+
+function pagePortsMarkup(page, bounds = schematicBounds(page)) {
+  return page.ports.map((targetPort) => pagePortMarkup(page, targetPort, bounds)).join("");
 }
 
 function renderMinimap() {
@@ -1199,6 +1314,10 @@ function duplicatePage(page = currentPage()) {
     copy.wires = copy.wires.map((wire) => {
       wire.id = id("wire");
       for (const endpoint of [wire.from, wire.to]) {
+        if (endpoint.blockId === PAGE_INTERFACE_BLOCK_ID) {
+          endpoint.portId = portMap.get(endpoint.portId) || endpoint.portId;
+          continue;
+        }
         const originalBlock = page.blocks.find((block) => block.id === endpoint.blockId);
         const copiedBlock = copy.blocks.find((block) => blockMap.get(originalBlock?.id) === block.id);
         endpoint.blockId = blockMap.get(endpoint.blockId) || endpoint.blockId;
@@ -1428,6 +1547,23 @@ function portOwnerArray(block) {
   return block?.ports || [];
 }
 
+function removePagePort(page, portId) {
+  page.ports = page.ports.filter((item) => item.id !== portId);
+  for (const candidatePage of project.pages) {
+    const instanceIds = new Set(candidatePage.blocks.filter((block) => block.definitionPageId === page.id).map((block) => block.id));
+    candidatePage.wires = candidatePage.wires.filter((wire) => ![wire.from, wire.to].some((endpoint) => (
+      endpoint.portId === portId
+      && (candidatePage.id === page.id && endpoint.blockId === PAGE_INTERFACE_BLOCK_ID || instanceIds.has(endpoint.blockId))
+    )));
+  }
+}
+
+function addPagePort(page) {
+  const targetPort = port(`P${page.ports.length + 1}`, "input");
+  page.ports.push(targetPort);
+  targetPort.edgePosition = defaultPagePortPosition(page, targetPort);
+}
+
 function handleInspectorChange(event) {
   const fieldName = event.target.dataset.field;
   if (fieldName) {
@@ -1520,14 +1656,23 @@ function handleInspectorClick(event) {
   }
 
   const deletePortId = event.target.closest("[data-delete-port]")?.dataset.deletePort;
-  if (deletePortId && block) transaction("Delete port", () => { const ports = portOwnerArray(block); ports.splice(ports.findIndex((item) => item.id === deletePortId), 1); });
-  if (event.target.closest("[data-add-port]") && block) transaction("Add port", () => portOwnerArray(block).push(port(`P${portOwnerArray(block).length + 1}`, "input")));
+  if (deletePortId && block) transaction("Delete port", () => {
+    if (block.definitionPageId) removePagePort(getPage(block.definitionPageId), deletePortId);
+    else {
+      const ports = portOwnerArray(block);
+      ports.splice(ports.findIndex((item) => item.id === deletePortId), 1);
+    }
+  });
+  if (event.target.closest("[data-add-port]") && block) transaction("Add port", () => {
+    if (block.definitionPageId) addPagePort(getPage(block.definitionPageId));
+    else portOwnerArray(block).push(port(`P${portOwnerArray(block).length + 1}`, "input"));
+  });
   const movePortButton = event.target.closest("[data-move-port]");
   if (movePortButton && block) transaction("Reorder port", () => reorderArrayItem(portOwnerArray(block), movePortButton.dataset.movePort, Number(movePortButton.dataset.offset)));
 
   const deletePagePortId = event.target.closest("[data-delete-page-port]")?.dataset.deletePagePort;
-  if (deletePagePortId) transaction("Delete page port", () => page.ports.splice(page.ports.findIndex((item) => item.id === deletePagePortId), 1));
-  if (event.target.closest("[data-add-page-port]")) transaction("Add page port", () => page.ports.push(port(`P${page.ports.length + 1}`, "input")));
+  if (deletePagePortId) transaction("Delete page port", () => removePagePort(page, deletePagePortId));
+  if (event.target.closest("[data-add-page-port]")) transaction("Add page port", () => addPagePort(page));
   const movePagePortButton = event.target.closest("[data-move-page-port]");
   if (movePagePortButton) transaction("Reorder page port", () => reorderArrayItem(page.ports, movePagePortButton.dataset.movePagePort, Number(movePagePortButton.dataset.offset)));
 }
@@ -1685,7 +1830,9 @@ function exportSvgText() {
   const titleHeight = 44;
   const issues = getValidationIssues();
   const errorWireIds = new Set(issues.filter((issue) => issue.pageId === page.id && issue.wireId).map((issue) => issue.wireId));
-  const frameContent = pageFrameMarkup(page, bounds);
+  const frameContent = `${pageFrameMarkup(page, bounds)}${pagePortsMarkup(page, bounds)}`
+    .replaceAll(/<rect class="page-port-label-hit"[^>]*\/>/g, "")
+    .replaceAll(/<rect class="port-hit-target"[^>]*\/>/g, "");
   const blockContent = [...page.blocks].sort((a, b) => a.z - b.z).map(blockMarkup).join("")
     .replaceAll(/<rect class="resize-handle"[^>]*\/>/g, "")
     .replaceAll(/<rect class="block-hit-area"[^>]*\/>/g, "")
@@ -1695,8 +1842,8 @@ function exportSvgText() {
     .replaceAll(/<rect class="waypoint"[^>]*\/>/g, "");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="${SVG_NS}" width="${Math.ceil(bounds.w)}" height="${Math.ceil(bounds.h + titleHeight)}" viewBox="${bounds.x} ${bounds.y - titleHeight} ${bounds.w} ${bounds.h + titleHeight}">
-<style>
-text{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.block-body,.symbol-body{fill:#12171b;stroke:#8d9997;stroke-width:1.5}.symbol-detail{fill:none;stroke:#8d9997;stroke-width:1.5}.symbol-selection-outline{display:none}.symbol-glyph{fill:#b8c3c1;font-size:10px}.symbol-glyph.is-large{font-size:20px}.block-divider{stroke:#333b42}.block-title{fill:#edf2f1;font:bold 12px sans-serif}.block-type{fill:#7f8b8d;font-size:9px}.port-terminal{stroke:#a2adab;stroke-width:1.5}.port-label{fill:#b5bfbd;font-size:9px}.port-width{fill:#707c7e;font-size:8px}.notation{fill:#12171b;stroke:#d1d9d8;stroke-width:1.3}.notation-text{fill:#c0cac8;font-size:10px}path.notation{fill:none}.wire-line{fill:none;stroke:#93a09f;stroke-width:2;stroke-linejoin:miter}.is-bus .wire-line{stroke:#b0bfbd;stroke-width:4}.is-error .wire-line{stroke:#dc7777;stroke-dasharray:7 5}.wire-label,.bus-width{fill:#c3cecc;font-size:10px;paint-order:stroke;stroke:#080a0c;stroke-width:4px}.bus-slash{stroke:#edf2f1;stroke-width:1.5}.page-title{fill:#edf2f1;font:bold 15px sans-serif}.page-meta{fill:#7f8b8d;font-size:9px}.page-frame{fill:none;stroke:#566169;stroke-width:1.2;stroke-dasharray:8 6}.page-frame-label-bg{fill:#080a0c}.page-frame-label{fill:#7f8a8b;font-size:9px;letter-spacing:.08em}</style>
+  <style>
+text{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.block-body,.symbol-body{fill:#12171b;stroke:#8d9997;stroke-width:1.5}.symbol-detail{fill:none;stroke:#8d9997;stroke-width:1.5}.symbol-selection-outline{display:none}.symbol-glyph{fill:#b8c3c1;font-size:10px}.symbol-glyph.is-large{font-size:20px}.block-divider{stroke:#333b42}.block-title{fill:#edf2f1;font:bold 12px sans-serif}.block-type{fill:#7f8b8d;font-size:9px}.port-terminal{stroke:#a2adab;stroke-width:1.5}.port-label,.page-port-label{fill:#b5bfbd;font-size:9px}.port-width,.page-port-width{fill:#707c7e;font-size:8px}.page-port-grip{fill:none;stroke:#52c6b0;stroke-width:1}.notation{fill:#12171b;stroke:#d1d9d8;stroke-width:1.3}.notation-text{fill:#c0cac8;font-size:10px}path.notation{fill:none}.wire-line{fill:none;stroke:#93a09f;stroke-width:2;stroke-linejoin:miter}.is-bus .wire-line{stroke:#b0bfbd;stroke-width:4}.is-error .wire-line{stroke:#dc7777;stroke-dasharray:7 5}.wire-label,.bus-width{fill:#c3cecc;font-size:10px;paint-order:stroke;stroke:#080a0c;stroke-width:4px}.bus-slash{stroke:#edf2f1;stroke-width:1.5}.page-title{fill:#edf2f1;font:bold 15px sans-serif}.page-meta{fill:#7f8b8d;font-size:9px}.page-frame{fill:none;stroke:#566169;stroke-width:1.2;stroke-dasharray:8 6}.page-frame-label-bg{fill:#080a0c}.page-frame-label{fill:#7f8a8b;font-size:9px;letter-spacing:.08em}</style>
 <rect x="${bounds.x}" y="${bounds.y - titleHeight}" width="${bounds.w}" height="${bounds.h + titleHeight}" fill="#080a0c"/>
 <text class="page-title" x="${bounds.x + 14}" y="${bounds.y - 18}">${escapeHtml(page.name)}</text><text class="page-meta" x="${bounds.x + 14}" y="${bounds.y - 5}">BLOCK SCHEMATIC STUDIO · ${page.blocks.length} BLOCKS · ${page.wires.length} NETS</text>
 <g>${frameContent}${wireContent}${blockContent}</g></svg>`;
@@ -1791,9 +1938,13 @@ function handlePanelResizerKey(event) {
   applyPanelPrefs();
 }
 
-function endpointLabel(endpoint) {
-  const block = getBlock(endpoint?.blockId);
-  const targetPort = block ? getPort(block.id, endpoint?.portId) : null;
+function endpointLabel(endpoint, page = currentPage()) {
+  if (endpoint?.blockId === PAGE_INTERFACE_BLOCK_ID) {
+    const targetPort = page.ports.find((item) => item.id === endpoint.portId);
+    return targetPort ? `${page.name}.${targetPort.name} (page edge)` : "Unknown page port";
+  }
+  const block = getBlock(endpoint?.blockId, page);
+  const targetPort = block ? getPort(block.id, endpoint?.portId, page) : null;
   return block && targetPort ? `${block.name}.${targetPort.name}` : "Unknown port";
 }
 
@@ -1857,10 +2008,21 @@ function onCanvasPointerDown(event) {
   const segmentHandle = event.target.closest?.(".segment-handle");
   const waypointHandle = event.target.closest?.(".waypoint");
   const resizeHandle = event.target.closest?.(".resize-handle");
+  const pagePortHandle = event.target.closest?.(".page-port-drag-handle");
   const targetPort = event.target.closest?.(".port");
   const wireHit = event.target.closest?.(".wire-hit");
   const wireGroup = event.target.closest?.(".wire-group");
   const blockGroup = event.target.closest?.(".block");
+
+  if (pagePortHandle) {
+    event.stopPropagation();
+    clearSelection();
+    ui.wireDraft = null;
+    ui.interaction = { type: "page-port", portId: pagePortHandle.dataset.pagePortId, before: snapshotProject() };
+    els.svg.setPointerCapture(event.pointerId);
+    render();
+    return;
+  }
 
   if (segmentHandle) {
     event.stopPropagation();
@@ -2024,6 +2186,16 @@ function onCanvasPointerMove(event) {
     }
     scheduleCanvasRender();
   }
+  if (interaction.type === "page-port") {
+    const page = currentPage();
+    const targetPort = page.ports.find((item) => item.id === interaction.portId);
+    if (targetPort) {
+      const bounds = schematicBounds(page);
+      const y = clamp(snap(point.y), bounds.y + 28, bounds.y + bounds.h - 28);
+      targetPort.edgePosition = clamp((y - bounds.y) / bounds.h, .08, .92);
+    }
+    scheduleCanvasRender();
+  }
   if (interaction.type === "waypoint") {
     const wire = currentPage().wires.find((item) => item.id === interaction.wireId);
     if (wire?.waypoints[interaction.index]) {
@@ -2067,7 +2239,7 @@ function onCanvasPointerUp(event) {
       });
     }
   }
-  if (["blocks", "resize", "waypoint", "segment"].includes(interaction.type) && snapshotProject() !== interaction.before) {
+  if (["blocks", "resize", "waypoint", "segment", "page-port"].includes(interaction.type) && snapshotProject() !== interaction.before) {
     recordBefore(interaction.before);
     markChanged();
   }
@@ -2248,7 +2420,7 @@ function initializeEvents() {
       const loaded = JSON.parse(await file.text());
       if (!validProject(loaded)) throw new Error("Unsupported project schema or version.");
       recordBefore(snapshotProject());
-      project = loaded;
+      project = normalizeProject(loaded);
       clearSelection();
       ui.wireDraft = null;
       markChanged();
