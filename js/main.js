@@ -17,11 +17,11 @@ const tools = [
   },
   {
     number: "03",
-    title: "Architecture Studio",
-    description: "Map hierarchical digital systems before translating them into HDL or paper schematics.",
+    title: "Block Schematic Studio",
+    description: "Draw hierarchical digital systems with buses, gates, flip-flops, and reusable sub-pages.",
     category: "Digital systems",
     path: "./architecture-studio/",
-    topics: ["Architecture", "FPGA", "Modules", "Buses", "Top-down Design"],
+    topics: ["Schematic", "FPGA", "Flip-Flops", "Buses", "Sub-pages"],
   },
   {
     number: "04",

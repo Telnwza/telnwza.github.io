@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="A local-first workbench for hierarchical digital system architecture diagrams.">
-  <title>Architecture Studio · Visual Learning</title>
+  <title>Block Schematic Studio · Visual Learning</title>
   <link rel="stylesheet" href="./style.css">
   <script src="./app.js" defer></script>
 </head>
@@ -13,7 +13,7 @@
     <header class="topbar">
       <a class="brand" href="../" aria-label="Back to Visual Learning">
         <span class="brand-mark" aria-hidden="true"></span>
-        <span><strong>Architecture Studio</strong><small>Digital systems workbench</small></span>
+        <span><strong>Block Schematic Studio</strong><small>Hierarchical digital logic editor</small></span>
       </a>
       <nav class="toolbar" aria-label="Project tools">
         <button type="button" data-action="new">New</button>
@@ -27,6 +27,7 @@
         <button class="zoom-readout" type="button" data-action="fit">100%</button>
         <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
         <button type="button" data-action="grid" aria-pressed="true">Grid</button>
+        <button type="button" data-action="snap" aria-pressed="true">Snap</button>
         <span class="toolbar-divider" aria-hidden="true"></span>
         <button type="button" data-action="export-svg">SVG</button>
         <button class="primary-button" type="button" data-action="export-png">Export PNG</button>
@@ -53,12 +54,42 @@
           </div>
         </div>
         <div class="library-group">
-          <button class="group-heading" type="button" aria-expanded="true"><span>Logic & routing</span><span>⌃</span></button>
+          <button class="group-heading" type="button" aria-expanded="true"><span>Logic gates</span><span>⌃</span></button>
           <div class="component-grid">
             <button class="compact-component" type="button" draggable="true" data-kind="and"><span>AND</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="nand"><span>NAND</span></button>
             <button class="compact-component" type="button" draggable="true" data-kind="or"><span>OR</span></button>
-            <button class="compact-component" type="button" draggable="true" data-kind="mux"><span>MUX</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="nor"><span>NOR</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="xor"><span>XOR</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="xnor"><span>XNOR</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="not"><span>NOT</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="buffer"><span>BUF</span></button>
+          </div>
+        </div>
+        <div class="library-group">
+          <button class="group-heading" type="button" aria-expanded="true"><span>Flip-flops & sequential</span><span>⌃</span></button>
+          <div class="component-grid">
+            <button class="compact-component" type="button" draggable="true" data-kind="dff"><span>D FF</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="jkff"><span>JK FF</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="tff"><span>T FF</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="srff"><span>SR FF</span></button>
             <button class="compact-component" type="button" draggable="true" data-kind="register"><span>REG</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="counter"><span>COUNT</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="clockdiv"><span>CLK ÷</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="edge"><span>EDGE</span></button>
+          </div>
+        </div>
+        <div class="library-group">
+          <button class="group-heading" type="button" aria-expanded="true"><span>Routing & arithmetic</span><span>⌃</span></button>
+          <div class="component-grid">
+            <button class="compact-component" type="button" draggable="true" data-kind="mux"><span>MUX</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="demux"><span>DEMUX</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="decoder"><span>DEC</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="encoder"><span>ENC</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="adder"><span>ADD</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="subtractor"><span>SUB</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="comparator"><span>COMP</span></button>
+            <button class="compact-component" type="button" draggable="true" data-kind="constant"><span>CONST</span></button>
           </div>
         </div>
       </div>
@@ -69,7 +100,10 @@
         <nav class="breadcrumbs" aria-label="Module path">
           <button type="button">CPU</button><span>›</span><button type="button">Datapath</button>
         </nav>
-        <div class="document-status"><span class="saved-dot" aria-hidden="true"></span>Saved locally</div>
+        <div class="document-actions">
+          <div class="document-status"><span class="saved-dot" aria-hidden="true"></span>Saved locally</div>
+          <button class="compact-panel-toggle" type="button" data-toggle-panel="inspector" aria-expanded="false">Inspector</button>
+        </div>
       </div>
       <section class="canvas" aria-label="Digital architecture canvas" tabindex="0">
         <div class="canvas-stage">
@@ -106,12 +140,13 @@
           <div class="selection-handle nw"></div><div class="selection-handle ne"></div><div class="selection-handle sw"></div><div class="selection-handle se"></div>
         </div>
         <div class="canvas-tools" aria-label="Canvas tools">
-          <button type="button" class="is-active" aria-label="Select tool">↖</button>
-          <button type="button" aria-label="Pan tool">✋</button>
-          <button type="button" aria-label="Wire tool">⌁</button>
-          <button type="button" aria-label="Add text">T</button>
+          <button type="button" class="is-active" aria-label="Select tool" data-canvas-tool="select">↖</button>
+          <button type="button" aria-label="Pan tool" data-canvas-tool="pan">✋</button>
+          <button type="button" aria-label="Wire tool" data-canvas-tool="wire">⌁</button>
+          <button type="button" aria-label="Add text" data-canvas-tool="text">T</button>
         </div>
-        <div class="minimap" aria-label="Canvas minimap"><div class="minimap-viewport"></div><span>DATAPATH</span></div>
+        <div class="canvas-gesture-hint">Two-finger pan · Pinch zoom · Drag port to wire</div>
+        <div class="minimap" aria-label="Canvas minimap"><div class="minimap-map"></div><div class="minimap-viewport"></div><span>DATAPATH</span></div>
       </section>
     </main>
 
@@ -144,7 +179,7 @@
 
     <footer class="statusbar">
       <span>Datapath · 3 blocks · 2 signals</span>
-      <span><kbd>⌘</kbd> + drag to pan</span>
+      <span>Two-finger pan · Pinch zoom · <kbd>Space</kbd> + drag</span>
       <span>Grid 16 px · Snap on</span>
     </footer>
   </div>

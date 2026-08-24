@@ -17,6 +17,9 @@ const sourceFiles = [
   "logic-gates/style.css",
   "logic-gates/logic-engine.js",
   "logic-gates/app.js",
+  "architecture-studio/index.html",
+  "architecture-studio/style.css",
+  "architecture-studio/app.js",
 ];
 
 const mimeTypes = {
