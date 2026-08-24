@@ -136,6 +136,25 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
 .canvas-toolbar button:hover{background:var(--bg-3);color:var(--ink)}
 .canvas-toolbar button.active{background:var(--accent);color:#fff}
 .canvas-toolbar hr{border:none;border-top:1px solid var(--line);margin:2px 3px}
+.placement-bar{position:absolute;left:58px;top:14px;display:flex;align-items:center;gap:7px;
+  min-height:38px;padding:5px 7px 5px 11px;background:var(--bg-2);border:1px solid var(--accent);
+  border-radius:8px;box-shadow:var(--sh-2);font-size:11.5px;color:var(--ink-dim)}
+.placement-bar[hidden]{display:none}
+.placement-bar strong{color:var(--accent);font-size:12px;white-space:nowrap}
+.placement-bar .phase{padding-right:5px;border-right:1px solid var(--line);white-space:nowrap}
+.placement-bar button{background:var(--bg-3);border:1px solid var(--line);color:var(--ink);border-radius:5px;
+  padding:5px 8px;font-size:11px;cursor:pointer;white-space:nowrap}
+.placement-bar button:hover{border-color:var(--accent)}
+.placement-bar button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.placement-bar button.accept{background:var(--ok);border-color:var(--ok);color:#06281c;font-weight:700}
+#app.placement-active .pane{opacity:.55;pointer-events:none}
+#app.placement-active .topbar .proj-name{opacity:.55;pointer-events:none}
+.airwire{fill:none;stroke:var(--accent);stroke-width:1.35;stroke-dasharray:6 5;opacity:.72;
+  pointer-events:none;vector-effect:non-scaling-stroke}
+.airwire.bus{stroke:var(--wire-bus);stroke-width:2.2}
+.airwire-label{font-family:"JetBrains Mono",monospace;font-size:9.5px;fill:var(--ink-dim);
+  paint-order:stroke;stroke:var(--bg-0);stroke-width:4px;stroke-linejoin:round;pointer-events:none}
+.node.placement-component .body{opacity:.96}
 .canvas-hint{position:absolute;left:14px;bottom:14px;background:var(--hint-bg);backdrop-filter:blur(8px);border:1px solid var(--line);padding:7px 28px 7px 12px;border-radius:6px;font-size:11.5px;color:var(--ink-dim);max-width:520px;pointer-events:none}
 .canvas-hint b{color:var(--ink)}
 .canvas-hint .hint-close{pointer-events:auto;position:absolute;top:2px;right:4px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px}
@@ -367,6 +386,16 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
             <hr>
             <button data-act="lock-layout" id="btnLockLayout" title="ล็อกการจัดวาง — สายและจุดจะอยู่กับที่ ไม่มีการจัดใหม่อัตโนมัติ">🔓</button>
             <button data-act="relayout" id="btnRelayout" title="จัดสายใหม่ทั้งแผ่น (ทำครั้งเดียวตามสั่ง)">↻</button>
+            <button data-act="placement-mode" id="btnPlacementMode" title="Placement Mode — ซ่อนสาย จัดตำแหน่ง component แล้วให้ระบบจัดสายใหม่">⤧</button>
+          </div>
+          <div class="placement-bar" id="placementBar" hidden>
+            <strong>Placement Mode</strong>
+            <span class="phase" id="placementPhase">จัด component</span>
+            <button data-act="placement-air" id="placementAir">Airwire: Selected</button>
+            <button data-act="placement-preview" id="placementPreview" class="primary">Preview Wires</button>
+            <button data-act="placement-back" id="placementBack" hidden>← Back</button>
+            <button data-act="placement-accept" id="placementAccept" class="accept" hidden>✓ Accept</button>
+            <button data-act="placement-cancel">Cancel</button>
           </div>
           <div class="canvas-tools">
             <button data-act="zoom-out" title="Zoom out">−</button>
@@ -2054,6 +2083,7 @@ const state = {
   history:{stack:[],idx:-1,muted:false},
   autosaveTimer:null,
   clipboard:null,           // {components:[], wires:[]}
+  placementMode:null,       // transactional component-only placement + wire preview
 };
 function blankProject(){
   const id = uid("sch");
@@ -2071,6 +2101,153 @@ function blankSchematic(id, name){
 /* convenience */
 function activeSch(){ return state.project.schematics[state.activeId]; }
 function comp(cid, sch=activeSch()){ return sch.components.find(c=>c.id===cid); }
+
+/* =========================================================================
+   COMPONENT PLACEMENT MODE
+   The circuit stays electrically intact, but routed geometry disappears while the
+   user arranges symbols. A preview re-routes wires as one transaction; Cancel puts
+   the exact pre-mode schematic back, and Accept creates one Undo step.
+   ========================================================================= */
+const cloneData = value => JSON.parse(JSON.stringify(value));
+function placementForActive(){
+  const pm = state.placementMode;
+  return pm && pm.schId===state.activeId ? pm : null;
+}
+function placementPlacing(){ const pm=placementForActive(); return !!(pm && pm.phase==="placing"); }
+function airEndpointLabel(c, pid){
+  const base = c.label || (c.params && c.params.name) || (c.type.startsWith("SCH:") ? "module" : c.type);
+  return (c.type==="IN" || c.type==="OUT") ? base : `${base}.${pid}`;
+}
+/* Collapse transparent junction chains into logical nets for the lightweight
+   ratsnest/airwire view. Topology is captured once on mode entry; dragging only
+   updates endpoint positions, so even a large sheet stays responsive. */
+function buildPlacementAirNets(sch){
+  const byJ = new Map();
+  sch.wires.forEach(w=>{
+    [w.from,w.to].forEach(ref=>{
+      const c=comp(ref.cid,sch);
+      if(c && c.type==="JUNCTION"){
+        if(!byJ.has(c.id)) byJ.set(c.id,[]);
+        byJ.get(c.id).push(w);
+      }
+    });
+  });
+  const seen = new Set(), nets=[];
+  sch.wires.forEach(seed=>{
+    if(seen.has(seed.id)) return;
+    const queue=[seed], wires=[];
+    while(queue.length){
+      const w=queue.pop(); if(!w || seen.has(w.id)) continue;
+      seen.add(w.id); wires.push(w);
+      [w.from,w.to].forEach(ref=>(byJ.get(ref.cid)||[]).forEach(x=>{ if(!seen.has(x.id)) queue.push(x); }));
+    }
+    const endpoints=[], used=new Set();
+    wires.forEach(w=>[w.from,w.to].forEach(ref=>{
+      const c=comp(ref.cid,sch); if(!c || c.type==="JUNCTION") return;
+      const key=ref.cid+"."+ref.pid; if(used.has(key)) return;
+      used.add(key); endpoints.push({cid:ref.cid,pid:ref.pid});
+    }));
+    if(endpoints.length<2) return;
+    const sources=endpoints.filter(ref=>{
+      const c=comp(ref.cid,sch), p=c&&getPort(c,ref.pid);
+      return p && p.dir==="out";
+    });
+    const anchor=sources[0] || endpoints[0];
+    let width=1;
+    wires.forEach(w=>{ try{ width=Math.max(width,wireWidth(w,sch)||1); }catch(_){} });
+    nets.push({anchor, endpoints:endpoints.filter(e=>e!==anchor), width,
+      name:wires.find(w=>w.name)?.name || ""});
+  });
+  return nets;
+}
+function renderPlacementBar(){
+  const pm=placementForActive(), bar=$("#placementBar"), app=$("#app"), btn=$("#btnPlacementMode");
+  if(!bar) return;
+  bar.hidden=!pm;
+  app.classList.toggle("placement-active",!!pm);
+  if(btn) btn.classList.toggle("active",!!pm);
+  if(!pm) return;
+  const preview=pm.phase==="preview";
+  $("#placementPhase").textContent=preview ? "ตรวจสายที่จัดใหม่" : "ลากจัด component";
+  $("#placementAir").hidden=preview;
+  $("#placementPreview").hidden=preview;
+  $("#placementBack").hidden=!preview;
+  $("#placementAccept").hidden=!preview;
+  const airLabel={selected:"Selected",all:"All",hidden:"Hidden"}[pm.airMode]||"Selected";
+  $("#placementAir").textContent="Airwire: "+airLabel;
+}
+function enterPlacementMode(){
+  const sch=activeSch(); if(!sch || state.placementMode) return;
+  if(sch.locked){ toast("ปลดล็อกการจัดวางก่อนเข้า Placement Mode","warn",3000); return; }
+  state.pendingWire=null; state.wireDrag=null; state.cornerDrag=null;
+  setTool("select",true);
+  state.placementMode={schId:sch.id, baseline:cloneData(sch),
+    previousSelection:[...state.selection], phase:"placing", airMode:"selected",
+    airNets:buildPlacementAirNets(sch)};
+  state.selection=new Set([...state.selection].filter(id=>{ const c=comp(id,sch); return c&&c.type!=="JUNCTION"; }));
+  renderAll();
+  toast("Placement Mode — สายจริงถูกซ่อนชั่วคราว · Enter = Preview · Esc = Cancel","info",4200);
+}
+function restorePlacementBaseline(keepComponentPositions){
+  const pm=placementForActive(); if(!pm) return null;
+  const live=activeSch();
+  const pos=new Map();
+  if(keepComponentPositions) live.components.forEach(c=>{ if(c.type!=="JUNCTION") pos.set(c.id,{x:c.x,y:c.y}); });
+  const restored=cloneData(pm.baseline);
+  if(keepComponentPositions) restored.components.forEach(c=>{
+    const p=pos.get(c.id); if(p && c.type!=="JUNCTION"){ c.x=p.x; c.y=p.y; }
+  });
+  state.project.schematics[pm.schId]=restored;
+  return restored;
+}
+function previewPlacementWires(){
+  const pm=placementForActive(); if(!pm || pm.phase!=="placing") return;
+  pm.previewSelection=[...state.selection];
+  const sch=restorePlacementBaseline(true);
+  sch.wires.forEach(w=>{ delete w.pts; delete w.autoPts; delete w.mx; delete w.my; delete w.zjog; });
+  sch.components.forEach(c=>{
+    if(c.type!=="JUNCTION") return;
+    c.params||(c.params={}); delete c.params.fixed; delete c.params.axis;
+  });
+  healLayout(sch,null,true);
+  pm.routeStats=smartRouteLayout(sch);
+  stampJunctionAxis(sch);
+  pm.phase="preview";
+  state.selection.clear();
+  renderAll();
+  const rs=pm.routeStats;
+  const detail=rs ? ` · Smart Router ${rs.routed}/${rs.total} เส้น · ${rs.bends} มุม` : "";
+  toast("Preview สายใหม่แล้ว"+detail+" — Accept เพื่อบันทึก หรือ Back เพื่อจัด component ต่อ","info",4200);
+}
+function backToPlacement(){
+  const pm=placementForActive(); if(!pm || pm.phase!=="preview") return;
+  restorePlacementBaseline(true);
+  pm.phase="placing";
+  state.selection=new Set((pm.previewSelection||[]).filter(id=>{ const c=comp(id); return c&&c.type!=="JUNCTION"; }));
+  renderAll();
+}
+function acceptPlacement(){
+  const pm=placementForActive(); if(!pm || pm.phase!=="preview") return;
+  state.placementMode=null;
+  state.selection.clear();
+  snapshot(); renderAll(); autosave();
+  toast("บันทึกตำแหน่ง component และจัดสายใหม่แล้ว · Ctrl+Z เพื่อย้อนกลับ","ok",3600);
+}
+function cancelPlacement(){
+  const pm=placementForActive(); if(!pm) return;
+  const prev=pm.previousSelection||[];
+  restorePlacementBaseline(false);
+  state.placementMode=null;
+  state.selection=new Set(prev.filter(id=>!!comp(id)));
+  state.drag=null; state.marquee=null;
+  renderAll();
+  toast("ยกเลิก Placement Mode — คืนตำแหน่งและเส้นทางเดิมแล้ว","info",2600);
+}
+function cyclePlacementAir(){
+  const pm=placementForActive(); if(!pm || pm.phase!=="placing") return;
+  pm.airMode=pm.airMode==="selected" ? "all" : pm.airMode==="all" ? "hidden" : "selected";
+  render();
+}
 
 /* =========================================================================
    HISTORY (undo/redo)
@@ -2369,6 +2546,9 @@ function renderPalette(){
    ========================================================================= */
 function openSchTab(id){
   if(!state.project.schematics[id]) return;
+  if(state.placementMode && id!==state.activeId){
+    toast("จบหรือยกเลิก Placement Mode ก่อนเปลี่ยน schematic","warn",2800); return;
+  }
   state.activeId = id;
   if(!state.openTabs.includes(id)) state.openTabs.push(id);
   state.selection.clear();
@@ -2376,6 +2556,7 @@ function openSchTab(id){
   renderAll();
 }
 function closeSchTab(id){
+  if(state.placementMode){ toast("จบหรือยกเลิก Placement Mode ก่อนปิด schematic","warn",2800); return; }
   state.openTabs = state.openTabs.filter(t=>t!==id);
   if(state.activeId===id){
     state.activeId = state.openTabs[state.openTabs.length-1] || Object.keys(state.project.schematics)[0];
@@ -2501,6 +2682,10 @@ const NUMBER_TOOL_SHORTCUTS = Object.freeze({
   Digit6:"symbol",   Numpad6:"symbol",
 });
 function setTool(t, silent){
+  if(state.placementMode && t!=="select"){
+    if(!silent) toast("Placement Mode ใช้เฉพาะเครื่องมือเลือกและย้าย component","info",2500);
+    return;
+  }
   if(t==="symbol"){ setLeftTab("palette"); toast("ลาก component จากแผง Components ไปวางบน canvas","info",2200); return; }
   if(!TOOL_INFO[t]) t = "select";
   state.tool = t;
@@ -2684,6 +2869,7 @@ function pruneDeadPinWires(){
   return n;
 }
 function deleteSelection(){
+  if(state.placementMode){ toast("Placement Mode ย้ายตำแหน่งเท่านั้น — กด Cancel/Accept ก่อนแก้วงจร","warn",2800); return; }
   const sch = activeSch();
   const ids = new Set(state.selection);
   // freeze every dot's host axis BEFORE the wire set changes — an unstamped dot would
@@ -4033,6 +4219,211 @@ function healLayout(sch, scope, force){
   healJunctions(sch);
   avoidBodies(sch, scope);
 }
+
+/* SMART ROUTER V2 ----------------------------------------------------------
+   Placement Preview is allowed to reconsider every route, so use a global grid
+   instead of choosing an H/L/Z shape one wire at a time. Each A* search sees the
+   component bodies AND the tracks already chosen for the rest of the sheet. The
+   score strongly prefers short orthogonal paths with few bends, then penalises
+   crossings and shared runs. The ordinary interactive router remains untouched;
+   if A* cannot find a clean path, that wire keeps healLayout's proven fallback. */
+const SMART_BEND_COST=9;
+const SMART_SAME_EDGE_COST=16;
+const SMART_OTHER_EDGE_COST=42;
+const SMART_SAME_NODE_COST=3;
+const SMART_OTHER_NODE_COST=14;
+function smartHeapPush(h,n){
+  h.push(n); let i=h.length-1;
+  while(i){ const p=(i-1)>>1; if(h[p].f<=n.f) break; h[i]=h[p]; i=p; }
+  h[i]=n;
+}
+function smartHeapPop(h){
+  const top=h[0], last=h.pop(); if(!h.length) return top;
+  let i=0;
+  while(true){
+    let a=i*2+1; if(a>=h.length) break;
+    let b=a+1, c=(b<h.length && h[b].f<h[a].f)?b:a;
+    if(h[c].f>=last.f) break;
+    h[i]=h[c]; i=c;
+  }
+  h[i]=last; return top;
+}
+const smartNodeKey=(x,y)=>x+","+y;
+const smartStateKey=(x,y,d)=>x+","+y+","+d;
+function smartEdgeKey(x1,y1,x2,y2){
+  return x1<x2 || (x1===x2&&y1<y2) ? `${x1},${y1}|${x2},${y2}` : `${x2},${y2}|${x1},${y1}`;
+}
+function smartPortVector(c,pid,toward,w,sch){
+  const p=portPos(c,pid), sz=getSize(c);
+  if(!p) return {x:1,y:0};
+  if(c.type==="JUNCTION"){
+    const h=portExitH(c,pid,w,sch);
+    if(h) return {x:toward.x>=p.x?1:-1,y:0};
+    return {x:0,y:toward.y>=p.y?1:-1};
+  }
+  const cx=c.x+sz.w/2, cy=c.y+sz.h/2;
+  const dx=p.x-cx, dy=p.y-cy;
+  if(Math.abs(dx)>=Math.abs(dy)) return {x:dx>=0?1:-1,y:0};
+  return {x:0,y:dy>=0?1:-1};
+}
+function smartBlockedGrid(sch,bounds){
+  const blocked=new Set();
+  symbolBoxes(sch).forEach(b=>{
+    const pad=BODY_PAD;
+    const x1=Math.floor((b.x1-pad)/GRID), x2=Math.ceil((b.x2+pad)/GRID);
+    const y1=Math.floor((b.y1-pad)/GRID), y2=Math.ceil((b.y2+pad)/GRID);
+    for(let x=Math.max(bounds.x1,x1);x<=Math.min(bounds.x2,x2);x++){
+      for(let y=Math.max(bounds.y1,y1);y<=Math.min(bounds.y2,y2);y++){
+        const px=x*GRID, py=y*GRID;
+        if(px>b.x1-pad+.5 && px<b.x2+pad-.5 && py>b.y1-pad+.5 && py<b.y2+pad-.5){
+          blocked.add(smartNodeKey(x,y));
+        }
+      }
+    }
+  });
+  return blocked;
+}
+function smartSearch(start,end,startDir,bounds,blocked,edgeUse,nodeUse,netKey){
+  const dirs=[[1,0],[0,1],[-1,0],[0,-1]];
+  const preferred=[];
+  const dx=end.x-start.x, dy=end.y-start.y;
+  if(Math.abs(dx)>=Math.abs(dy)){
+    preferred.push(dx>=0?0:2,dy>=0?1:3,dy>=0?3:1,dx>=0?2:0);
+  }else{
+    preferred.push(dy>=0?1:3,dx>=0?0:2,dx>=0?2:0,dy>=0?3:1);
+  }
+  const heap=[], score=new Map(), parent=new Map();
+  const sk=smartStateKey(start.x,start.y,startDir);
+  score.set(sk,0); smartHeapPush(heap,{x:start.x,y:start.y,d:startDir,g:0,f:Math.abs(dx)+Math.abs(dy)});
+  let goal=null, expanded=0;
+  while(heap.length && expanded++<32000){
+    const cur=smartHeapPop(heap), ck=smartStateKey(cur.x,cur.y,cur.d);
+    if(cur.g!==score.get(ck)) continue;
+    if(cur.x===end.x && cur.y===end.y){ goal=cur; break; }
+    for(const di of preferred){
+      const v=dirs[di], nx=cur.x+v[0], ny=cur.y+v[1];
+      if(nx<bounds.x1||nx>bounds.x2||ny<bounds.y1||ny>bounds.y2) continue;
+      const nk=smartNodeKey(nx,ny);
+      if(blocked.has(nk) && !(nx===end.x&&ny===end.y)) continue;
+      let step=1;
+      if(cur.d>=0 && cur.d!==di) step+=SMART_BEND_COST;
+      const eu=edgeUse.get(smartEdgeKey(cur.x,cur.y,nx,ny));
+      if(eu) step+=eu.net===netKey?SMART_SAME_EDGE_COST:SMART_OTHER_EDGE_COST;
+      const nu=nodeUse.get(nk);
+      if(nu) step+=nu.net===netKey?SMART_SAME_NODE_COST:SMART_OTHER_NODE_COST;
+      // Keep a one-track visual gutter around symbols when a similarly short route
+      // exists. It prevents legal-but-cramped paths that trace a gate outline.
+      if(dirs.some(q=>blocked.has(smartNodeKey(nx+q[0],ny+q[1])))) step+=1.8;
+      const ng=cur.g+step, nd=di, key=smartStateKey(nx,ny,nd);
+      if(ng+1e-6>=(score.get(key)??Infinity)) continue;
+      score.set(key,ng); parent.set(key,ck);
+      const h=Math.abs(end.x-nx)+Math.abs(end.y-ny);
+      smartHeapPush(heap,{x:nx,y:ny,d:nd,g:ng,f:ng+h});
+    }
+  }
+  if(!goal) return null;
+  const path=[]; let key=smartStateKey(goal.x,goal.y,goal.d);
+  while(key){
+    const [x,y]=key.split(",").map(Number); path.push({x,y});
+    if(x===start.x&&y===start.y) break;
+    key=parent.get(key);
+  }
+  path.reverse();
+  // A* works one grid edge at a time; only corners belong in the saved route.
+  const clean=[];
+  path.forEach(p=>{
+    const q={x:p.x*GRID,y:p.y*GRID};
+    clean.push(q);
+    while(clean.length>=3){
+      const a=clean[clean.length-3],b=clean[clean.length-2],c=clean[clean.length-1];
+      if((a.x===b.x&&b.x===c.x)||(a.y===b.y&&b.y===c.y)) clean.splice(clean.length-2,1);
+      else break;
+    }
+  });
+  return {grid:path,points:clean};
+}
+function smartMarkRoute(path,edgeUse,nodeUse,net){
+  if(!path||!path.length) return;
+  path.forEach(p=>{
+    const k=smartNodeKey(p.x,p.y), old=nodeUse.get(k);
+    if(!old) nodeUse.set(k,{net,count:1}); else old.count++;
+  });
+  for(let i=1;i<path.length;i++){
+    const k=smartEdgeKey(path[i-1].x,path[i-1].y,path[i].x,path[i].y), old=edgeUse.get(k);
+    if(!old) edgeUse.set(k,{net,count:1}); else old.count++;
+  }
+}
+function smartFallbackGrid(r){
+  const out=[];
+  routeParts(r).forEach(seg=>{
+    let x1=Math.round((seg.t==="h"?seg.x1:seg.x)/GRID), y1=Math.round((seg.t==="h"?seg.y:seg.y1)/GRID);
+    let x2=Math.round((seg.t==="h"?seg.x2:seg.x)/GRID), y2=Math.round((seg.t==="h"?seg.y:seg.y2)/GRID);
+    const dx=Math.sign(x2-x1),dy=Math.sign(y2-y1); let x=x1,y=y1;
+    if(!out.length||out[out.length-1].x!==x||out[out.length-1].y!==y) out.push({x,y});
+    while(x!==x2||y!==y2){ x+=dx;y+=dy;out.push({x,y}); }
+  });
+  return out;
+}
+function smartRouteLayout(sch){
+  sch=sch||activeSch();
+  if(!sch||!sch.wires.length) return {routed:0,total:0,fallback:0,bends:0};
+  const points=[];
+  sch.components.forEach(c=>{
+    const s=getSize(c); points.push({x:c.x,y:c.y},{x:c.x+s.w,y:c.y+s.h});
+  });
+  const margin=9*GRID;
+  const bounds={
+    x1:Math.floor((Math.min(...points.map(p=>p.x))-margin)/GRID),
+    y1:Math.floor((Math.min(...points.map(p=>p.y))-margin)/GRID),
+    x2:Math.ceil((Math.max(...points.map(p=>p.x))+margin)/GRID),
+    y2:Math.ceil((Math.max(...points.map(p=>p.y))+margin)/GRID)
+  };
+  const blocked=smartBlockedGrid(sch,bounds), edgeUse=new Map(), nodeUse=new Map();
+  const netOf=new Map(), netCount=new Map();
+  sch.wires.forEach(w=>{
+    const d=netDriverPort(sch,w), key=d?d.cid+"."+d.pid:"wire:"+w.id;
+    netOf.set(w.id,key); netCount.set(key,(netCount.get(key)||0)+1);
+  });
+  const jobs=sch.wires.map(w=>{
+    const a=comp(w.from.cid,sch),b=comp(w.to.cid,sch);
+    const p1=a&&portPos(a,w.from.pid),p2=b&&portPos(b,w.to.pid);
+    return {w,a,b,p1,p2,net:netOf.get(w.id),width:wireWidth(w,sch),
+      span:p1&&p2?Math.abs(p2.x-p1.x)+Math.abs(p2.y-p1.y):0};
+  }).filter(j=>j.a&&j.b&&j.p1&&j.p2);
+  // Wide trunks and large fan-out nets reserve the cleanest channels first.
+  jobs.sort((a,b)=>b.width-a.width || (netCount.get(b.net)||0)-(netCount.get(a.net)||0) || b.span-a.span || a.w.id.localeCompare(b.w.id));
+  let routed=0,fallback=0;
+  jobs.forEach(j=>{
+    const w=j.w, opts=wireOpts(w,sch);
+    const oldAuto=w.autoPts?cloneData(w.autoPts):null;
+    const v1=smartPortVector(j.a,w.from.pid,j.p2,w,sch);
+    const v2=smartPortVector(j.b,w.to.pid,j.p1,w,sch);
+    const q1={x:j.p1.x+v1.x*WIRE_MINLEG,y:j.p1.y+v1.y*WIRE_MINLEG};
+    const q2={x:j.p2.x+v2.x*WIRE_MINLEG,y:j.p2.y+v2.y*WIRE_MINLEG};
+    const start={x:Math.round(q1.x/GRID),y:Math.round(q1.y/GRID)};
+    const end={x:Math.round(q2.x/GRID),y:Math.round(q2.y/GRID)};
+    const sd=v1.x>0?0:v1.y>0?1:v1.x<0?2:3;
+    const found=smartSearch(start,end,sd,bounds,blocked,edgeUse,nodeUse,j.net);
+    if(found){
+      const raw=[j.p1,q1,...found.points,q2,j.p2];
+      const pts=orthoPolyline(raw,opts.fromH!==false,opts.toH!==false);
+      w.autoPts=pts.slice(1,-1);
+      if(!routeCutsBody(sch,w)){
+        routed++; smartMarkRoute(found.grid,edgeUse,nodeUse,j.net); return;
+      }
+    }
+    if(oldAuto&&oldAuto.length) w.autoPts=oldAuto; else delete w.autoPts;
+    const r=wireRoute(w,j.p1,j.p2,opts);
+    smartMarkRoute(smartFallbackGrid(r),edgeUse,nodeUse,j.net); fallback++;
+  });
+  let bends=0;
+  sch.wires.forEach(w=>{
+    const a=comp(w.from.cid,sch),b=comp(w.to.cid,sch);
+    const p1=a&&portPos(a,w.from.pid),p2=b&&portPos(b,w.to.pid);
+    if(p1&&p2) bends+=Math.max(0,routeParts(wireRoute(w,p1,p2,wireOpts(w,sch))).length-1);
+  });
+  return {routed,total:jobs.length,fallback,bends};
+}
 /* the wires an edit touches: those given, plus every wire attached to the given
    components (moving a symbol re-routes exactly the wires that hang off it) */
 function scopeOf(sch, {wires=[], comps=[]}={}){
@@ -4283,10 +4674,42 @@ function syncGridBg(){
   host.style.backgroundSize = `${s}px ${s}px, auto`;
   host.style.backgroundPosition = `${mod(state.view.x-1, s)}px ${mod(state.view.y-1, s)}px, 0 0`;
 }
+function renderPlacementAirwires(root, sch, pm){
+  if(!pm || pm.airMode==="hidden") return;
+  const selected=new Set([...state.selection].filter(id=>{ const c=comp(id,sch); return c&&c.type!=="JUNCTION"; }));
+  const defs=el("defs",{});
+  const marker=el("marker",{id:"airArrow",viewBox:"0 0 8 8",refX:7,refY:4,markerWidth:6,markerHeight:6,orient:"auto-start-reverse"});
+  marker.appendChild(el("path",{d:"M0,0 L8,4 L0,8 z",fill:"var(--accent)"}));
+  defs.appendChild(marker); root.appendChild(defs);
+  (pm.airNets||[]).forEach(net=>{
+    const refs=[net.anchor,...net.endpoints];
+    const related=refs.some(ref=>selected.has(ref.cid));
+    if(pm.airMode==="selected" && !related) return;
+    const ac=comp(net.anchor.cid,sch), ap=ac&&portPos(ac,net.anchor.pid);
+    if(!ac||!ap) return;
+    net.endpoints.forEach(ref=>{
+      const tc=comp(ref.cid,sch), tp=tc&&portPos(tc,ref.pid);
+      if(!tc||!tp) return;
+      const line=el("line",{class:"airwire"+(net.width>1?" bus":""),x1:ap.x,y1:ap.y,x2:tp.x,y2:tp.y,
+        "marker-end":"url(#airArrow)"});
+      line.style.opacity=related ? ".88" : ".3";
+      root.appendChild(line);
+      // Labels are most useful on the focused net; drawing them on every net of a
+      // large sheet would replace wire clutter with text clutter.
+      if(related){
+        const label=net.name || `${airEndpointLabel(ac,net.anchor.pid)} → ${airEndpointLabel(tc,ref.pid)}`;
+        const suffix=net.width>1 ? ` ×${net.width}` : "";
+        const t=txt((ap.x+tp.x)/2,(ap.y+tp.y)/2-5,label+suffix,{anchor:"middle",size:9.5});
+        t.setAttribute("class","airwire-label"); root.appendChild(t);
+      }
+    });
+  });
+}
 function render(){
   const sch = activeSch();
   while(canvas.firstChild) canvas.removeChild(canvas.firstChild);
   syncGridBg();
+  renderPlacementBar();
   const lockBtn = $("#btnLockLayout");
   if(lockBtn){
     const on = !!(sch && sch.locked);
@@ -4299,6 +4722,15 @@ function render(){
 
   const root = el("g",{transform:`translate(${state.view.x},${state.view.y}) scale(${state.view.k})`});
   canvas.appendChild(root);
+
+  const placement=placementForActive();
+  const placing=!!(placement && placement.phase==="placing");
+  // widths are also used by Bus Tap/Junction component rendering below
+  const wWidth = new Map();
+  sch.wires.forEach(w=>wWidth.set(w.id, wireWidth(w, sch)));
+  if(placing){
+    renderPlacementAirwires(root,sch,placement);
+  } else {
 
   // wires — resolve routes in two passes so automatic routes dodge both
   // manually-adjusted segments and each other (no overlapping vertical runs)
@@ -4346,9 +4778,6 @@ function render(){
       if(part.t==="v") allV.push({x:part.x, y1:part.y1, y2:part.y2, wid});
     });
   });
-  // widths derived once per frame from the driving ports (never cached on a wire)
-  const wWidth = new Map();
-  sch.wires.forEach(w=>wWidth.set(w.id, wireWidth(w, sch)));
   const drawWire = w=>{
     const r = wireRoutes.get(w.id); if(!r) return;
     const isBus = (wWidth.get(w.id)||1) > 1;
@@ -4513,6 +4942,7 @@ function render(){
       (pw.pts||[]).forEach(p=>root.appendChild(el("circle",{cx:p.x,cy:p.y,r:2.5,fill:"var(--accent-2)","pointer-events":"none"})));
     }
   }
+  }
 
   // marquee (rectangle selection)
   if(state.marquee && state.marquee.moved){
@@ -4529,6 +4959,7 @@ function render(){
 
   // components
   sch.components.forEach(c=>{
+    if(placing && c.type==="JUNCTION") return;       // routing artifact: hidden until Preview
     const td = typeDef(c); if(!td) return;
     const sz = td.size(c.params||{});
     const isSel = state.selection.has(c.id);
@@ -4536,7 +4967,7 @@ function render(){
     let ntf = `translate(${c.x},${c.y})`;
     if(rot)      ntf += ` rotate(${rot} ${sz.w/2} ${sz.h/2})`;
     if(c.mirror) ntf += ` translate(${sz.w} 0) scale(-1 1)`;
-    const g = el("g",{class:"node"+(isSel?" selected":""),transform:ntf});
+    const g = el("g",{class:"node"+(isSel?" selected":"")+(placing?" placement-component":""),transform:ntf});
     const body = el("g",{class:"body"});
     body.innerHTML = td.shape(c.params||{});
     if(c.type==="BUSTAP"){
@@ -4583,7 +5014,7 @@ function render(){
 
     // ports — a JUNCTION keeps only its body dot: click = wire, drag = move
     // (handled in startDrag/mouseup), so no port overlay is added for it
-    if(c.type!=="JUNCTION") td.ports(c.params||{}).forEach(p=>{
+    if(c.type!=="JUNCTION" && !placing) td.ports(c.params||{}).forEach(p=>{
       const isOut = p.dir==="out";
       const isPending = state.pendingWire && state.pendingWire.cid===c.id && state.pendingWire.pid===p.id;
       const pg = el("g",{class:"port"+(isPending?" pending":"")});
@@ -4659,6 +5090,7 @@ let lastComponentClick = null;
    still resolve to the same component. */
 function handleComponentDoubleClick(ev, c){
   if(ev.button!==0) return false;
+  if(state.placementMode){ lastComponentClick=null; return false; }
   const now = performance.now();
   const key = state.activeId + ":" + c.id;
   const prev = lastComponentClick;
@@ -4718,12 +5150,15 @@ function beginSelectionDrag(ev, anchorId, selectionIds, prevMulti){
     .map(c=>({c, x0:c.x, y0:c.y, ox:m.x-c.x, oy:m.y-c.y}));
   if(!items.length) return false;
   const movingIds = new Set(items.map(d=>d.c.id));
-  const internal = captureInternalDragWires(sch, movingIds, selectionIds);
-  const coverAtStart = compsCoverWire(sch, items.map(d=>d.c), internal.ids);
+  // Placement Mode freezes hidden route geometry until Preview; component motion
+  // must not drag old waypoints or collide against wires the user cannot see.
+  const inPlacement=placementPlacing();
+  const internal=inPlacement ? {ids:new Set(),routes:[]} : captureInternalDragWires(sch,movingIds,selectionIds);
+  const coverAtStart=inPlacement || compsCoverWire(sch,items.map(d=>d.c),internal.ids);
   state.drag = {items, anchor:anchorId, sx:m.x, sy:m.y, moved:false,
     shift:ev.shiftKey, prevMulti, coverAtStart,
     internalWireIds:internal.ids, internalWireRoutes:internal.routes,
-    lastDx:0, lastDy:0, freeGroup:items.length>1};
+    lastDx:0, lastDy:0, freeGroup:inPlacement||items.length>1};
   return true;
 }
 /* Selection model — optimistic single-select with multi-restore on drag:
@@ -4739,6 +5174,9 @@ function beginSelectionDrag(ev, anchorId, selectionIds, prevMulti){
 function startDrag(ev, c){
   if(ev.button !== 0) return;          // only respond to left mouse button
   ev.stopPropagation();
+  if(state.placementMode && !placementPlacing()){
+    toast("อยู่หน้า Preview — กด Back ก่อนขยับ component ต่อ","info",2400); return;
+  }
   if(state.spaceDown){ startPan(ev); return; }   // Space+drag pans from anywhere
   if(state.tool!=="select"){
     // drawing tools don't move parts; a junction still acts as a wire source
@@ -4933,6 +5371,11 @@ window.addEventListener("mouseup",ev=>{
       const draggedJunction = state.drag.items.some(d=>d.c.type==="JUNCTION");
       const anchor = comp(state.drag.anchor);
       state.drag = null;
+      if(placementPlacing()){
+        // The whole placement session is one edit: do not route or snapshot after
+        // each drag. Preview/Accept performs both once when the user is ready.
+        render(); renderInspector(); return;
+      }
       // A dot the user dragged by hand is THEIRS: pin it, or the auto re-tap below
       // recomputes the "nearest take-off" and drags it straight back — which reads
       // as the dot being unmovable. Delete the dot to hand the net back to auto.
@@ -4986,6 +5429,7 @@ window.addEventListener("mouseup",ev=>{
       const y2 = Math.max(state.marquee.sy, state.marquee.ey);
       // a component (incl. junctions) is selected if its bounding box intersects
       sch.components.forEach(c=>{
+        if(placementPlacing() && c.type==="JUNCTION") return;
         const sz = getSize(c);
         if(c.x+sz.w >= x1 && c.x <= x2 && c.y+sz.h >= y1 && c.y <= y2){
           state.selection.add(c.id);
@@ -5002,7 +5446,7 @@ window.addEventListener("mouseup",ev=>{
         const ya=Math.min(part.y1,part.y2), yb=Math.max(part.y1,part.y2);
         return part.x>=x1 && part.x<=x2 && yb>=y1 && ya<=y2;
       };
-      sch.wires.forEach(w=>{
+      if(!placementPlacing()) sch.wires.forEach(w=>{
         const a = comp(w.from.cid, sch), b = comp(w.to.cid, sch);
         if(!a||!b) return;
         const p1 = portPos(a,w.from.pid), p2 = portPos(b,w.to.pid);
@@ -5102,6 +5546,21 @@ window.addEventListener("keydown",ev=>{
   const k = (ev.key||"").toLowerCase();
   const ctl = ev.ctrlKey||ev.metaKey;
   const numberTool = !ctl && !ev.altKey && !ev.shiftKey ? NUMBER_TOOL_SHORTCUTS[code] : null;
+  const pm=placementForActive();
+  if(pm){
+    if(ev.key==="Escape"){ cancelPlacement(); ev.preventDefault(); return; }
+    if(ev.key==="Enter"){
+      if(pm.phase==="placing") previewPlacementWires(); else acceptPlacement();
+      ev.preventDefault(); return;
+    }
+    const blockedPlain=["KeyW","KeyN","KeyB","KeyI","KeyS","KeyR","KeyM","F7"].includes(code)
+      || ev.key==="Delete" || ev.key==="Backspace" || !!numberTool;
+    const blockedCtrl=ctl && ["KeyZ","KeyY","KeyD","KeyC","KeyV","KeyX","KeyS","KeyO","KeyN"].includes(code);
+    if(blockedPlain || blockedCtrl){
+      toast("Placement Mode ย้ายตำแหน่งเท่านั้น — Preview/Accept หรือ Cancel ก่อนแก้วงจร","info",2600);
+      ev.preventDefault(); return;
+    }
+  }
   if(ev.key==="Enter" && state.pendingWire && state.pendingWire.pts){
     finishWireInSpace();   // end the wire in open space (free bus stub)
     ev.preventDefault();
@@ -5135,7 +5594,9 @@ window.addEventListener("keydown",ev=>{
   } else if(ctl && (code==="KeyY" || k==="y")){ redo(); ev.preventDefault(); }
   else if(ctl && (code==="KeyA" || k==="a")){   // select EVERYTHING on the sheet
     const sch = activeSch();
-    state.selection = new Set([...sch.components.map(c=>c.id), ...sch.wires.map(w=>w.id)]);
+    state.selection = placementPlacing()
+      ? new Set(sch.components.filter(c=>c.type!=="JUNCTION").map(c=>c.id))
+      : new Set([...sch.components.map(c=>c.id), ...sch.wires.map(w=>w.id)]);
     render(); renderInspector(); ev.preventDefault();
   }
   else if(ctl && (code==="KeyD" || k==="d")){ duplicateSelection(); ev.preventDefault(); }
@@ -5156,15 +5617,17 @@ window.addEventListener("keydown",ev=>{
     const selComps = Array.from(state.selection).map(id=>comp(id)).filter(Boolean);
     if(selComps.length && layoutLocked()){ lockedNudge(); ev.preventDefault(); return; }
     if(selComps.length){
+      const inPlacement=placementPlacing();
       // nudge selected components one grid step (a junction snaps by its DOT, which
       // sits at box+6 — snapping the box would drift it half a grid off the lines)
-      const wasClear = !compsCoverWire(activeSch(), selComps);
+      const wasClear = !inPlacement && !compsCoverWire(activeSch(), selComps);
       const was = selComps.map(c=>({x:c.x, y:c.y}));
       selComps.forEach(c=>{
         const q = c.type==="JUNCTION" ? 6 : 0;
         c.x = snap(c.x + q + dx*GRID) - q;
         c.y = snap(c.y + q + dy*GRID) - q;
       });
+      if(inPlacement){ render(); ev.preventDefault(); return; }
       // a nudge may not park a symbol on a wire either (same rule as the mouse drag)
       if(wasClear && compsCoverWire(activeSch(), selComps)){
         selComps.forEach((c,i)=>{ c.x = was[i].x; c.y = was[i].y; });
@@ -5200,6 +5663,7 @@ window.addEventListener("blur",()=>{ state.spaceDown = false; if(!state.pan) can
 canvas.addEventListener("dragover",ev=>ev.preventDefault());
 canvas.addEventListener("drop",ev=>{
   ev.preventDefault();
+  if(state.placementMode){ toast("Placement Mode ย้าย component ที่มีอยู่เท่านั้น","info",2400); return; }
   const t = state.dragType || (ev.dataTransfer && ev.dataTransfer.getData("text/plain"));
   if(t){
     const m = svgPoint(ev);
@@ -6883,6 +7347,10 @@ function exportAllVhdl(){
    AUTO-SAVE (localStorage)
    ========================================================================= */
 function autosave(){
+  if(state.placementMode){
+    $("#statAutosave").innerHTML = `<span>autosave: paused (Placement Mode)</span>`;
+    return;
+  }
   try{
     localStorage.setItem(AUTOSAVE_KEY, serialize());
     $("#statAutosave").innerHTML = `<span class="ok">autosave: ✓ ${new Date().toLocaleTimeString()}</span>`;
@@ -7477,7 +7945,18 @@ document.addEventListener("click",ev=>{
   const a = ev.target.closest("[data-act]");
   if(!a) return;
   const act = a.dataset.act;
+  const placementAllowed=new Set(["placement-mode","placement-air","placement-preview","placement-back",
+    "placement-accept","placement-cancel","zoom-in","zoom-out","zoom-100","zoom-fit","theme","toggle-hops","show-hint"]);
+  if(state.placementMode && !placementAllowed.has(act)){
+    toast("จบหรือยกเลิก Placement Mode ก่อนใช้คำสั่งนี้","info",2500); return;
+  }
   switch(act){
+    case "placement-mode": enterPlacementMode(); break;
+    case "placement-air": cyclePlacementAir(); break;
+    case "placement-preview": previewPlacementWires(); break;
+    case "placement-back": backToPlacement(); break;
+    case "placement-accept": acceptPlacement(); break;
+    case "placement-cancel": cancelPlacement(); break;
     case "new-project": newProject(); break;
     case "open-project": openProjectFromFile(); break;
     case "save-project": saveProjectToFile(); break;
@@ -7710,7 +8189,7 @@ function drawMinimap(){
     return node;
   };
 
-  sch.wires.forEach(w=>{
+  if(!placementPlacing()) sch.wires.forEach(w=>{
     const a=comp(w.from.cid,sch), b=comp(w.to.cid,sch);
     const p=a&&portPos(a,w.from.pid), q=b&&portPos(b,w.to.pid);
     if(!p||!q) return;
@@ -7767,7 +8246,8 @@ function updateStatus(){
   updateMouseStat();   // keep the zoom % current after wheel/button zoom
   const sch = activeSch();
   if(!sch){ $("#statCounts").textContent = "no schematic"; return; }
-  $("#statCounts").textContent = `${sch.components.length} components · ${sch.wires.length} wires · top: ${state.project.schematics[state.project.topId]?.name||"-"}`;
+  const mode=placementForActive() ? ` · PLACEMENT: ${placementPlacing()?"components":"wire preview"}` : "";
+  $("#statCounts").textContent = `${sch.components.length} components · ${sch.wires.length} wires · top: ${state.project.schematics[state.project.topId]?.name||"-"}${mode}`;
 }
 
 /* =========================================================================
