@@ -568,6 +568,7 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
             <tr><td class="k">COMPARATOR</td><td class="k">COMP · COMPM</td><td>COMP ตรวจ “เท่ากัน” · COMPM ให้ผล “มากกว่า/น้อยกว่า” ขนาด 2 และ 4 บิตแยกขาทีละบิต ส่วน 8 และ 16 บิตใช้ขาบัสข้างละเส้น</td></tr>
             <tr><td class="k">BUS TAP</td><td class="k">Bus Tap</td><td>จุดแตกหรือรวมบิตบนสายบัส ดูหัวข้อ 04</td></tr>
             <tr><td class="k">FLIP-FLOPS</td><td class="k">D-FF · JK-FF · T-FF · SR-FF</td><td>ต้องต่อขา CLK เสมอ ไม่งั้นจะไม่ถูกสร้างเป็นวงจร</td></tr>
+            <tr><td class="k">DOCUMENTATION</td><td class="k">MODULE FRAME</td><td>กรอบเส้นประสำหรับจัดกลุ่มวงจร ปรับกว้าง×สูงเป็นหน่วยช่องตารางได้ ไม่มีพอร์ตและไม่สร้าง VHDL</td></tr>
           </tbody>
         </table>
       </div>
@@ -963,6 +964,7 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 const canvas = $("#canvas");
 
 const GRID = 11;            // snap-to-grid step (px)
+const FRAME_CELL = 2*GRID;   // one visible dot-grid cell (22px)
 const AUTOSAVE_KEY = "schstudio.autosave.v2";
 const AUTOSAVE_MS = 4000;
 // crossing style: "plain" = clean ISE-style crossings, "hop" = bump over
@@ -1580,10 +1582,34 @@ const TYPES = {
               <text x="74" y="59" text-anchor="end" font-size="10" fill="var(--ink-dim)">Q̅</text>
               <g transform="translate(6,0)">${tri}</g>`;
     }
+  },
+
+  /* ---------- Documentation only ---------- */
+  MODULE_FRAME: {
+    label:"MODULE FRAME", category:"doc",
+    defaultParams:{widthCells:20, heightCells:11},
+    paramSchema:[
+      {key:"widthCells",  label:"ความกว้าง (ช่อง)", type:"int", min:4, max:80},
+      {key:"heightCells", label:"ความสูง (ช่อง)",   type:"int", min:3, max:60},
+    ],
+    size(p){
+      const w = clamp(Math.round(Number(p.widthCells)||20), 4, 80) * FRAME_CELL;
+      const h = clamp(Math.round(Number(p.heightCells)||11), 3, 60) * FRAME_CELL;
+      return {w,h};
+    },
+    ports:_=>[],
+    shape(p){
+      const {w,h} = this.size(p);
+      return `<rect class="glow" x="1" y="1" width="${w-2}" height="${h-2}"
+                fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="7 5"
+                vector-effect="non-scaling-stroke" pointer-events="stroke"/>`;
+    }
   }
 };
 
 /* ---------- helpers for type system ---------- */
+const DOCUMENTATION_TYPES = new Set(["MODULE_FRAME"]);
+const isDocumentationComponent = c => !!c && DOCUMENTATION_TYPES.has(c.type);
 function typeDef(c){
   if(c.type.startsWith("CUSTOM:")){
     const name = c.type.slice(7);
@@ -2505,6 +2531,7 @@ function renderPalette(){
     ["cmp",  "COMPARATOR"],
     ["bus",  "BUS TAP"],
     ["ff",   "FLIP-FLOPS"],
+    ["doc",  "DOCUMENTATION"],
   ];
   const html = [`<div class="palette">`];
   for(const [cat,name] of groups){
@@ -3045,7 +3072,7 @@ function portPos(c, pid){
 }
 /* Rotate / mirror placed symbols (ISE ECS-style). Bus taps/rippers carry their
    own orientation and junctions have none, so they are skipped. */
-function orientable(c){ return !!c && c.type!=="JUNCTION"; }
+function orientable(c){ return !!c && c.type!=="JUNCTION" && !isDocumentationComponent(c); }
 function rotateSelection(step){       // step +1 = CW 90°, -1 = CCW 90°
   const sch = activeSch();
   const cs = [...state.selection].map(id=>comp(id, sch)).filter(orientable);
@@ -3591,7 +3618,7 @@ const GRAB_CLEAR = WIRE_MINLEG;
 function bodyClearance(pt, sch){
   let d = Infinity;
   for(const c of sch.components){
-    if(c.type==="JUNCTION") continue;            // dots may meet dots; only symbols push back
+    if(c.type==="JUNCTION" || isDocumentationComponent(c)) continue;
     const td = typeDef(c); if(!td || !td.size) continue;
     const s = td.size(c.params||{});
     const dx = Math.max(c.x - pt.x, 0, pt.x - (c.x + s.w));
@@ -4036,7 +4063,7 @@ function retapBranches(sch, scope){
    and neither is a BUS TAP: it is mounted FLUSH on its bus by design, so treating it
    as an obstacle would push the bus trunk off its own tap. */
 function symbolBoxes(sch){
-  return sch.components.filter(c=>c.type!=="JUNCTION").map(c=>{
+  return sch.components.filter(c=>c.type!=="JUNCTION" && !isDocumentationComponent(c)).map(c=>{
     const td = typeDef(c), s = td && td.size ? td.size(c.params||{}) : {w:0,h:0};
     return { id:c.id, x1:c.x, y1:c.y, x2:c.x+s.w, y2:c.y+s.h };
   });
@@ -4369,7 +4396,7 @@ function smartRouteLayout(sch){
   sch=sch||activeSch();
   if(!sch||!sch.wires.length) return {routed:0,total:0,fallback:0,bends:0};
   const points=[];
-  sch.components.forEach(c=>{
+  sch.components.filter(c=>!isDocumentationComponent(c)).forEach(c=>{
     const s=getSize(c); points.push({x:c.x,y:c.y},{x:c.x+s.w,y:c.y+s.h});
   });
   const margin=9*GRID;
@@ -5843,6 +5870,10 @@ function renderInspector(){
       const subInputs = isSubSchematic ? orderedSchPortList(subPorts.filter(p=>p.dir==="in"), c.params&&c.params.inputOrder, c.params&&c.params.reverseInputs) : [];
       const subOutputs = isSubSchematic ? orderedSchPortList(subPorts.filter(p=>p.dir==="out"), c.params&&c.params.outputOrder, c.params&&c.params.reverseOutputs) : [];
       let html = `<div class="insp"><h3>${esc(td?td.label:c.type)} <span style="font-size:11px;color:var(--muted);font-weight:normal">${esc(c.id)}</span></h3>`;
+      if(isDocumentationComponent(c)){
+        html += `<div style="margin:0 12px 10px;padding:8px 9px;border-left:3px solid var(--accent);background:var(--bg-2);color:var(--ink-dim);font-size:11px;line-height:1.5">
+          กรอบประกอบคำอธิบายเท่านั้น · ไม่มีพอร์ต · ไม่เข้า Check และไม่สร้าง VHDL</div>`;
+      }
       if(gateTypes.length){
         html += `<div class="row"><label>Gate type</label><select id="iGateType">
           ${gateTypes.map(type=>`<option value="${type}" ${type===c.type?"selected":""}>${esc(TYPES[type].label)}</option>`).join("")}
@@ -6115,7 +6146,8 @@ function combinationalLoops(sch){
     if(!s) return null;
     return s.type==="JUNCTION" ? srcOf(s.id, "j", seen) : s;
   };
-  const nodes = sch.components.filter(c=>!["IN","OUT","VCC","GND","JUNCTION"].includes(c.type) && !SEQ_TYPES.has(c.type));
+  const nodes = sch.components.filter(c=>!["IN","OUT","VCC","GND","JUNCTION"].includes(c.type)
+    && !SEQ_TYPES.has(c.type) && !isDocumentationComponent(c));
   const idset = new Set(nodes.map(c=>c.id));
   const adj = new Map();
   nodes.forEach(c=>{
@@ -6450,7 +6482,8 @@ function generateSchVhdl(sch){
 
   const inputs  = sch.components.filter(c=>c.type==="IN");
   const outputs = sch.components.filter(c=>c.type==="OUT");
-  const inners  = sch.components.filter(c=>!["IN","OUT","VCC","GND"].includes(c.type));
+  const inners  = sch.components.filter(c=>!["IN","OUT","VCC","GND"].includes(c.type)
+    && !isDocumentationComponent(c));
 
   // assign net names
   const used = {};
@@ -8285,12 +8318,14 @@ function drawMinimap(){
     }));
   });
   sch.components.filter(c=>c.type!=="JUNCTION").forEach(c=>{
-    const size=getSize(c), selected=state.selection.has(c.id);
-    minimapSvg.appendChild(make("rect",{
+    const size=getSize(c), selected=state.selection.has(c.id), documentation=isDocumentationComponent(c);
+    const node=make("rect",{
       x:c.x,y:c.y,width:size.w,height:size.h,rx:Math.max(2,worldW/240),
-      fill:selected?"var(--wire-sel)":"var(--gate-fill)",
-      stroke:selected?"var(--ink)":"var(--gate-stroke)","stroke-width":nodeStroke
-    }));
+      fill:documentation?"none":selected?"var(--wire-sel)":"var(--gate-fill)",
+      stroke:selected?"var(--ink)":documentation?"var(--accent)":"var(--gate-stroke)","stroke-width":nodeStroke
+    });
+    if(documentation) node.setAttribute("stroke-dasharray",`${3*nodeStroke} ${2*nodeStroke}`);
+    minimapSvg.appendChild(node);
   });
 
   const cr=canvas.getBoundingClientRect(), k=Math.max(.001,state.view.k);
