@@ -71,3 +71,40 @@ test('imported nested design compiles all referenced entities',()=>{
  a.run('importProjectData(fixture.project,{mode:"new"})');
  const all=a.json('generateAllVhdl()');compile(Object.values(all).map(r=>typeof r==='string'?r:r.code).join('\n'));
 });
+
+test('8/16-bit comparators accept CONST on either side, including both constants',()=>{
+ for(const type of ['COMP','COMPM']) for(const width of [8,16]) for(const side of ['a','b','both']){
+  const a=circuit(`const x=c('IN',{name:'data_in',width:${width}}),k=c('CONST',{value:'07',width:${width}}),g=c('${type}',{width:${width}},'compare'),o=c('OUT',{name:'result',width:1});w(${side==='a'||side==='both'?'k':'x'},'o',g,'a');w(${side==='b'||side==='both'?'k':'x'},'o',g,'b');w(g,'${type==='COMP'?'eq':'gt'}',o,'i');`);
+  const r=a.json('generateSchVhdl(sch)');assert.deepEqual(r.warns,[]);assert.deepEqual(r.fallbacks,[]);compile(r.code);
+ }
+});
+test('user ADC comparator pattern simulates correctly for every state 0..19',()=>{
+ const a=circuit(`const x=c('IN',{name:'state_in',width:8});
+ function compare(label,type,value,pid,out){const k=c('CONST',{value,width:8}),g=c(type,{width:8},label),o=c('OUT',{name:out,width:1});w(x,'o',g,'a');w(k,'o',g,'b');w(g,pid,o,'i');return g;}
+ compare('miso','COMPM','07','gt','is_reading');compare('cs','COMP','00','eq','cs_adc');
+ const lo=compare('lo','COMPM','00','gt','positive'),hi=compare('hi','COMPM','05','lt','below_five'),g=c('AND',{inputs:2,width:1}),o=c('OUT',{name:'din_mosi',width:1});w(lo,'gt',g,'i0');w(hi,'lt',g,'i1');w(g,'o',o,'i');`);
+ const result=a.json('generateSchVhdl(sch)');assert.deepEqual(result.fallbacks,[]);
+ compile(result.code,'tb',`library ieee;use ieee.std_logic_1164.all;use ieee.numeric_std.all;
+ entity tb is end;architecture sim of tb is signal s:std_logic_vector(7 downto 0);signal r,cs,m,p,b:std_logic;
+ begin u:entity work.top port map(state_in=>s,is_reading=>r,cs_adc=>cs,din_mosi=>m,positive=>p,below_five=>b);
+ process begin for i in 0 to 19 loop s<=std_logic_vector(to_unsigned(i,8));wait for 1 ns;
+ assert (r='1')=(i>7) report "reading" severity failure;assert (cs='1')=(i=0) report "CS" severity failure;
+ assert (m='1')=(i>0 and i<5) report "MOSI" severity failure;end loop;wait;end process;end;`);
+});
+test('fallback display follows output branches, preserves data, and clears after reconnect',()=>{
+ const a=circuit(`const x=c('IN',{name:'value_in',width:8}),g=c('COMPM',{width:8},'compare'),j=c('JUNCTION'),o=c('OUT',{name:'result',width:1}),o2=c('OUT',{name:'copy_out',width:1});w(x,'o',g,'a');w(g,'gt',j,'j');w(j,'j',o,'i');w(j,'j',o2,'i');`);
+ const before=a.json('sch');assert.equal(a.run('fallbackDisplay(sch).wires.size'),3);assert.deepEqual(a.json('sch'),before);
+ assert.match(a.run('fallbackDisplay(sch).components.get(g.id)'),/ตรึง/);
+ a.run(`const k=c('CONST',{width:8,value:'00'});w(k,'o',g,'b')`);
+ assert.equal(a.run('fallbackDisplay(sch).wires.size'),0);assert.equal(a.run('fallbackDisplay(sch).components.size'),0);
+});
+test('missing gate operand warns about substitution, not a constant output; intended zeros stay normal',()=>{
+ const a=circuit(`const x=c('IN',{name:'value_in',width:1}),g=c('OR',{inputs:2,width:1},'or_gate'),o=c('OUT',{name:'result',width:1});w(x,'o',g,'i0');w(g,'o',o,'i');`);
+ assert.equal(a.run('fallbackDisplay(sch).wires.size'),1);assert.match(a.run('[...fallbackDisplay(sch).wires.values()][0]'),/อาจได้รับผลกระทบ/);
+ a.run(`const zero=c('GND');w(zero,'o',g,'i1')`);assert.equal(a.run('fallbackDisplay(sch).wires.size'),0);
+});
+test('invalid Bus Tap, missing clock and isolated OUT expose fallback diagnostics',()=>{
+ const a=circuit(`const x=c('IN',{name:'value_in',width:8}),t=c('BUSTAP',{bit:9,nbit:1,mode:'split',dir:'right'}),o=c('OUT',{name:'result',width:1});w(x,'o',t,'d');w(t,'y',o,'i');const f=c('DFF',{edge:'rising',reset:false,preset:false}),q=c('OUT',{name:'qout',width:1});w(f,'q',q,'i');const loose=c('OUT',{name:'loose',width:1});`);
+ assert.ok(a.run('fallbackDisplay(sch).components.has(t.id)'));assert.ok(a.run('fallbackDisplay(sch).components.has(f.id)'));assert.ok(a.run('fallbackDisplay(sch).components.has(loose.id)'));
+ assert.equal(a.run('fallbackDisplay(sch).wires.size'),2);
+});

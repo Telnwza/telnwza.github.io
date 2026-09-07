@@ -11,7 +11,7 @@
   --ink:#e9eef9; --ink-dim:#a8b5d1; --muted:#6c7a99;
   --accent:#5b8def; --accent-2:#7c5cff;
   --ok:#34d399; --warn:#fbbf24; --err:#f87171; --info:#38bdf8;
-  --wire:#5dd5ff; --wire-bus:#c084fc; --wire-sel:#fde68a; --wire-open:#fb923c;
+  --wire:#5dd5ff; --wire-bus:#c084fc; --wire-sel:#fde68a; --wire-open:#fb923c; --wire-fallback:#fb7185;
   --gate-fill:#1d2940; --gate-stroke:#9bb0d8;
   --in-fill:#14342a; --in-stroke:#34d399; --in-text:#bff0db;
   --out-fill:#3a1f2b; --out-stroke:#f87171; --out-text:#ffd2dc;
@@ -31,7 +31,7 @@
   --ink:#16181d; --ink-dim:#4a5060; --muted:#7c8494;
   --accent:#1a4fd6; --accent-2:#3a2fb0;
   --ok:#0a7d4a; --warn:#9a6400; --err:#c0202a; --info:#0b6ea8;
-  --wire:#0000c8; --wire-bus:#0000c8; --wire-sel:#c0202a; --wire-open:#e14b18;
+  --wire:#0000c8; --wire-bus:#0000c8; --wire-sel:#c0202a; --wire-open:#e14b18; --wire-fallback:#be185d;
   --gate-fill:#ffffff; --gate-stroke:#0000c8;
   --in-fill:#ffffff; --in-stroke:#0000c8; --in-text:#0000c8;
   --out-fill:#ffffff; --out-stroke:#0000c8; --out-text:#0000c8;
@@ -265,6 +265,7 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
 .wire-group.net-hi .wire{stroke-width:3.5;filter:drop-shadow(0 0 5px var(--wire-sel))}
 .wire-group.sel .wire{filter:drop-shadow(0 0 4px var(--wire-sel))}
 .wire.incomplete{stroke:var(--wire-open)}
+.wire.fallback{stroke:var(--wire-fallback);stroke-dasharray:8 4}
 .wire.selected{stroke:var(--wire-sel);filter:drop-shadow(0 0 4px var(--wire-sel))}
 .wire-label{fill:var(--ink-dim);font-size:10.5px;font-family:"JetBrains Mono",monospace;pointer-events:none;text-anchor:middle}
 
@@ -5017,6 +5018,32 @@ function wireCompletionMap(sch){
   return result;
 }
 
+// Diagnostic cache excludes geometry and generated names; moves must not regenerate VHDL.
+const fallbackDisplayCache = new WeakMap();
+function fallbackDisplay(sch){
+  const key=JSON.stringify({name:sch.name,components:sch.components.map(c=>({id:c.id,type:c.type,label:c.label,params:c.params,ports:getPorts(c)})),
+    wires:sch.wires.map(w=>({id:w.id,from:w.from,to:w.to,name:w.name}))});
+  const cached=fallbackDisplayCache.get(sch);
+  if(cached && cached.key===key) return cached.value;
+  const diagnostics=generateSchVhdl(cloneData(sch)).fallbacks;
+  const wires=new Map(), components=new Map();
+  const add=(map,id,reason)=>map.set(id,[...(map.get(id)||[]),reason].filter((v,i,a)=>a.indexOf(v)===i));
+  diagnostics.forEach(d=>{
+    add(components,d.cid,d.reason);
+    sch.wires.forEach(w=>{
+      const input=d.dir==="in" && w.to.cid===d.cid && w.to.pid===d.pid;
+      const output=w.from.cid===d.cid && (d.dir==="in" || w.from.pid===d.pid);
+      if(!input&&!output) return;
+      // Do not colour other consumers of a valid source merely because one input fails.
+      const ids=output?netWires(sch,w):new Set([w.id]);
+      ids.forEach(id=>add(wires,id,d.reason));
+    });
+  });
+  const value={wires:new Map([...wires].map(([id,r])=>[id,r.join(" · ")])),
+    components:new Map([...components].map(([id,r])=>[id,r.join(" · ")]))};
+  fallbackDisplayCache.set(sch,{key,value}); return value;
+}
+
 function netDriverPort(sch, w, seen){
   seen = seen || new Set();
   const src = comp(w.from.cid, sch);
@@ -5207,6 +5234,7 @@ function render(){
   const wWidth = new Map();
   sch.wires.forEach(w=>wWidth.set(w.id, wireWidth(w, sch)));
   const wCompletion = placing ? new Map() : wireCompletionMap(sch);
+  const fallbackStatus=placing?{wires:new Map(),components:new Map()}:fallbackDisplay(sch);
   if(placing){
     renderPlacementAirwires(root,sch,placement);
   } else {
@@ -5262,16 +5290,21 @@ function render(){
     const isBus = (wWidth.get(w.id)||1) > 1;
     const isSel = state.selection.has(w.id);
     const incomplete=wCompletion.get(w.id)||"";
+    const fallbackReason=fallbackStatus.wires.get(w.id)||"";
     const g = el("g",{class:"wire-group"+(isSel?" sel":"")+(incomplete?" incomplete":""), "data-wid": w.id});
     if(incomplete){
       g.setAttribute("data-incomplete",incomplete);
       const title=el("title",{}); title.textContent="สายยังต่อไม่ครบ: "+incomplete; g.appendChild(title);
     }
+    if(fallbackReason){
+      g.setAttribute("data-fallback",fallbackReason);
+      const title=el("title",{}); title.textContent="⚠ VHDL ใช้ 0 ทดแทน: "+fallbackReason; g.prepend(title);
+    }
     // visible path carries hops over crossings so overlaps read clearly
     const D = fastRender ? r.d : hoppedPathD(r, allV, w.id);
     const path = el("path",{d: D,
-      class:"wire"+(isBus?" bus":"")+(incomplete?" incomplete":"")+(isSel?" selected":""),
-      stroke: isSel ? "var(--wire-sel)" : incomplete ? "var(--wire-open)" : (isBus?"var(--wire-bus)":"var(--wire)")});
+      class:"wire"+(isBus?" bus":"")+(incomplete?" incomplete":"")+(fallbackReason?" fallback":"")+(isSel?" selected":""),
+      stroke: isSel ? "var(--wire-sel)" : fallbackReason ? "var(--wire-fallback)" : incomplete ? "var(--wire-open)" : (isBus?"var(--wire-bus)":"var(--wire)")});
     g.appendChild(path);
     // wide invisible hit path (straight route): easy clicking + drag rerouting
     const hit = el("path",{d:r.d, class:"wire-hit"});
@@ -5452,6 +5485,12 @@ function render(){
     if(rot)      ntf += ` rotate(${rot} ${sz.w/2} ${sz.h/2})`;
     if(c.mirror) ntf += ` translate(${sz.w} 0) scale(-1 1)`;
     const g = el("g",{class:"node"+(isSel?" selected":"")+(placing?" placement-component":""),transform:ntf});
+    const fallbackReason=fallbackStatus.components.get(c.id);
+    if(fallbackReason){
+      const badge=el("text",{x:0,y:-18,fill:"var(--wire-fallback)","font-size":11,"font-weight":700});
+      badge.textContent="⚠ VHDL ใช้ 0 ทดแทน";
+      const title=el("title",{}); title.textContent=fallbackReason; badge.appendChild(title); g.appendChild(badge);
+    }
     const body = el("g",{class:"body"});
     body.innerHTML = td.shape(c.params||{});
     if(c.type==="BUSTAP"){
@@ -6438,8 +6477,10 @@ function renderInspector(){
     if(w){
       const hasCustomRoute = (typeof w.mx==="number") || (typeof w.my==="number") || !!(w.pts && w.pts.length);
       const incompleteReason=wireCompletionMap(sch).get(w.id)||"";
+      const fallbackReason=fallbackDisplay(sch).wires.get(w.id)||"";
       root.innerHTML = `<div class="insp">
         <h3>Wire</h3>
+        ${fallbackReason?`<div style="padding:9px;border:1px solid var(--wire-fallback);color:var(--wire-fallback);border-radius:6px;font-size:12px">⚠ VHDL ใช้ 0 ทดแทน — ${esc(fallbackReason)}</div>`:""}
         ${incompleteReason?`<div style="margin:0 12px 10px;padding:8px 9px;border:1px solid var(--wire-open);color:var(--wire-open);border-radius:6px;font-size:11px">⚠ สายยังต่อไม่ครบ — ${esc(incompleteReason)}</div>`:""}
         <div class="row"><label>Net name</label><input id="iWireName" value="${esc(w.name||"")}" placeholder="เช่น data หรือ data(7:0)"></div>
         <div class="row"><label>เส้นทาง</label><button class="btn" id="iWireRoute" ${hasCustomRoute?"":"disabled"} title="ลบตำแหน่งที่ลากไว้ ให้ระบบจัดแนวเอง">↺ จัดแนวอัตโนมัติ</button></div>
@@ -6962,6 +7003,8 @@ function generateAllVhdl(){
 function generateSchVhdl(sch){
   sch.components.forEach(c=>{ delete c._busNet; delete c._busW; });
   const warns = [];
+  const fallbacks = [];
+  const fallback = (c,pid,dir,reason) => fallbacks.push({cid:c.id,pid,dir,reason});
   const ename = sanId(sch.name) || "my_circuit";
 
   const inputs  = sch.components.filter(c=>c.type==="IN");
@@ -7150,6 +7193,7 @@ function generateSchVhdl(sch){
       if(!v){
         const pw = (portsArr.find(p=>p.id===pid)||{}).width||1;
         warns.push(`${compDisplay(c)} ขา '${pid}' ยังไม่ได้ต่อสาย — ใช้ค่า '0' แทน`);
+        fallback(c,pid,"in",`${compDisplay(c)} ขา '${pid}' ไม่มี driver — ใช้ 0 แทนที่ขานี้ (ผลขาออกอาจได้รับผลกระทบ)`);
         return zlit(pw);
       }
       return v;
@@ -7217,6 +7261,7 @@ function generateSchVhdl(sch){
     // when a flip-flop is skipped, still give its outputs a defined value so the rest
     // of the design elaborates instead of collapsing into undriven-signal noise
     const tieOffOutputs = () => {
+      Object.keys(c._nets || {}).forEach(pid=>fallback(c,pid,"out",`${compDisplay(c)} ไม่มี clock ที่ใช้งานได้ — ตรึงขา '${pid}' เป็น 0`));
       Object.keys(c._nets || {}).forEach(pid => concurrent.push(`  ${c._nets[pid]} <= ${zlit((c._netW&&c._netW[pid])||1)};`));
     };
     /* Q̄ is usually left unconnected on a drawing; declaring and driving it anyway only
@@ -7322,6 +7367,7 @@ function generateSchVhdl(sch){
       else if(!sw || sw <= 1) warns.push(`${compDisplay(c)} ต้องแตะสายบัส (กว้างมากกว่า 1 bit)`);
       else if(hi > sw-1) warns.push(`${compDisplay(c)} แตะบิต ${range} แต่บัสมีแค่ (${sw-1}:0)`);
       else expr = slice(src);
+      if(!expr) fallback(c,"y","out",`${compDisplay(c)} อ่าน Bus Tap ไม่ได้ — ใช้ 0 แทน: ${warns[warns.length-1]}`);
       concurrent.push(`  ${c._nets.y} <= ${expr || zlit(nbit)};`);
       return;
     }
@@ -7339,8 +7385,9 @@ function generateSchVhdl(sch){
       let A, B, arr;
       if(cmpIsBus(c.params)){
         const av = driver(c.id,"a"), bv = driver(c.id,"b");
-        if(!av || !bv || isLit(av) || isLit(bv)){
-          warns.push(`${compDisplay(c)} ยังต่อขา A/B ไม่ครบ — ผลลัพธ์ถูกตรึงเป็น '0'`);
+        if(!av || !bv || driverWidth(c.id,"a")!==n || driverWidth(c.id,"b")!==n){
+          warns.push(`${compDisplay(c)} ขา A/B ไม่มี driver หรือความกว้างไม่ตรง ${n} bit — ผลลัพธ์ถูกตรึงเป็น '0'`);
+          outs.forEach(pid=>fallback(c,pid,"out",warns[warns.length-1]));
           tie(); return;
         }
         A = av; B = bv; arr = true;
@@ -7353,8 +7400,8 @@ function generateSchVhdl(sch){
       // numeric_std defines < and > for unsigned, NOT for std_logic_vector — a bare
       // `aa > bb` does not compile in Vivado. A bus operand is CONVERTED; a raw
       // concatenation is QUALIFIED, since it has no type of its own to convert from.
-      const q = v => cmpIsBus(c.params) ? `unsigned(${v})` : `unsigned'(${v})`;
-      const sv = v => cmpIsBus(c.params) ? v : `std_logic_vector'(${v})`;
+      const q = v => cmpIsBus(c.params) && !isLit(v) ? `unsigned(${v})` : `unsigned'(${v})`;
+      const sv = v => cmpIsBus(c.params) && !isLit(v) ? v : `std_logic_vector'(${v})`;
       if(!mag){
         const cond = arr ? `${sv(A)} = ${sv(B)}`
                          : (isLit(A) && isLit(B) ? (A === B ? "true" : "false") : `${A} = ${B}`);
@@ -7530,6 +7577,7 @@ function generateSchVhdl(sch){
         if(p.dir==="in"){
           const v = driver(c.id, p.name);
           if(!v) warns.push(`${compDisplay(c)} ขา '${p.name}' ยังไม่ได้ต่อสาย — ใช้ค่า '0' แทน`);
+          if(!v) fallback(c,p.name,"in",`${compDisplay(c)} ขา '${p.name}' ไม่มี driver — ใช้ 0 แทนที่ขานี้ (ผลขาออกอาจได้รับผลกระทบ)`);
           maps.push(`${p.name} => ${v || zlit(p.width)}`);
         } else {
           maps.push(`${p.name} => ${c._nets[p.name]}`);
@@ -7547,6 +7595,7 @@ function generateSchVhdl(sch){
         if(p.dir==="in"){
           const v = driver(c.id, p.id);
           if(!v) warns.push(`${compDisplay(c)} ขา '${p.id}' ยังไม่ได้ต่อสาย — ใช้ค่า '0' แทน`);
+          if(!v) fallback(c,p.id,"in",`${compDisplay(c)} ขา '${p.id}' ไม่มี driver — ใช้ 0 แทนที่ขานี้ (ผลขาออกอาจได้รับผลกระทบ)`);
           maps.push(`${p.id} => ${v || zlit(p.width)}`);
         } else {
           maps.push(`${p.id} => ${c._nets[p.id]}`);
@@ -7565,7 +7614,7 @@ function generateSchVhdl(sch){
     // its drivers, so leaving it unassigned here is correct, not an omission
     const byTaps = busMerges.some(l => l.trim().startsWith(c._net + "("));
     if(byTaps) return;
-    if(!v){ warns.push(`OUTPUT '${c._net}' ยังไม่ได้ต่อสาย — ใช้ค่า '0' แทน`); outLines.push(`  ${c._net} <= ${zlit(c.params.width)};`); }
+    if(!v){ fallback(c,"i","in",`OUTPUT '${c._net}' ไม่มี driver — ใช้ 0 แทน`); warns.push(`OUTPUT '${c._net}' ยังไม่ได้ต่อสาย — ใช้ค่า '0' แทน`); outLines.push(`  ${c._net} <= ${zlit(c.params.width)};`); }
     else outLines.push(`  ${c._net} <= ${v};`);
   });
   busMerges.forEach(l => outLines.push(l));
@@ -7679,7 +7728,7 @@ function generateSchVhdl(sch){
   }
   code += `\nend Behavioral;\n`;
 
-  return { code, warns };
+  return { code, warns, fallbacks };
 }
 function formatComponentDecl(name, ports){
   // a port-less component must have NO Port clause — "Port ( );" is invalid VHDL
@@ -9452,6 +9501,7 @@ function drawMinimap(){
   };
 
   const minimapCompletion=placementPlacing()?new Map():wireCompletionMap(sch);
+  const minimapFallback=placementPlacing()?new Map():fallbackDisplay(sch).wires;
   if(!placementPlacing()) sch.wires.forEach(w=>{
     const a=comp(w.from.cid,sch), b=comp(w.to.cid,sch);
     const p=a&&portPos(a,w.from.pid), q=b&&portPos(b,w.to.pid);
@@ -9459,7 +9509,7 @@ function drawMinimap(){
     let bus=false; try{ bus=wireWidth(w,sch)>1; }catch(_){}
     minimapSvg.appendChild(make("line",{
       x1:p.x,y1:p.y,x2:q.x,y2:q.y,
-      stroke:minimapCompletion.has(w.id)?"var(--wire-open)":bus?"var(--wire-bus)":"var(--wire)","stroke-width":lineW,opacity:.72
+      stroke:minimapFallback.has(w.id)?"var(--wire-fallback)":minimapCompletion.has(w.id)?"var(--wire-open)":bus?"var(--wire-bus)":"var(--wire)","stroke-width":lineW,opacity:.72
     }));
   });
   sch.components.filter(c=>c.type!=="JUNCTION").forEach(c=>{
