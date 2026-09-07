@@ -1,109 +1,38 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
-
-function loadHelpers() {
-  const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
-  const routing = /\/\* BEGIN TESTABLE SMART ROUTING HELPERS \*\/([\s\S]*?)\/\* END TESTABLE SMART ROUTING HELPERS \*\//.exec(html);
-  const compatibility = /\/\* BEGIN TESTABLE ROUTE COMPATIBILITY HELPER \*\/([\s\S]*?)\/\* END TESTABLE ROUTE COMPATIBILITY HELPER \*\//.exec(html);
-  const netColor = /\/\* BEGIN TESTABLE NET COLOR HELPER \*\/([\s\S]*?)\/\* END TESTABLE NET COLOR HELPER \*\//.exec(html);
-  assert.ok(routing, "testable smart-routing helper block should exist");
-  assert.ok(compatibility, "testable compatibility helper block should exist");
-  assert.ok(netColor, "testable net-color helper block should exist");
-
-  const context = {};
-  vm.createContext(context);
-  vm.runInContext(
-    `${routing[1]}\n${compatibility[1]}\n${netColor[1]}\nthis.helpers = { routingEdgeKey, simplifyGridPath, routeGridAStar, isManualWire, normalizeNetColor };`,
-    context,
-  );
-  return context.helpers;
-}
-
-const { routingEdgeKey, simplifyGridPath, routeGridAStar, isManualWire, normalizeNetColor } = loadHelpers();
-
-test("routes a clear connection as one straight Manhattan run", () => {
-  const route = routeGridAStar(
-    { x: 0, y: 0 },
-    { x: 5, y: 0 },
-    { minX: -2, maxX: 7, minY: -2, maxY: 2 },
-    () => false,
-    () => 0,
-  );
-
-  assert.deepEqual(JSON.parse(JSON.stringify(route)), [{ x: 0, y: 0 }, { x: 5, y: 0 }]);
+const test=require('node:test'),assert=require('node:assert/strict');
+const {loadApp}=require('./test-runtime.cjs');
+function setup(){const a=loadApp();a.run(`const sch=activeSch();sch.components=[
+{id:'i',type:'IN',x:88,y:110,params:{name:'input_data',width:8}},
+{id:'o',type:'OUT',x:484,y:220,params:{name:'output_data',width:8}},
+{id:'frame',type:'MODULE_FRAME',x:44,y:44,params:{widthCells:28,heightCells:16}}];
+sch.wires=[{id:'wire',from:{cid:'i',pid:'o'},to:{cid:'o',pid:'i'},pts:[{x:220,y:132},{x:220,y:242}],name:''}];snapshot();`);return a;}
+test('Module Frame remains documentation-only; bus stays electrically complete',()=>{
+ const a=setup();assert.equal(a.run('getPorts(comp("frame")).length'),0);
+ assert.equal(a.run('wireCompletionMap(sch).size'),0);assert.equal(a.run('wireWidth(sch.wires[0],sch)'),8);
+ const before=a.run('generateSchVhdl(sch).code');a.run('sch.components=sch.components.filter(c=>c.type!=="MODULE_FRAME")');
+ assert.equal(a.run('generateSchVhdl(sch).code'),before);
 });
-
-test("detours around blocked component cells without diagonal segments", () => {
-  const blocked = new Set(["2,0", "3,0"]);
-  const route = routeGridAStar(
-    { x: 0, y: 0 },
-    { x: 5, y: 0 },
-    { minX: -2, maxX: 7, minY: -3, maxY: 3 },
-    (x, y) => blocked.has(`${x},${y}`),
-    () => 0,
-  );
-
-  assert.ok(route.length >= 4, "route should contain a visible detour");
-  assert.deepEqual(JSON.parse(JSON.stringify(route[0])), { x: 0, y: 0 });
-  assert.deepEqual(JSON.parse(JSON.stringify(route.at(-1))), { x: 5, y: 0 });
-  assert.ok(route.every(p => !blocked.has(`${p.x},${p.y}`)));
-  for (let i = 1; i < route.length; i++) {
-    assert.ok(route[i - 1].x === route[i].x || route[i - 1].y === route[i].y);
-  }
+test('Placement Cancel restores exact geometry and existing wire topology',()=>{
+ const a=setup(),before=a.json('sch');a.run('enterPlacementMode();activeSch().components[0].x+=77;cancelPlacement()');
+ assert.deepEqual(a.json('activeSch()'),before);
 });
-
-test("prefers a short detour over an expensive overlap with another net", () => {
-  const occupied = new Set([
-    routingEdgeKey({ x: 1, y: 0 }, { x: 2, y: 0 }),
-    routingEdgeKey({ x: 2, y: 0 }, { x: 3, y: 0 }),
-    routingEdgeKey({ x: 3, y: 0 }, { x: 4, y: 0 }),
-  ]);
-  const route = routeGridAStar(
-    { x: 0, y: 0 },
-    { x: 5, y: 0 },
-    { minX: -2, maxX: 7, minY: -3, maxY: 3 },
-    () => false,
-    (a, b) => occupied.has(routingEdgeKey(a, b)) ? 70 : 0,
-  );
-
-  const expanded = [];
-  for (let i = 1; i < route.length; i++) {
-    const a = route[i - 1], b = route[i];
-    const dx = Math.sign(b.x - a.x), dy = Math.sign(b.y - a.y);
-    for (let p = { ...a }; p.x !== b.x || p.y !== b.y;) {
-      const q = { x: p.x + dx, y: p.y + dy };
-      expanded.push(routingEdgeKey(p, q));
-      p = q;
-    }
-  }
-  assert.ok(expanded.every(edge => !occupied.has(edge)));
+test('Placement Preview routes the bus, Accept has undo/redo, and does not alter VHDL',()=>{
+ const a=setup(),code=a.run('generateSchVhdl(sch).code');
+ a.run('snapshot();enterPlacementMode();activeSch().components[0].x+=44;previewPlacementWires()');
+ const stat=a.json('state.placementMode.routeStats');assert.ok(stat.total>=1);assert.ok(stat.routed>=1);
+ assert.equal(a.run('generateSchVhdl(activeSch()).code'),code);
+ a.run('acceptPlacement()');assert.equal(a.run('activeSch().components[0].x'),132);
+ a.run('undo()');assert.equal(a.run('activeSch().components[0].x'),88);
+ a.run('redo()');assert.equal(a.run('activeSch().components[0].x'),132);
 });
-
-test("keeps legacy hand-routed wires manual while route-less wires remain auto", () => {
-  assert.equal(isManualWire({ pts: [{ x: 22, y: 33 }] }), true);
-  assert.equal(isManualWire({ mx: 55 }), true);
-  assert.equal(isManualWire({ pts: [{ x: 22, y: 33 }], routeMode: "auto" }), false);
-  assert.equal(isManualWire({ routeMode: "manual" }), true);
-  assert.equal(isManualWire({ from: {}, to: {} }), false);
+test('dangling wire is incomplete even if its geometry touches a valid output',()=>{
+ const a=setup();a.run(`sch.components.push({id:'j',type:'JUNCTION',x:484,y:220,params:{endpoint:true}});sch.wires[0].to={cid:'j',pid:'j'};`);
+ assert.ok(a.run('wireCompletionMap(sch).has("wire")'));
 });
-
-test("accepts only serializable six-digit net colours", () => {
-  assert.equal(normalizeNetColor("#Aa44FF"), "#aa44ff");
-  assert.equal(normalizeNetColor("  #123456  "), "#123456");
-  assert.equal(normalizeNetColor("red"), "");
-  assert.equal(normalizeNetColor("#fff"), "");
-  assert.equal(normalizeNetColor("#12345678"), "");
+test('project switching is blocked while placement edits are uncommitted',()=>{
+ const a=setup();const old=a.run('state.activeProjectId');a.run('const p=addProject("other",{activate:false});enterPlacementMode();switchProject(p.id)');
+ assert.equal(a.run('state.activeProjectId'),old);assert.ok(a.run('state.placementMode'));
 });
-
-test("simplifies duplicate and collinear grid points", () => {
-  const route = simplifyGridPath([
-    { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 0 },
-    { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 2, y: 2 },
-  ]);
-  assert.deepEqual(JSON.parse(JSON.stringify(route)), [
-    { x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 },
-  ]);
+test('Fit bounds include manual wire points outside all component bodies',()=>{
+ const a=setup();a.run('sch.wires[0].pts.push({x:900,y:800})');
+ const b=a.json('sheetBounds(sch)');assert.ok(b.maxX>=900);assert.ok(b.maxY>=800);
 });

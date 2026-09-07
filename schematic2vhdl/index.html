@@ -76,6 +76,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .dd hr{border:none;border-top:1px solid var(--line);margin:4px 2px}
 .grow{flex:1}
 .btn{background:var(--bg-2);color:var(--ink);border:1px solid var(--line);padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.btn:disabled{opacity:.42;cursor:not-allowed;filter:grayscale(.6)}
 .btn:hover{border-color:var(--accent);background:var(--bg-3)}
 .btn-primary{background:linear-gradient(135deg,#5b8def,#7c5cff);border:none;color:white;padding:7px 14px}
 .btn-primary:hover{filter:brightness(1.1)}
@@ -171,6 +172,18 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
 .tree-group h4{margin:0;padding:7px 6px 4px;font-size:10.5px;letter-spacing:1.3px;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:6px}
 .tree-group h4 .add{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);color:var(--ink-dim);width:20px;height:20px;padding:0;box-sizing:border-box;border-radius:4px;cursor:pointer;line-height:1;font-size:16px}
 .tree-group h4 .add:hover{background:var(--accent);color:white;border-color:var(--accent)}
+.tree-group h4 .add ~ .add{margin-left:4px}
+.tree-item.prj .label{font-weight:600}
+.tree-item.prj.active{background:var(--bg-3)}
+.tree-item.prj.active .label{color:var(--accent)}
+.tree-item .cnt{margin-left:auto;color:var(--muted);font-size:10.5px;padding:0 4px}
+.tree-item .tw{width:12px;flex:0 0 auto;color:var(--muted);font-size:10px;cursor:pointer;text-align:center}
+.tree-item .tw:hover{color:var(--ink)}
+.tree-item.sch{padding-left:26px}
+.tree-item.sch .star{opacity:0}
+.tree-item.sch.top .star{opacity:1}
+.tree-empty{padding:3px 10px 5px 34px;color:var(--muted);font-size:11px;font-style:italic}
+.tree-item:hover .cnt{display:none}
 .tree-item{display:flex;align-items:center;gap:7px;padding:6px 8px;margin:2px 4px;border-radius:5px;cursor:pointer;color:var(--ink-dim)}
 .tree-item:hover{background:var(--bg-2);color:var(--ink)}
 .tree-item.active{background:var(--bg-3);color:var(--ink)}
@@ -263,7 +276,13 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
 .modal h2 .close:hover{color:var(--err)}
 .modal-body{padding:16px 18px;overflow:auto;flex:1}
 .modal-foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
-.modal .row{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;margin-bottom:10px}
+.modal .row[hidden]{display:none}
+.modal .row{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:center;margin-bottom:10px}
+.split-row{display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px}
+.split-row:hover{background:var(--bg-3)}
+.split-row .nm{color:var(--ink)}
+.split-row .tag{font-size:10px;color:var(--warn);border:1px solid var(--warn);border-radius:4px;padding:0 5px}
+.split-row .cnt{margin-left:auto;color:var(--muted);font-size:11px}
 .modal .row label{font-size:12px;color:var(--ink-dim)}
 .modal textarea{width:100%;min-height:140px;resize:vertical;font-family:"JetBrains Mono",monospace;font-size:12px}
 .port-row{display:grid;grid-template-columns:1fr 90px 80px 30px;gap:6px;margin-bottom:6px;align-items:center}
@@ -304,9 +323,11 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
       <div class="mi"><button data-menu="file">File</button>
         <div class="dd">
           <button data-act="new-project">📄 New Project</button>
-          <button data-act="open-project">📂 Open Project…<span class="kbd">Ctrl+O</span></button>
-          <button data-act="save-project">💾 Save Project<span class="kbd">Ctrl+S</span></button>
+          <button data-act="import-project">↓ Import Project as Sub-project…</button>
+          <button data-act="open-project">📂 Open Project / Workspace…<span class="kbd">Ctrl+O</span></button>
+          <button data-act="save-project">💾 Save Workspace<span class="kbd">Ctrl+S</span></button>
           <button data-act="save-as-project">Save Project As…</button>
+          <button data-act="split-project">✂ แยก schematic เป็นโปรเจกต์ใหม่…</button>
           <hr>
           <button data-act="new-sch">＋ New Schematic</button>
           <button data-act="rename-sch">Rename Active Schematic</button>
@@ -498,7 +519,7 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
 .manual-scroll pre{margin:12px 0 0;padding:12px 14px;background:var(--bg-2);border:1px solid var(--line);border-radius:9px;overflow-x:auto;font-size:12.5px;line-height:1.6;color:var(--ink-dim);font-family:"JetBrains Mono","Consolas",monospace}
 .manual-scroll pre b{color:var(--ink)}
 </style>
-<nav class="man-toc"><a href="#man-s1"><b>01</b> หน้าตาโปรแกรม</a><a href="#man-s2"><b>02</b> วางชิ้นส่วน</a><a href="#man-s3"><b>03</b> ต่อสาย</a><a href="#man-s4"><b>04</b> บัส (Bus)</a><a href="#man-s5"><b>05</b> ปรับค่าใน Inspector</a><a href="#man-s6"><b>06</b> ตรวจก่อนสร้างโค้ด</a><a href="#man-s7"><b>07</b> สร้าง VHDL</a><a href="#man-s8"><b>08</b> หลายแผ่นและ sub-block</a><a href="#man-s9"><b>09</b> บันทึก เปิด นำเข้า</a><a href="#man-s10"><b>10</b> ธีมและมุมมอง</a><a href="#man-s11"><b>11</b> คีย์ลัด</a><a href="#man-s12"><b>12</b> กับดักที่เจอบ่อย</a><a href="#man-s13"><b>13</b> Vivado หาบอร์ดไม่เจอ — สลับ driver ของบอร์ด</a></nav>
+<nav class="man-toc"><a href="#man-s1"><b>01</b> หน้าตาโปรแกรม</a><a href="#man-s2"><b>02</b> วางชิ้นส่วน</a><a href="#man-s3"><b>03</b> ต่อสาย</a><a href="#man-s4"><b>04</b> บัส (Bus)</a><a href="#man-s5"><b>05</b> ปรับค่าใน Inspector</a><a href="#man-s6"><b>06</b> ตรวจก่อนสร้างโค้ด</a><a href="#man-s7"><b>07</b> สร้าง VHDL</a><a href="#man-s8"><b>08</b> หลายแผ่นและ sub-block</a><a href="#man-s9"><b>09</b> บันทึก เปิด นำเข้า</a><a href="#man-s10"><b>10</b> ธีมและมุมมอง</a><a href="#man-s11"><b>11</b> คีย์ลัด</a><a href="#man-s12"><b>12</b> กับดักที่เจอบ่อย</a><a href="#man-s13"><b>13</b> Vivado หาบอร์ดไม่เจอ — สลับ driver ของบอร์ด</a><a href="#man-s14"><b>14</b> Preset กับ Clear ของ flip-flop</a></nav>
 
 
     <!-- ================= 1 ================= -->
@@ -561,7 +582,7 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
         <table>
           <thead><tr><th>หมวด</th><th>ชิ้นส่วน</th><th>หมายเหตุ</th></tr></thead>
           <tbody>
-            <tr><td class="k">I/O PORTS</td><td class="k">INPUT · OUTPUT · VCC · GND</td><td>INPUT/OUTPUT คือขาของ entity ที่จะออกไปเป็นพอร์ตใน VHDL ตั้งชื่อและกำหนดความกว้างบิตได้</td></tr>
+            <tr><td class="k">I/O PORTS</td><td class="k">INPUT · OUTPUT · VCC · GND · CONST</td><td>INPUT/OUTPUT คือขาของ entity ที่จะออกไปเป็นพอร์ตใน VHDL ตั้งชื่อและกำหนดความกว้างบิตได้</td></tr>
             <tr><td class="k">LOGIC GATES</td><td class="k">AND · OR · NAND · NOR · XOR · XNOR · NOT · BUF</td><td>เกตสองอินพุตขึ้นไปเพิ่มจำนวนขาได้ใน Inspector</td></tr>
             <tr><td class="k">MUX / DEMUX</td><td class="k">MUX · DEMUX</td><td>เลือกจำนวนช่องได้ 2, 4, 8, 16</td></tr>
             <tr><td class="k">ENCODER / DECODER</td><td class="k">ENCODER · DECODER</td><td>ขนาด 4, 8, 16</td></tr>
@@ -623,7 +644,7 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
       <p class="sub">บัสคือสายที่กว้างกว่า 1 บิต เกิดจากการตั้ง <b>ความกว้าง (bit)</b> ให้พอร์ต IN/OUT หรือใช้ขาบัสของชิ้นส่วน
         สายบัสวาดหนากว่าสายปกติเสมอ (ธีมมืดใช้สีม่วงแยกจากสายสีฟ้า ส่วนธีม ISE เป็นน้ำเงินเดียวกันต่างที่ความหนา — ตามแบบ ISE จริง)</p>
 
-      <p><b>Bus Tap</b> คือตัวเชื่อมระหว่างบัสกับสายบิตเดียว หนึ่งอันดูแลหนึ่งบิต วางได้สองทาง</p>
+      <p><b>Bus Tap</b> คือตัวเชื่อมระหว่างบัสกับสายที่แคบกว่า — หนึ่งอันดูแลหนึ่งบิต หรือหลายบิตติดกันก็ได้ วางได้สองทาง</p>
       <ol class="steps">
         <li><b>ลากสายรอไว้ก่อน</b> — ลากสายจากขาเกต จบปลายไว้กลางอากาศใกล้ ๆ บัส แล้วกด <kbd>B</kbd> คลิกบนบัสตรงจุดนั้น
           tap จะวางลง กลืนปลายสายที่รอ และ<b>เดาโหมด</b>จากสายเส้นนั้น: ปลายลากมาจากขา output → รวมบิตเข้าบัส (merge),
@@ -632,6 +653,30 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
           <b>ในโหมด split เสมอ</b> จากนั้นลากสายจากปลายแหลมของ tap เข้าขาเกต — ถ้าลากจากขา output
           ของเกตมาต่อปลาย tap ที่ยังว่าง โปรแกรมจะสลับโหมดเป็น merge ให้พร้อมแจ้งเตือน</li>
       </ol>
+
+      <h3>แตกออกมาเป็นบัสก็ได้</h3>
+      <p>Bus Tap หนึ่งอันไม่จำเป็นต้องดึงทีละบิต — ช่อง <b>จำนวนบิต</b> ใน Inspector บอกว่าจะเอาออกมากี่บิต
+        คู่กับช่อง <b>บิตเริ่มที่</b> ก็ได้ช่วงบิตตามต้องการ เช่นเริ่มที่บิต 4 จำนวน 4 บิต คือ <code>d(7:4)</code>
+        บนสัญลักษณ์จะขึ้นเป็น <code>7:4</code> แทนเลขเดี่ยว และ<b>สายที่ออกจากปลายแหลมกลายเป็นบัสกว้างเท่านั้น</b>
+        ต่อเข้าขาบัสของชิ้นส่วนอื่นหรือของบล็อกย่อยได้ทันที</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>ตั้งค่า</th><th>โค้ดที่ได้ (แตกจากบัส d)</th><th>ใช้ตอนไหน</th></tr></thead>
+          <tbody>
+            <tr><td class="k">บิตเริ่ม 0 · จำนวน 1</td><td class="k">d(0)</td><td>ดึงทีละบิตเข้าเกตธรรมดา (ค่าตั้งต้น)</td></tr>
+            <tr><td class="k">บิตเริ่ม 0 · จำนวน 4</td><td class="k">d(3 downto 0)</td><td>ส่งครึ่งล่างเข้าบล็อกย่อยที่รับ 4 บิต</td></tr>
+            <tr><td class="k">บิตเริ่ม 4 · จำนวน 4</td><td class="k">d(7 downto 4)</td><td>ครึ่งสูงของบัส 8 บิต</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>ฝั่ง merge ก็ทำได้เหมือนกัน — tap สองอันขนาด 4 บิต ประกอบเป็นพอร์ต 8 บิตได้เลย:
+        <code>q(3 downto 0) &lt;= lo;</code> กับ <code>q(7 downto 4) &lt;= hi;</code></p>
+
+      <div class="note trap">
+        <p class="lbl">สลิซต้องอยู่ในขอบบัส</p>
+        <p>เริ่มที่บิต 6 แล้วขอ 4 บิตจากบัส 8 บิต จะเลยขอบไปถึงบิต 9 ซึ่งไม่มีจริง — Issues จะฟ้อง
+          “Bus Tap แตะบิต 9:6 แต่บัสมีแค่ (7:0)” และตัวสามเหลี่ยมจะเป็นสีแดงบนผัง ตั้งค่าใน Inspector จะถูกตัดให้พอดีกับขอบให้เอง</p>
+      </div>
 
       <div class="note trap">
         <p class="lbl">ตรวจโหมดเองเสมอ</p>
@@ -850,6 +895,18 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
       <h2><span class="num">12</span> กับดักที่เจอบ่อย</h2>
       <p class="sub">ทั้งหมดนี้คือปัญหาที่วงจร “ดูถูก” แต่โค้ดออกมาผิด</p>
 
+      <h3>Workspace และการนำโปรเจกต์เดิมมาใช้</h3>
+      <p><b>New Project</b> เพิ่มโปรเจกต์ในรายการ PROJECTS โดยเก็บงานที่เปิดอยู่ไว้ แต่ละโปรเจกต์มี Top และแท็บของตัวเอง
+        <b>Save Workspace</b> บันทึกทุกโปรเจกต์ในไฟล์เดียว (v2) ส่วน <b>Open Project / Workspace</b> โหลดไฟล์มาแทน Workspace ที่เปิดอยู่</p>
+      <p><b>File → Import Project as Sub-project…</b> รองรับไฟล์ .schproj.json เดิม (v1) และ Workspace (v2)
+        ถ้าไฟล์มีหลายโปรเจกต์ให้เลือกต้นทาง แล้วเลือกว่าจะวาง Top เดิมเป็น <b>Sub-block ใน schematic ปัจจุบัน</b>,
+        เปิดเป็น <b>โปรเจกต์ใหม่</b> หรือเพิ่มเฉพาะ <b>Schematics</b> วงจรย่อยกับ custom component จะติดมาด้วย
+        ชื่อซ้ำเติมเลขต่อท้ายและทุกชิ้นส่วนได้ ID ใหม่ กด Ctrl+Z ย้อนกลับการนำเข้าได้</p>
+      <p><b>File → แยก schematic เป็นโปรเจกต์ใหม่…</b> เลือกแผ่นแล้วคัดลอกหรือย้ายไปโปรเจกต์ใหม่/โปรเจกต์อื่น/ไฟล์
+        หน้าต่างจะแสดงแผ่นที่ต้องพ่วงไปด้วย และกันการย้ายที่ทำให้แผ่นที่เหลือขาดวงจรย่อย</p>
+      <p>ไฟล์ที่มี custom VHDL แบบข้อความและชื่อ entity ชนกันต้องเปลี่ยนชื่อในต้นทางก่อนนำเข้า
+        โปรแกรมจะไม่เลือกใช้วงจรชื่อเดียวกันแทนโดยอัตโนมัติ</p>
+
       <h3>สายที่ดูเหมือนต่อแล้ว แต่ยังลอยอยู่</h3>
       <p>อาการคือเอาต์พุตเป็นศูนย์ตลอด ทั้งที่ตรรกะข้างในถูกหมด ให้ดูโค้ดที่บรรทัดขับเอาต์พุต ถ้าเจอแบบนี้แปลว่ายังไม่ได้ต่อจริง</p>
       <pre>  <b>out_s &lt;= (others =&gt; '0');</b>   -- เอาต์พุตถูกยึดเป็นศูนย์ ไม่มีอะไรขับ
@@ -934,6 +991,53 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
         <p class="lbl">ระวังสองจุด</p>
         <p>หนึ่ง — แตะเฉพาะ <b>Converter A</b> เท่านั้น อย่าเปลี่ยน driver ของ Converter B
           สอง — ถ้าในรายการขั้นที่ 6 ไม่มี USB Serial Converter A เลย แปลว่าเครื่องนั้นยังไม่มี FTDI driver — ติดตั้ง CDM driver จาก ftdichip.com (หรือเสียบบอร์ดกับเครื่องที่เคยใช้ Vivado ได้ แล้วให้ Windows Update ดึงให้) ก่อนค่อยทำซ้ำ</p>
+      </div>
+    </section>
+
+
+    <!-- ================= 14 ================= -->
+    <section id="man-s14">
+      <h2><span class="num">14</span> Preset กับ Clear ของ flip-flop</h2>
+      <p class="sub">flip-flop ทั้งสี่ตัวมีขาควบคุมแบบไม่รอนาฬิกา (asynchronous) — เปิดใช้ได้จาก Inspector</p>
+
+      <ol class="steps">
+        <li>คลิกเลือก flip-flop → ใน Inspector ติ๊ก <b>Async reset</b> (คือ clear) หรือ <b>Async preset</b></li>
+        <li>ขา <b>R</b> จะโผล่ที่ขอบล่างของบล็อก ส่วนขา <b>P</b> ที่ขอบบน</li>
+        <li>ต่อสายเข้าขานั้น — ทำงานแบบ <b>active-high</b> คือสัญญาณเป็น <code>'1'</code> เมื่อไหร่ทำงานทันที ไม่รอสัญญาณนาฬิกา</li>
+      </ol>
+
+      <pre>  process(clk, rst)               <b>-- ขา async อยู่ใน sensitivity list → ไม่รอ clock</b>
+  begin
+    if rst = '1' then
+      q &lt;= '0';  qn &lt;= '1';       <b>-- clear: Q=0, Q̅=1</b>
+    elsif rising_edge(clk) then …</pre>
+
+      <p>ถ้าเปิดทั้งสองพร้อมกัน <b>reset มีสิทธิ์เหนือ preset</b> (ตามลำดับ if/elsif ในโค้ด)
+        แต่ Spartan-7 มี async control ได้ทางเดียวต่อ register โปรแกรมจึงเตือนให้เลือกอย่างใดอย่างหนึ่ง</p>
+
+      <h3>ต่อขา R / P เข้า VCC หรือ GND</h3>
+      <p>ต่อได้ทั้งสองแบบ และความหมายต่างกันคนละขั้ว — โปรแกรมแปลให้ตรงกับฮาร์ดแวร์จริง</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>ต่อกับ</th><th>ความหมาย</th><th>โค้ดที่ได้</th></tr></thead>
+          <tbody>
+            <tr><td class="k">GND</td><td>กดค้างไว้ที่ไม่ทำงาน — เป็นการ tie-off ตามมาตรฐานสำหรับขาที่ไม่ใช้</td><td>register ธรรมดา ไม่มีกิ่ง async ใน process</td></tr>
+            <tr><td class="k">VCC</td><td>ทำงานค้างตลอด — flip-flop จำค่าอะไรไม่ได้เลย</td><td>ได้ค่าคงที่ (Q ค้างที่ 0 หรือ 1) ไม่มี process เลย พร้อมคำเตือน</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note good">
+        <p class="lbl">ต่อ GND ไว้ไม่ผิด</p>
+        <p>ใน ISE การต่อขา CLR/PRE ที่ไม่ใช้เข้า GND เป็นเรื่องปกติ เพื่อบอกว่า "ตั้งใจไม่ใช้"
+          ไม่ใช่ลืมต่อ โปรแกรมจึงขึ้นเป็นข้อสังเกตอธิบาย ไม่ใช่ error — จะปิดตัวเลือกใน Inspector ไปเลยก็ได้ผลเท่ากัน</p>
+      </div>
+
+      <div class="note trap">
+        <p class="lbl">ต่อ VCC คือ flip-flop ตาย</p>
+        <p>ขา R ต่อ VCC → Q ค้างที่ 0 ตลอด · ขา P ต่อ VCC → Q ค้างที่ 1 ตลอด
+          โปรแกรมจะเตือนในแท็บ Issues และสร้างโค้ดเป็นค่าคงตามความจริง (Vivado ก็จะตัด register ทิ้งเหมือนกัน)
+          ถ้าตั้งใจจะ reset ตอนเริ่ม ให้ต่อกับปุ่มหรือสัญญาณ reset จริง ไม่ใช่ VCC</p>
       </div>
     </section>
 
@@ -1027,7 +1131,7 @@ const sanId = s => {
 };
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const snap = v => Math.round(v/GRID)*GRID;
-const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 function el(tag, attrs={}, children=[]){
   const e = document.createElementNS(SVGNS, tag);
   for(const k in attrs) if(attrs[k]!==undefined&&attrs[k]!==null) e.setAttribute(k, attrs[k]);
@@ -1062,6 +1166,7 @@ function toast(msg, kind="info", ms=2400){
 const HBASE = 56;
 const STEP  = 24;
 
+function gateWidth(p){ return clamp(Math.round((p && p.width) || 1) || 1, 1, 32); }
 function gatePortsAndSize(p, withBubble=false){
   const n = clamp(p.inputs||2, 1, 8);
   // h = 22*(n+1) puts every input at 22*i and the output at 11*(n+1) —
@@ -1070,11 +1175,12 @@ function gatePortsAndSize(p, withBubble=false){
   // width GROWS with the input count so a many-input gate stays balanced (not a thin
   // tall sliver); always a GRID multiple so the output port lands on the grid.
   const w = GRID * clamp(4 + n, 6, 12);   // n=2 → 66 … n=8 → 132
+  const bits = gateWidth(p);
   const ins = [];
   for(let i=0;i<n;i++){
-    ins.push({id:"i"+i, dir:"in", dx:0, dy: Math.round(h/(n+1) * (i+1))});
+    ins.push({id:"i"+i, dir:"in", dx:0, dy: Math.round(h/(n+1) * (i+1)), width:bits});
   }
-  const out = {id:"o", dir:"out", dx:w, dy: Math.round(h/2)};
+  const out = {id:"o", dir:"out", dx:w, dy: Math.round(h/2), width:bits};
   return { ports:[...ins,out], size:{w,h} };
 }
 function gateBodyShape(p, kind){
@@ -1120,7 +1226,11 @@ function gateBodyShape(p, kind){
   const bubble = hasBubble
     ? `<circle cx="${re+br}" cy="${cy}" r="${br}" fill="var(--gate-fill)" stroke="var(--gate-stroke)" stroke-width="1.4"/>`
     : "";
-  return stubs + body + bubble;
+  // a wide gate must LOOK wide — the wires do (buses draw thicker), so the body says so too
+  const bits = gateWidth(p);
+  const tag = bits > 1
+    ? `<text x="${w/2}" y="${h-1}" text-anchor="middle" font-size="8" fill="var(--muted)">${bits-1}:0</text>` : "";
+  return stubs + body + bubble + tag;
 }
 /* ISE ships exactly four sizes of each comparator, and the SIZE decides the pin
    style: COMP2/COMP4 bring every bit out on its own pin, COMP8/COMP16 carry one bus
@@ -1165,8 +1275,14 @@ function cmpDef(mag){
 function gateDef(kind, label, op, defaultIns=2){
   return {
     label, category:"gate",
-    defaultParams: kind==="not"||kind==="buf" ? {inputs:1} : {inputs:defaultIns},
-    paramSchema: kind==="not"||kind==="buf" ? [] : [{key:"inputs", label:"Inputs", type:"int", min:2, max:8}],
+    /* WIDTH. A gate is one bit until you say otherwise, and then it is that many bits
+       wide on every pin — which is what lets a byte-wide mux be drawn as
+       (a and not sel) or (b and sel) instead of eight copies of it. VHDL defines
+       and/or/xor/not element-wise over std_logic_vector, so the emitted expression is
+       the same; only the widths change. */
+    defaultParams: kind==="not"||kind==="buf" ? {inputs:1, width:1} : {inputs:defaultIns, width:1},
+    paramSchema: (kind==="not"||kind==="buf" ? [] : [{key:"inputs", label:"Inputs", type:"int", min:2, max:8}])
+      .concat([{key:"width", label:"ความกว้าง (bit)", type:"int", min:1, max:32}]),
     size(p){ return gatePortsAndSize(p).size; },
     ports(p){ return gatePortsAndSize(p).ports; },
     shape(p){ return gateBodyShape(p, kind); },
@@ -1197,6 +1313,42 @@ function blockShape(label, w, h, sub){
 function ioLabel(p){ return (p.name||"") + ((p.width||1)>1 ? `(${p.width-1}:0)` : ""); }
 // width rounded up to a GRID multiple so the port x lands on the grid
 function ioShapeW(p){ return Math.ceil(Math.max(56, Math.round(ioLabel(p).length*6.3) + 28) / GRID) * GRID; }
+
+/* ---------- CONST: a signal locked to a fixed value ----------
+   Written as hex because that is how a data sheet gives it (0x38, 0xF4 in the LCD
+   command tables). ONE normaliser, so the symbol, the label and the generated VHDL
+   can never disagree about what the block actually drives: the stored text is free
+   (the user may type "0xf4", "F4", or paste junk) and every reader goes through here. */
+function constWidth(p){ return clamp(Math.round((p && p.width) || 1) || 1, 1, 32); }
+function constHex(p){
+  const w = constWidth(p), nib = Math.ceil(w/4);
+  let h = String((p && p.value) !== undefined && p.value !== null ? p.value : "")
+            .trim().replace(/^0[xX]/, "").replace(/[^0-9a-fA-F]/g, "").toUpperCase();
+  if(!h) h = "0";
+  h = h.slice(-nib).padStart(nib, "0");        // keep the LOW digits, pad to the width
+  const top = w % 4;                           // 6 bits cannot hold 0xFF — mask the
+  if(top){                                     // bits that do not exist at this width
+    h = ((parseInt(h[0], 16) & ((1 << top) - 1)).toString(16).toUpperCase()) + h.slice(1);
+  }
+  return h;
+}
+function constBits(p){
+  const w = constWidth(p);
+  return parseInt(constHex(p), 16).toString(2).padStart(w, "0").slice(-w);
+}
+function constLabel(p){ return constWidth(p) > 1 ? "0x" + constHex(p) : "'" + constBits(p) + "'"; }
+function constShapeW(p){
+  const n = Math.max(constLabel(p).length, constWidth(p) > 1 ? String(constWidth(p)-1).length + 4 : 0);
+  return Math.ceil(Math.max(55, Math.round(n*7) + 22) / GRID) * GRID;
+}
+/* The VHDL literal. Hex only when the width is a whole number of nibbles — x"F4" IS
+   8 bits by definition, so a 6-bit signal rejects it; a binary string always fits the
+   width exactly, which is also what makes the odd widths legal. */
+function constVhdl(p){
+  const w = constWidth(p);
+  if(w === 1) return "'" + constBits(p) + "'";
+  return (w % 4 === 0) ? `x"${constHex(p)}"` : `"${constBits(p)}"`;
+}
 /* clock-edge mark for flip-flops: triangle, plus a bubble for falling edge */
 function edgeMark(cy, edge){
   const off = edge==="falling" ? 7 : 0;
@@ -1262,6 +1414,30 @@ const TYPES = {
               <line x1="4" y1="20" x2="18" y2="20" stroke="var(--out-stroke)" stroke-width="1.6"/>
               <line x1="7" y1="26" x2="15" y2="26" stroke="var(--out-stroke)" stroke-width="1.6"/>
               <text x="11" y="33" text-anchor="middle" font-size="10" fill="var(--out-text)" font-weight="600">GND</text>`
+  },
+  /* Locks whatever it feeds to a fixed value — an OUTPUT pin held at 0x00, a sub-block
+     input strapped to a mode, a byte of a command table. Deliberately NOT drawn like an
+     INPUT: a port and a constant read the same on a printout otherwise, and one of them
+     is a pin on the entity while the other is a wire tied to a rail. */
+  CONST: {
+    label:"CONST", category:"io",
+    defaultParams:{value:"00", width:8},
+    paramSchema:[
+      {key:"value", label:"ค่า (hex)",       type:"string", placeholder:"เช่น F4 หรือ 0xF4"},
+      {key:"width", label:"ความกว้าง (bit)", type:"int", min:1, max:32},
+    ],
+    size:p=>({w: constShapeW(p), h:44}),
+    ports:p=>{const w=constShapeW(p); return [{id:"o",dir:"out",dx:w,dy:22,width:constWidth(p)}];},
+    shape(p){
+      const w = constShapeW(p), wide = constWidth(p) > 1;
+      return `<rect class="glow" x="2" y="8" width="${w-4}" height="28" rx="4"
+                fill="var(--in-fill)" stroke="var(--in-stroke)" stroke-width="1.6"/>
+              <line x1="7" y1="12" x2="7" y2="32" stroke="var(--in-stroke)" stroke-width="1.4"/>
+              <text x="${(w+5)/2}" y="${wide?21:26}" text-anchor="middle" font-size="11"
+                fill="var(--in-text)" font-weight="600">${esc(constLabel(p))}</text>` +
+             (wide ? `<text x="${(w+5)/2}" y="32" text-anchor="middle" font-size="8"
+                fill="var(--muted)">(${constWidth(p)-1}:0)</text>` : ``);
+    }
   },
   JUNCTION: {
     label:"Junction", category:"wire",
@@ -1364,9 +1540,10 @@ const TYPES = {
      student from having to pick a mode. */
   BUSTAP: {
     label:"Bus Tap", category:"bus",
-    defaultParams:{bit:0, dir:"right", mode:"split"},
+    defaultParams:{bit:0, nbit:1, dir:"right", mode:"split"},
     paramSchema:[
-      {key:"bit",  label:"บิตที่ ", type:"int", min:0, max:31},
+      {key:"bit",  label:"บิตเริ่มที่ ", type:"int", min:0, max:31},
+      {key:"nbit", label:"จำนวนบิต", type:"int", min:1, max:32},
       {key:"mode", label:"ทิศทางบิต", type:"select", options:["split","merge"]},
       {key:"dir",  label:"หันไปทาง",  type:"select", options:["right","down","left","up"]},
     ],
@@ -1380,7 +1557,9 @@ const TYPES = {
       // d sits on the BASE of the triangle, y at the TIP.
       const merge = p.mode==="merge";
       const D = {id:"d", dir:"in", width:2, label:""};
-      const Y = {id:"y", dir: merge ? "in" : "out", width:1, label:""};
+      // the bit pin is as wide as the SLICE: rip 4 bits and the thin wire is a 4-bit
+      // bus itself, so every width check downstream lines up on its own
+      const Y = {id:"y", dir: merge ? "in" : "out", width: Math.max(1, p.nbit ?? 1), label:""};
       switch(p.dir){
         case "down":  return [{...D,dx:11,dy:0 }, {...Y,dx:11,dy:33}];
         case "up":    return [{...D,dx:11,dy:33}, {...Y,dx:11,dy:0 }];
@@ -1389,7 +1568,8 @@ const TYPES = {
       }
     },
     shape(p){
-      const bit = p.bit ?? 0;
+      const bit = p.bit ?? 0, nb = Math.max(1, p.nbit ?? 1);
+      const tag = nb > 1 ? `${bit+nb-1}:${bit}` : String(bit);
       const W = (p.dir==="down"||p.dir==="up") ? 22 : 33;
       // a CLOSED triangle: the broad BASE lies flush ON the bus (the d side) and the
       // TIP points at the thin wire — the ISE rip. Four orientations; the bit number
@@ -1403,7 +1583,7 @@ const TYPES = {
       const anchor = vert ? "start" : "middle";
       return `<path class="glow" d="${tri}" fill="var(--gate-fill)" stroke="var(--wire-bus)" stroke-width="1.8"/>
               <text x="${lx}" y="${ly}" text-anchor="${anchor}" font-size="8"
-                font-family="monospace" fill="var(--ink-dim)">${bit}</text>`;
+                font-family="monospace" fill="var(--ink-dim)">${tag}</text>`;
     }
   },
 
@@ -1917,6 +2097,7 @@ function reseedUid(p){
   let mx = 0;
   const scan = id => { const m = /(\d+)$/.exec(id||""); if(m) mx = Math.max(mx, +m[1]); };
   p = p || state.project;
+  scan(p.id);
   Object.keys(p.schematics).forEach(sid=>{
     scan(sid);
     const s = p.schematics[sid];
@@ -1971,10 +2152,11 @@ function netPortWidth(sch, w0){
   return width;
 }
 /* Ensure a schematic name is unique in the project (excluding one id) */
-function uniqueSchName(base, excludeId){
+function uniqueSchName(base, excludeId, proj){
+  const P = proj || state.project;
   let nm = sanId(base) || "sch";
-  const taken = () => Object.keys(state.project.schematics)
-    .some(id => id !== excludeId && state.project.schematics[id].name === nm);
+  const taken = () => Object.keys(P.schematics)
+    .some(id => id !== excludeId && P.schematics[id].name === nm);
   let k = 2; const root = nm;
   while(taken()) nm = root + "_" + (k++);
   return nm;
@@ -1991,8 +2173,8 @@ function schPortList(sch){
   const used = {};
   const uq = b => { let n = sanId(b)||"net", i=1; while(used[n]) n = sanId(b)+"_"+(i++); used[n]=1; return n; };
   const out = [];
-  (sch.components||[]).filter(c=>c.type==="IN").forEach(c=>out.push({id:uq(c.params.name||"in"),  name:c.params.name, dir:"in",  width:c.params.width||1}));
-  (sch.components||[]).filter(c=>c.type==="OUT").forEach(c=>out.push({id:uq(c.params.name||"out"), name:c.params.name, dir:"out", width:c.params.width||1}));
+  (sch.components||[]).filter(c=>c.type==="IN").forEach(c=>out.push({cid:c.id, id:uq(c.params.name||"in"),  name:c.params.name, dir:"in",  width:c.params.width||1}));
+  (sch.components||[]).filter(c=>c.type==="OUT").forEach(c=>out.push({cid:c.id, id:uq(c.params.name||"out"), name:c.params.name, dir:"out", width:c.params.width||1}));
   return out;
 }
 /* Apply a per-instance manual port order without changing the port ids themselves.
@@ -2071,7 +2253,7 @@ function schTypeDef(sch){
       const {w,h} = geometry(p);
       // ids come from the shared deduped list so port-map formals match the
       // sub-entity exactly (an IN+OUT with one name become foo/foo_1, not foo×2)
-      const list = schPortList(sch);
+      const list = schPortList(sch).sort((a,b)=>{ const ac=sch.components.find(c=>c.id===a.cid), bc=sch.components.find(c=>c.id===b.cid); return ac.y-bc.y || ac.x-bc.x; });
       const insL = orderedSchPortList(list.filter(p=>p.dir==="in"), p&&p.inputOrder, p&&p.reverseInputs);
       const outsL = orderedSchPortList(list.filter(p=>p.dir==="out"), p&&p.outputOrder, p&&p.reverseOutputs);
       const out = [];
@@ -2092,6 +2274,14 @@ function schTypeDef(sch){
    STATE
    ========================================================================= */
 const state = {
+  /* WORKSPACE. Work is organised in several projects at once (Lab01, Lab02, …)
+     exactly like a tool's project list, so one term does not become one giant
+     sheet list. `state.project` remains the ACTIVE project object and every other
+     line in this file keeps reading it — the workspace only decides WHICH object
+     that is. Each project also remembers its own open tabs and active sheet, so
+     switching back finds the desk as it was left. */
+  projects: {},             // {pid: project}
+  activeProjectId: null,
   project: blankProject(),
   activeId: null,           // current schematic id
   openTabs: [],             // [schId]
@@ -2123,6 +2313,13 @@ function blankProject(){
 }
 function blankSchematic(id, name){
   return { id, name, components: [], wires: [] };
+}
+
+function seedWorkspace(){
+  const pid = uid("prj");
+  state.project.id = pid;
+  state.projects = { [pid]: state.project };
+  state.activeProjectId = pid;
 }
 
 /* convenience */
@@ -2281,7 +2478,9 @@ function cyclePlacementAir(){
    ========================================================================= */
 function snapshot(){
   if(state.history.muted) return;
-  const s = JSON.stringify({p:state.project, a:state.activeId, t:state.openTabs});
+  stashProjectUi();
+  const s = JSON.stringify({projects:state.projects, a:state.activeId, t:state.openTabs, pid:state.activeProjectId},
+    (k,v)=>["_net","_nets","_netW","_busNet","_busW"].includes(k) ? undefined : v);
   const h = state.history;
   h.stack = h.stack.slice(0, h.idx+1);
   h.stack.push(s);
@@ -2290,12 +2489,16 @@ function snapshot(){
 }
 function restore(s){
   const o = JSON.parse(s);
-  state.project = o.p;
+  state.projects = o.projects || {[o.pid || state.activeProjectId]:o.p};
+  state.activeProjectId = o.pid || state.activeProjectId;
+  state.project = state.projects[state.activeProjectId];
   state.activeId = o.a;
   state.openTabs = o.t;
   state.selection.clear();
   state.pendingWire = null;
-  renderAll();
+  state.clipboard = null;
+  $("#projectName").value = state.project.name;
+  resetVhdlPanel(); renderAll();
 }
 function undo(){ if(state.history.idx>0){ state.history.idx--; restore(state.history.stack[state.history.idx]); } }
 function redo(){ if(state.history.idx<state.history.stack.length-1){ state.history.idx++; restore(state.history.stack[state.history.idx]); } }
@@ -2329,8 +2532,19 @@ function renderProjectTree(){
   const html = [];
   html.push(`<div class="tree">`);
 
+  html.push(`<div class="tree-group"><h4>PROJECTS
+    <button class="add" title="Import Project" data-act="import-project">↓</button>
+    <button class="add" title="New Project" data-act="new-project">+</button></h4>`);
+  Object.values(state.projects).forEach(pr=>{
+    html.push(`<div class="tree-item prj ${pr.id===state.activeProjectId?"active":""}" data-project="${esc(pr.id)}">
+      <span class="ico">▣</span><span class="label">${esc(pr.name)}</span><span class="cnt">${Object.keys(pr.schematics).length}</span>
+      <span class="acts"><button title="เปลี่ยนชื่อโปรเจกต์" data-project-rename="${esc(pr.id)}">✎</button>
+      <button title="ลบโปรเจกต์" data-project-delete="${esc(pr.id)}">×</button></span></div>`);
+  });
+  html.push(`</div>`);
   // Schematics
   html.push(`<div class="tree-group"><h4>SCHEMATICS
+    <button class="add" title="แยก schematics" data-act="split-project">✂</button>
     <button class="add" title="New schematic" data-act="new-sch">+</button></h4>`);
   for(const id in p.schematics){
     const sch = p.schematics[id];
@@ -2388,6 +2602,14 @@ function renderProjectTree(){
   html.push(`</div>`);
 
   root.innerHTML = html.join("");
+  root.querySelectorAll("[data-project]").forEach(e=>e.addEventListener("click",ev=>{
+    if(!ev.target.closest(".acts")) switchProject(e.dataset.project);
+  }));
+  root.querySelectorAll("[data-project-rename]").forEach(e=>e.addEventListener("click",()=>{
+    const id=e.dataset.projectRename, name=prompt("ชื่อโปรเจกต์:",state.projects[id].name);
+    if(name) renameProjectById(id,name);
+  }));
+  root.querySelectorAll("[data-project-delete]").forEach(e=>e.addEventListener("click",()=>deleteProjectById(e.dataset.projectDelete)));
 
   // wire up
   const orderRows = Array.from(root.querySelectorAll("[data-sch-order]"));
@@ -2489,6 +2711,7 @@ function renderProjectTree(){
     Object.values(state.project.schematics).forEach(s=>healJunctions(s));
     pruneDeadPinWires();
     snapshot(); renderAll();
+    autoFitSheet();
   }));
   root.querySelectorAll("[data-edit-custom]").forEach(e=>e.addEventListener("click",ev=>{
     ev.stopPropagation();
@@ -2582,6 +2805,7 @@ function openSchTab(id){
   state.selection.clear();
   state.pendingWire = null;
   renderAll();
+  autoFitSheet();
 }
 function closeSchTab(id){
   if(state.placementMode){ toast("จบหรือยกเลิก Placement Mode ก่อนปิด schematic","warn",2800); return; }
@@ -2593,6 +2817,7 @@ function closeSchTab(id){
     state.pendingWire = null;
   }
   renderAll();
+  autoFitSheet();          // you land on a different sheet
 }
 function renderSchTabs(){
   const root = $("#schTabs");
@@ -2757,7 +2982,12 @@ function tappedBitsOnNet(w, sch){
     const x = sch.wires.find(y=>y.id===id); if(!x) return;
     [x.from, x.to].forEach(ep=>{
       const c = comp(ep.cid, sch);
-      if(c && c.type==="BUSTAP") used.add(c.params.bit??0);
+      if(c && c.type==="BUSTAP"){
+        // a slice occupies EVERY bit it covers, or the next tap would be handed one
+        // of them and two taps would fight over the same wires
+        const b0 = c.params.bit ?? 0, n = Math.max(1, c.params.nbit ?? 1);
+        for(let k=0; k<n; k++) used.add(b0 + k);
+      }
     });
   });
   return used;
@@ -2820,7 +3050,7 @@ function stampTapOnWire(w, point){
   let bit = 0; while(bit < bw && used.has(bit)) bit++;
   if(bit >= bw){ toast(`บัสกว้าง ${bw} bit และถูกแตะครบทุกบิตแล้ว`,"warn",3200); return false; }
 
-  const tap = { id:uid("c"), type:"BUSTAP", x:0, y:0, label:"", params:{bit, dir, mode} };
+  const tap = { id:uid("c"), type:"BUSTAP", x:0, y:0, label:"", params:{bit, nbit:1, dir, mode} };
   const dp = TYPES.BUSTAP.ports(tap.params).find(p=>p.id==="d");
   tap.x = at.x - dp.dx; tap.y = at.y - dp.dy;   // seat the bus side EXACTLY on the bus
   sch.components.push(tap);
@@ -2880,6 +3110,61 @@ function addIOMarkerAt(c, p){
    no explanation) while the dead wire is still written to the saved file, and the next
    healJunctions on that sheet threw a TypeError out of the Delete handler. Sweep them
    across the WHOLE project and report how many went. */
+/* A SUB-BLOCK'S PIN ID IS THE PORT'S NAME — it has to be, because that name is the
+   formal in the generated port map. So renaming an IN/OUT inside a sheet renames the
+   pins of every instance of that sheet, and the parent's wires, which store the OLD
+   id, are left pointing at a pin that no longer exists. They then stop being drawn
+   (the render skips a wire whose port will not resolve), the pin reads as "not
+   connected", and the generator quietly substitutes '0'. A whole branch of a design
+   dies with no message at all.
+
+   Deleting a port is worse than it looks for the same reason: ids are deduped by
+   POSITION (an IN and an OUT sharing a name become foo / foo_1), so removing one port
+   can renumber another — and a wire then still resolves, to the WRONG pin.
+
+   Both are the same fix: diff the port list by component identity and move the wires. */
+function remapSubBlockPins(schId, before, after){
+  const now = new Map((after||[]).map(p=>[p.cid, p.id]));
+  const move = new Map();                       // oldId → newId, only where it changed
+  const dead = new Set();                       // ports that are gone altogether
+  (before||[]).forEach(p=>{
+    const nid = now.get(p.cid);
+    if(!nid) dead.add(p.id);
+    else if(nid !== p.id) move.set(p.id, nid);
+  });
+  const out = {moved:0, dropped:0};
+  if(!move.size && !dead.size) return out;
+  const type = "SCH:" + schId;
+  const sweep = s => {
+    if(!s || !Array.isArray(s.wires)) return;
+    const inst = new Set((s.components||[]).filter(c=>c.type===type).map(c=>c.id));
+    if(!inst.size) return;
+    s.components.filter(c=>inst.has(c.id)).forEach(c=>{
+      for(const key of ["inputOrder","outputOrder"]){
+        if(Array.isArray(c.params?.[key])) c.params[key]=c.params[key].filter(id=>!dead.has(id)).map(id=>move.get(id)||id);
+      }
+    });
+    /* Wires on a DELETED port must go first. Deleting one port renumbers another
+       (foo_1 → foo), so a moment later the dead wire's id would resolve again — to a
+       different pin, sometimes one facing the other way — and the ordinary dead-pin
+       sweep would then find nothing wrong with it. */
+    if(dead.size){
+      const keep = s.wires.filter(w => ![w.from, w.to].some(ep => inst.has(ep.cid) && dead.has(ep.pid)));
+      out.dropped += s.wires.length - keep.length;
+      s.wires = keep;
+    }
+    // each endpoint is rewritten at most once, off the ORIGINAL map, so even a rename
+    // that swaps two names round lands correctly
+    s.wires.forEach(w=>{
+      [w.from, w.to].forEach(ep=>{
+        if(inst.has(ep.cid) && move.has(ep.pid)){ ep.pid = move.get(ep.pid); out.moved++; }
+      });
+    });
+  };
+  Object.values(state.project.schematics).forEach(sweep);
+  Object.values(state.project.customs||{}).forEach(cc=>{ if(cc.schematic) sweep(cc.schematic); });
+  return out;
+}
 function pruneDeadPinWires(){
   let n = 0;
   const sweep = s => {
@@ -2906,7 +3191,11 @@ function deleteSelection(){
   // deleting an IN/OUT changes this sheet's PORT LIST, so every parent sheet that
   // instantiates it now has wires hanging off pins that no longer exist
   const droppedPorts = sch.components.some(c=>ids.has(c.id) && (c.type==="IN" || c.type==="OUT"));
+  const portsBefore = droppedPorts ? schPortList(sch) : null;
   sch.components = sch.components.filter(c=>!ids.has(c.id));
+  // removing one port renumbers the others (foo_1 → foo); without this the parent's
+  // wire still resolves — to a DIFFERENT pin, silently
+  const portSync = portsBefore ? remapSubBlockPins(sch.id, portsBefore, schPortList(sch)) : {moved:0, dropped:0};
   sch.wires = sch.wires.filter(w=>!ids.has(w.id) && !ids.has(w.from.cid) && !ids.has(w.to.cid));
   state.selection.clear();
   // a wire being drawn FROM a component we just deleted must die with it — else the
@@ -2914,13 +3203,14 @@ function deleteSelection(){
   // one-driver filter has already removed that sink's existing wire (silent loss)
   if(state.pendingWire && !comp(state.pendingWire.cid, sch)) state.pendingWire = null;
   healJunctions(sch);   // junctions clean themselves up when no longer needed
-  const orphans = droppedPorts ? pruneDeadPinWires() : 0;
+  const orphans = (droppedPorts ? pruneDeadPinWires() : 0) + portSync.dropped;
   snapshot(); renderAll();
   if(orphans) toast(`ลบขาเข้า/ออกของวงจรนี้ — สายในแผ่นที่เรียกใช้วงจรนี้ถูกตัดออก ${orphans} เส้น`,"warn",4200);
 }
 function duplicateSelection(){
   const sch = activeSch();
-  const ids = new Set(state.selection);
+  const grab = copyPlan(sch, state.selection);      // the copy needs its own tie-offs
+  const ids = grab.ids;
   const newSel = new Set();
   const idMap = new Map();
   sch.components.filter(c=>ids.has(c.id)).forEach(c=>{
@@ -2951,8 +3241,10 @@ function duplicateSelection(){
     nw.to   = {cid:idMap.get(w.to.cid),   pid:w.to.pid};
     sch.wires.push(nw);
   });
+  placeTies(sch, grab.ties, idMap, newSel);
   state.selection = newSel;
   snapshot(); renderAll();
+  if(grab.lost) toast(`ทำซ้ำแล้ว — มี ${grab.lost} ขาที่ตัวขับอยู่นอกสิ่งที่เลือก ตัวที่คัดลอกจึงยังไม่มีสายที่ขานั้น`, "warn", 4600);
 }
 
 /* pts / autoPts / mx / my are ABSOLUTE canvas coordinates, not offsets from the pins.
@@ -2982,16 +3274,96 @@ function freezeAutoRoute(clone, src, sch){
   return clone;
 }
 
+/* A TIE-OFF IS PART OF THE BLOCK, not part of the drawing around it. Copying four
+   flip-flops without the VCC on their J/K pins gives four registers that can never
+   change — the generator writes `null; -- J=K='0' → hold` and the counter silently
+   does nothing. VCC / GND / CONST are pure sources with no other meaning, so a copy
+   takes them with it, following junctions so a shared tie-off rail comes too.
+   Anything else whose driver is outside the selection is REPORTED instead: the wire
+   genuinely cannot come, and finding that out after the paste is too late. */
+/* WHAT A COPY HAS TO CARRY, beyond the blocks the user picked.
+
+   A tie-off is part of the block, not part of the drawing around it: copy four JK-FFs
+   without the VCC on their J/K and every copy is a register that can never change
+   (`null; -- J=K='0' → hold`), which is how a counter that does not count reaches
+   Vivado looking fine.
+
+   But a tie-off must not be copied WHERE IT SAT. One VCC usually feeds a whole rail
+   through junctions somewhere off to the side, so cloning it with its geometry pasted
+   a flip-flop with a metre of wire trailing back to where the rail used to be. The
+   copy does not need that rail — it needs its own tie, next to the pin. So an
+   unselected tie-off is not copied at all: the plan records "this pin wants a VCC"
+   and the paste builds a fresh one against the pin.
+
+   If the user DID select the tie-off, they chose that geometry: the junction chain in
+   between comes along so the wire arrives exactly as drawn. */
+function copyPlan(sch, sel){
+  const TIE = new Set(["VCC","GND","CONST"]);
+  const ids = new Set(sel);
+  const ties = [];
+  let lost = 0;
+  /* pull in the dots between a selected sink and a selected source, or the wire that
+     joins them cannot be copied (both ends must be inside the set) */
+  const addChain = w => {
+    let cur = w, guard = 0;
+    while(cur && guard++ < 64){
+      const f = comp(cur.from.cid, sch);
+      if(!f || f.type !== "JUNCTION") return;
+      ids.add(f.id);
+      cur = sch.wires.find(x => x.to.cid === f.id);
+    }
+  };
+  sch.wires.forEach(w=>{
+    if(!sel.has(w.to.cid) || sel.has(w.from.cid)) return;
+    const d = netDriverPort(sch, w);
+    const src = d && comp(d.cid, sch);
+    if(src && TIE.has(src.type)){
+      if(sel.has(src.id)) addChain(w);
+      else ties.push({cid:w.to.cid, pid:w.to.pid, type:src.type,
+                      params: JSON.parse(JSON.stringify(src.params||{}))});
+      return;
+    }
+    if(src && sel.has(src.id)){ addChain(w); return; }
+    lost++;
+  });
+  return { ids, ties, lost };
+}
+/* Build the recorded tie-offs against the pasted pins. Each pin gets its own block —
+   independent, so moving one copy can never disturb another — stepped further left
+   for each extra tie on the same component so two of them never land on top of
+   each other. */
+function placeTies(sch, ties, idMap, newSel){
+  const placed = new Map();
+  (ties||[]).forEach(t=>{
+    const cid = idMap.get(t.cid); if(!cid) return;
+    const target = comp(cid, sch); if(!target) return;
+    const pp = portPos(target, t.pid); if(!pp) return;
+    const td = TYPES[t.type]; if(!td) return;
+    const params = JSON.parse(JSON.stringify(t.params||{}));
+    const op = (td.ports(params)||[]).find(p=>p.dir==="out"); if(!op) return;
+    const k = placed.get(cid) || 0; placed.set(cid, k+1);
+    const nc = { id:uid("c"), type:t.type, label:"", params,
+                 x: snap(pp.x - (3 + k*5)*GRID - op.dx),
+                 y: snap(pp.y - op.dy) };
+    sch.components.push(nc);
+    sch.wires.push({id:uid("w"), from:{cid:nc.id, pid:op.id}, to:{cid, pid:t.pid}, name:""});
+    if(newSel) newSel.add(nc.id);
+  });
+}
 function copySelection(){
   const sch = activeSch();
-  const ids = new Set(state.selection);
+  const grab = copyPlan(sch, state.selection);
+  const ids = grab.ids;
   const comps = sch.components.filter(c=>ids.has(c.id))
     .map(c=>JSON.parse(JSON.stringify(c)));
   if(!comps.length){ toast("ไม่มี component ที่เลือก","warn"); return; }
   const wires = sch.wires.filter(w=>ids.has(w.from.cid) && ids.has(w.to.cid))
     .map(w=>freezeAutoRoute(JSON.parse(JSON.stringify(w)), w, sch));
-  state.clipboard = { components: comps, wires };
-  toast(`คัดลอก ${comps.length} บล็อกแล้ว`, "ok");
+  state.clipboard = { components: comps, wires, ties: grab.ties };
+  toast(`คัดลอก ${comps.length} บล็อกแล้ว`
+        + (grab.ties.length ? ` (พ่วง VCC/GND/CONST ที่ต่ออยู่มาด้วย ${grab.ties.length} ขา)` : "")
+        + (grab.lost ? ` — มี ${grab.lost} ขาที่ตัวขับอยู่นอกสิ่งที่เลือก จะไม่มีสายตอนวาง` : ""),
+        grab.lost ? "warn" : "ok", grab.lost ? 4600 : 2200);
 }
 
 function pasteClipboard(){
@@ -3039,9 +3411,12 @@ function pasteClipboard(){
     nw.to   = {cid:idMap.get(w.to.cid),   pid:w.to.pid};
     sch.wires.push(nw);
   });
+  placeTies(sch, state.clipboard.ties, idMap, newSel);
   state.selection = newSel;
   snapshot(); render(); renderInspector();
-  toast(`วาง ${state.clipboard.components.length} บล็อกแล้ว`, "ok");
+  const nTie = (state.clipboard.ties||[]).length;
+  toast(`วาง ${state.clipboard.components.length} บล็อกแล้ว`
+        + (nTie ? ` พร้อม VCC/GND/CONST ติดขาใหม่ ${nTie} ตัว` : ""), "ok");
 }
 
 /* =========================================================================
@@ -5084,7 +5459,7 @@ function render(){
       // colour, so it is visible without running the check
       const dw = sch.wires.find(w=>w.to.cid===c.id && w.to.pid==="d");
       const bw = dw ? (wWidth.get(dw.id) || 1) : 0;
-      const bit = c.params.bit ?? 0;
+      const bit = (c.params.bit ?? 0) + Math.max(1, c.params.nbit ?? 1) - 1;   // top of the slice
       if(bw > 1 && bit > bw-1){
         const tri = body.querySelector("path"), num = body.querySelector("text");
         if(tri) tri.setAttribute("stroke", "var(--err)");
@@ -5644,6 +6019,8 @@ canvas.addEventListener("wheel",ev=>{
 
 /* keyboard */
 window.addEventListener("keydown",ev=>{
+  const modal=document.querySelector(".modal-bg");
+  if(modal){ if(ev.key==="Escape"){ modal.remove(); ev.preventDefault(); } return; }
   if(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   // use ev.code (keyboard-layout independent) AND ev.key (for fallback) so Thai
   // and other non-Latin layouts still respond to Ctrl+C / Ctrl+V etc.
@@ -6008,17 +6385,44 @@ function renderInspector(){
           // A Bus Tap's bit only means something against the bus it sits on: bit 5 on
           // a 2-bit bus is not a number the user can have. Clamp to the live width
           // (only when it is actually attached — a loose tap may be set freely).
-          if(c.type==="BUSTAP" && k==="bit"){
+          if(c.type==="BUSTAP" && (k==="bit" || k==="nbit")){
             const dw = sch.wires.find(x=>x.to.cid===c.id && x.to.pid==="d");
             const bw = dw ? wireWidth(dw, sch) : 0;
-            if(bw > 1 && v > bw-1){
-              toast(`บัสเส้นนี้กว้าง ${bw} bit (${bw-1}:0) — เลือกบิต ${v} ไม่ได้`, "warn", 3200);
-              v = bw-1;
+            if(k==="nbit"){
+              if(v < 1) v = 1;
+              const b0 = c.params.bit ?? 0;
+              if(bw > 1 && b0 + v > bw){
+                toast(`บัสเส้นนี้กว้าง ${bw} bit — จากบิต ${b0} เอาได้อีกอย่างมาก ${bw-b0} บิต`, "warn", 3200);
+                v = Math.max(1, bw - b0);
+              }
+            } else {
+              if(v < 0) v = 0;
+              const n = Math.max(1, c.params.nbit ?? 1);
+              if(bw > 1 && v + n > bw){
+                toast(`บัสเส้นนี้กว้าง ${bw} bit (${bw-1}:0) — สลิซ ${n} บิตเริ่มที่บิต ${v} ไม่ได้`, "warn", 3200);
+                v = Math.max(0, bw - n);
+              }
             }
-            if(v < 0) v = 0;
           }
+          // a CONST shows back exactly what it will drive: "0xf4" → F4, and a value
+          // too big for the width is masked rather than silently truncated elsewhere
+          if(c.type==="CONST" && (k==="value" || k==="width")){
+            const merged = Object.assign({}, c.params, {[k]: v});
+            if(k==="value") v = constHex(merged);
+            const shown = constHex(merged);
+            if(k==="value" && String(e.value).trim().replace(/^0[xX]/,"").toUpperCase() !== shown)
+              toast(`ค่าคงที่ ${constWidth(merged)} bit → 0x${shown}`, "warn", 2600);
+            if(k==="width") c.params.value = shown;
+          }
+          // renaming an IN/OUT renames this sheet's SUB-BLOCK PIN too — take the
+          // parents' wires with it instead of leaving them on a dead pin
+          const portsBefore = (k==="name" && (c.type==="IN" || c.type==="OUT")) ? schPortList(sch) : null;
           c.params = c.params || {};
           c.params[k] = v;
+          if(portsBefore){
+            const moved = remapSubBlockPins(sch.id, portsBefore, schPortList(sch)).moved;
+            if(moved) toast(`ย้ายสายในแผ่นที่เรียกใช้วงจรนี้ตามชื่อขาใหม่แล้ว ${moved} เส้น`, "ok", 3600);
+          }
           // ports may have changed (count/width): drop wires to vanished pins
           sch.wires = sch.wires.filter(w=>{
             const a = comp(w.from.cid), b = comp(w.to.cid);
@@ -6059,6 +6463,7 @@ function renderInspector(){
 /* =========================================================================
    ZOOM / VIEW
    ========================================================================= */
+let _fitFor = null;              // the sheet the view was last framed for
 function zoomBy(f){
   // zoom around the viewport centre so panned content stays in view
   const r = canvas.getBoundingClientRect();
@@ -6071,23 +6476,72 @@ function zoomBy(f){
   render();
 }
 function zoom100(){ state.view = {x:0,y:0,k:1}; render(); }
-function zoomFit(){
-  const sch = activeSch(); if(!sch||!sch.components.length){ zoom100(); return; }
-  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
-  sch.components.forEach(c=>{
-    const sz = getSize(c);
-    minX = Math.min(minX,c.x); minY = Math.min(minY,c.y);
-    maxX = Math.max(maxX,c.x+sz.w); maxY = Math.max(maxY,c.y+sz.h);
-  });
-  const r = canvas.getBoundingClientRect();
-  const pad = 80;
-  const kx = (r.width-pad*2) / (maxX-minX);
-  const ky = (r.height-pad*2) / (maxY-minY);
-  const k = clamp(Math.min(kx,ky), 0.3, 2);
-  state.view.k = k;
-  state.view.x = pad - minX*k + (r.width-pad*2 - (maxX-minX)*k)/2;
-  state.view.y = pad - minY*k + (r.height-pad*2 - (maxY-minY)*k)/2;
+
+/* The INK of a sheet, not just its blocks: a hand-drawn wire can run well outside the
+   components it joins, and a frame measured from blocks alone leaves it off-screen. */
+function sheetBounds(sch){
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  const put = (x,y) => {
+    if(!isFinite(x) || !isFinite(y)) return;
+    if(x<minX) minX=x; if(y<minY) minY=y; if(x>maxX) maxX=x; if(y>maxY) maxY=y;
+  };
+  (sch.components||[]).forEach(c=>{ const s = getSize(c); put(c.x, c.y); put(c.x+s.w, c.y+s.h); });
+  (sch.wires||[]).forEach(w=>{ (w.pts||[]).concat(w.autoPts||[]).forEach(p=>{ if(p) put(p.x, p.y); }); });
+  return isFinite(minX) ? {minX, minY, maxX, maxY} : null;
+}
+/* The view that frames `b` inside a vw×vh viewport — kept as pure arithmetic so it can
+   be checked without a browser, and so the zero cases are handled in ONE place: a flat
+   extent (a single block, a dead-straight wire) divides by zero, and the NaN that puts
+   in state.view blanks the canvas with no way back short of a reload. */
+function fitView(b, vw, vh, pad){
+  pad = (pad==null) ? 80 : pad;
+  const iw = Math.max(1, vw - pad*2), ih = Math.max(1, vh - pad*2);
+  const cw = Math.max(1, b.maxX - b.minX), ch = Math.max(1, b.maxY - b.minY);
+  const k = clamp(Math.min(iw/cw, ih/ch), 0.3, 2);
+  return { k, x: pad - b.minX*k + (iw - cw*k)/2, y: pad - b.minY*k + (ih - ch*k)/2 };
+}
+/* the canvas is not always measurable — hidden behind the manual, or simply not laid
+   out yet at boot — and a fit computed against a 0-wide box is nonsense */
+function viewportSize(){
+  const r = (typeof canvas !== "undefined" && canvas && canvas.getBoundingClientRect)
+              ? canvas.getBoundingClientRect() : null;
+  // typeof, not +r.width: this runs on every sheet you open, so it must not be able
+  // to throw on whatever the rect turns out to be
+  const w = r ? r.width : null, h = r ? r.height : null;
+  return (typeof w === "number" && typeof h === "number" && isFinite(w) && isFinite(h) && w > 0 && h > 0)
+           ? {w, h} : null;
+}
+function applyFit(){
+  const sch = activeSch(); if(!sch) return false;
+  const b = sheetBounds(sch);
+  if(!b){ zoom100(); return true; }            // nothing drawn yet — plain 1:1
+  const vp = viewportSize(); if(!vp) return false;
+  state.view = fitView(b, vp.w, vp.h);
   render();
+  return true;
+}
+function zoomFit(){ _fitFor = state.activeId; applyFit(); }
+
+/* ENTERING A SHEET FRAMES IT (user: "พอเข้าไฟล์ sch ให้ zoom-fit เองเลย").
+   state.view is a SINGLE global pan/zoom, so a sheet you open inherits the window of
+   whatever you were looking at before it — on a DIFFERENT sheet that is an arbitrary
+   spot, usually empty space, which is why opening a sheet could look like it had
+   nothing on it. Nothing is lost by re-framing, because there was never a per-sheet
+   view to keep. Fires only when the active sheet actually CHANGES, so it never fights
+   a zoom set while working; `force` covers a wholesale change (file load, project
+   switch) where the id can be the same while the content is not. */
+function autoFitSheet(force, tries){
+  const id = state.activeId;
+  if(!id || (!force && id === _fitFor)) return false;
+  _fitFor = id;
+  if(applyFit()) return true;
+  /* not measurable yet — boot, or a canvas behind the manual. Try again next frame,
+     with a cap: a canvas that is never shown must not spin a frame loop forever. */
+  _fitFor = null;
+  tries = tries || 0;
+  if(tries < 20 && typeof requestAnimationFrame === "function")
+    requestAnimationFrame(()=>autoFitSheet(force, tries+1));
+  return false;
 }
 
 /* =========================================================================
@@ -6146,7 +6600,7 @@ function combinationalLoops(sch){
     if(!s) return null;
     return s.type==="JUNCTION" ? srcOf(s.id, "j", seen) : s;
   };
-  const nodes = sch.components.filter(c=>!["IN","OUT","VCC","GND","JUNCTION"].includes(c.type)
+  const nodes = sch.components.filter(c=>!["IN","OUT","VCC","GND","CONST","JUNCTION"].includes(c.type)
     && !SEQ_TYPES.has(c.type) && !isDocumentationComponent(c));
   const idset = new Set(nodes.map(c=>c.id));
   const adj = new Map();
@@ -6231,6 +6685,29 @@ function runSynthesis(){
         outN.set(n,c);
       }
     });
+    /* An INPUT and an OUTPUT sharing a name is legal to draw and impossible to build:
+       one VHDL entity cannot declare the same port twice, so the OUTPUT is silently
+       renamed to name_1 — that is the name that reaches Vivado, the port map and the
+       testbench. Worse, the pin ids of an instance are then POSITIONAL: delete either
+       port and the survivor renumbers, so a wire in a parent sheet ends up on a
+       different pin than it was drawn to. */
+    outN.forEach((c,n)=>{
+      if(!inN.has(n)) return;
+      issues.push({lvl:"err",
+        msg:`INPUT กับ OUTPUT ชื่อ '${n}' ซ้ำกัน — entity เดียวมีพอร์ตชื่อซ้ำไม่ได้ VHDL จะเปลี่ยนขาออกเป็น '${n}_1' ให้เอง และถ้าลบขาใดขาหนึ่ง id ของพินจะเลื่อน ทำให้สายในแผ่นที่เรียกใช้ไปเกาะขาผิดตัว`,
+        ref:sch.name, schId:sch.id, cid:c.id});
+    });
+    /* The mirror of the unconnected-OUTPUT error, which this app has always treated as
+       an error: a port declared on the entity that carries nothing. An INPUT drawn but
+       never wired is not a harmless stub — it is a pin the caller must still drive,
+       while every consumer inside falls back to '0'. This is exactly how eight target
+       pins of a working-looking sheet came out as '0' in the port map. */
+    sch.components.filter(c=>c.type==="IN").forEach(c=>{
+      const used = sch.wires.some(w=>w.from.cid===c.id || w.to.cid===c.id);
+      if(!used) issues.push({lvl:"warn",
+        msg:`INPUT '${c.params.name||"in"}' ไม่ได้ต่อไปไหน — เป็นขาของ entity ที่ไม่มีใครอ่านค่า`,
+        ref:sch.name, schId:sch.id, cid:c.id});
+    });
     // unconnected inputs
     sch.components.forEach(c=>{
       const td = typeDef(c); if(!td) return;
@@ -6302,15 +6779,21 @@ function runSynthesis(){
       const fw = src.w, tw = tp.width||1;
       // a Bus Tap's bus pin accepts any bus — the thing to check is the bit number
       if(tc.type==="BUSTAP" && tp.id==="d"){
-        const bit = tc.params.bit ?? 0;
+        const bit  = tc.params.bit ?? 0;
+        const nbit = Math.max(1, tc.params.nbit ?? 1);
+        const hi   = bit + nbit - 1;
         if(fw < 2) issues.push({lvl:"err",
           msg:`Bus Tap ต้องแตะสายบัส (กว้างมากกว่า 1 bit) แต่สายที่แตะกว้าง ${fw} bit`,
           ref:sch.name, schId:sch.id, cid:tc.id});
-        else if(bit > fw-1) issues.push({lvl:"err",
-          msg:`Bus Tap แตะบิต ${bit} แต่บัสมีแค่ (${fw-1}:0)`,
+        else if(hi > fw-1) issues.push({lvl:"err",
+          msg:`Bus Tap แตะบิต ${nbit>1?`${hi}:${bit}`:bit} แต่บัสมีแค่ (${fw-1}:0)`,
           ref:sch.name, schId:sch.id, cid:tc.id});
         return;
       }
+      /* One bit into a WIDE gate is legal and deliberate: it is replicated across the
+         bus (a select line masking a byte). Every other width difference is still an
+         error — including a wide gate feeding a narrow sink. */
+      if(fw === 1 && tw > 1 && ["AND","OR","NAND","NOR","XOR","XNOR","NOT","BUF"].includes(tc.type)) return;
       if(fw !== tw){
         issues.push({lvl:"err",
           msg:`สายเชื่อม ${compDisplay(src.c)} (${fw} bit) เข้ากับ ${compDisplay(tc)} (${tw} bit) — ความกว้างบัสไม่ตรงกัน`,
@@ -6329,7 +6812,7 @@ function runSynthesis(){
       }
       return s;
     };
-    const COMBI = c2 => c2 && !["IN","VCC","GND","JUNCTION"].includes(c2.type) && !SEQ_TYPES.has(c2.type);
+    const COMBI = c2 => c2 && !["IN","VCC","GND","CONST","JUNCTION"].includes(c2.type) && !SEQ_TYPES.has(c2.type);
     // flip-flop clock must be a real signal — a constant or missing clock makes the
     // generated process unparseable (and the register meaningless); a clock that comes
     // from other logic still builds but is a classic FPGA trap, so it is a warning
@@ -6337,7 +6820,7 @@ function runSynthesis(){
       const src = srcOfPin(c.id, "clk");
       if(!src)
         issues.push({lvl:"err", msg:`${compDisplay(c)} ขา 'clk' ยังไม่ได้ต่อสัญญาณนาฬิกา — flip-flop นี้จะไม่ถูกสร้าง`, ref:sch.name, schId:sch.id, cid:c.id});
-      else if(src.type==="VCC" || src.type==="GND")
+      else if(src.type==="VCC" || src.type==="GND" || src.type==="CONST")
         issues.push({lvl:"err", msg:`${compDisplay(c)} ขา 'clk' ต่อกับ ${src.type} (ค่าคงที่) — นาฬิกาต้องเป็นสัญญาณ ไม่ใช่ค่าคงที่`, ref:sch.name, schId:sch.id, cid:c.id});
       else if(SEQ_TYPES.has(src.type))
         issues.push({lvl:"warn", msg:`${compDisplay(c)} ใช้เอาต์พุตของ ${compDisplay(src)} เป็นนาฬิกา (ripple counter) — บน FPGA สัญญาณนี้ไม่ได้อยู่บน clock network, Vivado จะเตือน CLOCK_DEDICATED_ROUTE และ skew สะสมทีละสเตจ; ทางที่ปลอดภัยคือใช้ clock เส้นเดียวกันทุกตัว แล้วคุมด้วยเงื่อนไข`, ref:sch.name, schId:sch.id, cid:c.id});
@@ -6477,12 +6960,13 @@ function generateAllVhdl(){
 }
 
 function generateSchVhdl(sch){
+  sch.components.forEach(c=>{ delete c._busNet; delete c._busW; });
   const warns = [];
   const ename = sanId(sch.name) || "my_circuit";
 
   const inputs  = sch.components.filter(c=>c.type==="IN");
   const outputs = sch.components.filter(c=>c.type==="OUT");
-  const inners  = sch.components.filter(c=>!["IN","OUT","VCC","GND"].includes(c.type)
+  const inners  = sch.components.filter(c=>!["IN","OUT","VCC","GND","CONST"].includes(c.type)
     && !isDocumentationComponent(c));
 
   // assign net names
@@ -6536,6 +7020,48 @@ function generateSchVhdl(sch){
     }
   });
 
+  /* A bus ASSEMBLED BY MERGE TAPS needs a signal of its own whenever the net has no
+     name to borrow. Signals are handed out to OUTPUT pins only (plus the IN/OUT port
+     markers), so a merge bus whose only real endpoint is an INPUT — a sub-schematic
+     block's port, a gate pin — had nothing to write into: every tap reported
+     "ยังไม่ได้แตะสายบัส" and the block read (others => '0'). Give such a net a signal,
+     hang it on its junctions, and both ends find it: the taps write bits into it and
+     the consumer's port map reads it. A net that already owns a name (an OUTPUT
+     marker, some block's output pin) keeps that one — nothing new is invented. */
+  const busNets = [];
+  (function allocMergeBuses(){
+    const done = new Set();
+    (sch.components||[]).forEach(tap => {
+      if(tap.type !== "BUSTAP" || (tap.params||{}).mode !== "merge") return;
+      const dw = sch.wires.find(w => (w.to.cid===tap.id   && w.to.pid==="d")
+                                  || (w.from.cid===tap.id && w.from.pid==="d"));
+      if(!dw || done.has(dw.id)) return;
+      const net = netWires(sch, dw);
+      let existing = null, width = 1;
+      net.forEach(id => {
+        const w = sch.wires.find(x=>x.id===id); if(!w) return;
+        done.add(id);
+        [w.from, w.to].forEach(ep => {
+          const oc = comp(ep.cid, sch);
+          if(!oc || oc.type==="JUNCTION" || oc.type==="BUSTAP") return;
+          const p = getPort(oc, ep.pid);
+          if(p) width = Math.max(width, p.width||1);       // the real port sets the width
+          if(oc.type==="OUT"){ existing = existing || oc._net; }
+          else if(oc._nets && oc._nets[ep.pid]){ existing = existing || oc._nets[ep.pid]; }
+        });
+      });
+      const name = existing || uniq(dw.name || "bus");
+      if(!existing) busNets.push({name, w: width});
+      net.forEach(id => {
+        const w = sch.wires.find(x=>x.id===id); if(!w) return;
+        [w.from, w.to].forEach(ep => {
+          const oc = comp(ep.cid, sch);
+          if(oc && oc.type==="JUNCTION"){ oc._busNet = name; oc._busW = width; }
+        });
+      });
+    });
+  })();
+
   // width-aware zero literal
   const zlit = w => (w||1)>1 ? "(others => '0')" : "'0'";
 
@@ -6551,8 +7077,11 @@ function generateSchVhdl(sch){
     if(src.type==="IN") return src._net;
     if(src.type==="VCC") return "'1'";
     if(src.type==="GND") return "'0'";
+    if(src.type==="CONST") return constVhdl(src.params||{});
     if(src.type==="JUNCTION"){
-      return driver(src.id, "j", visited);                          // transparent
+      // transparent — but if nothing drives it from upstream this may be a bus the
+      // merge taps assemble, which does have a signal even with no driving port
+      return driver(src.id, "j", visited) || src._busNet || null;
     }
     if(src._nets) return src._nets[w.from.pid] || null;
     return null;
@@ -6569,7 +7098,7 @@ function generateSchVhdl(sch){
     const src = comp(w.from.cid, sch);
     if(!src) return null;
     if(src.type==="JUNCTION"){
-      return driverWidth(src.id, "j", visited);
+      return driverWidth(src.id, "j", visited) || src._busW || null;
     }
     const sp = getPort(src, w.from.pid);
     return sp ? (sp.width||1) : null;
@@ -6598,10 +7127,17 @@ function generateSchVhdl(sch){
       }
       return null;
     };
-    const dw = sch.wires.find(w=>w.to.cid===tap.id && w.to.pid==="d");
+    // the d-wire is normally junction -> tap, but a net that was re-oriented can
+    // store it the other way round; either way the far end is what we follow
+    const dw = sch.wires.find(w => (w.to.cid===tap.id   && w.to.pid==="d")
+                                || (w.from.cid===tap.id && w.from.pid==="d"));
     if(!dw) return null;
-    const j = comp(dw.from.cid, sch);
-    return j ? (j.type==="JUNCTION" ? walk(j.id) : (j._nets && j._nets[dw.from.pid]) || null) : null;
+    const far = dw.to.cid===tap.id ? dw.from : dw.to;
+    const j = comp(far.cid, sch);
+    if(!j) return null;
+    if(j.type==="JUNCTION") return j._busNet || walk(j.id);
+    if(j.type==="OUT") return j._net;
+    return (j._nets && j._nets[far.pid]) || null;
   }
 
   inners.forEach(c=>{
@@ -6625,7 +7161,8 @@ function generateSchVhdl(sch){
         (b) the left side of a comparison: `'0' = '0'` is ambiguous ("=" is declared
             for CHARACTER, BIT and STD_ULOGIC), the error family students lose hours to.
        Note the bus form `(others => '0')` counts as a literal here too. */
-    const isLit = v => typeof v === "string" && (/^'[01]'$/.test(v) || /^\(others\s*=>\s*'[01]'\)$/.test(v));
+    const isLit = v => typeof v === "string" && (/^'[01]'$/.test(v) || /^\(others\s*=>\s*'[01]'\)$/.test(v)
+                          || /^x"[0-9A-Fa-f]+"$/.test(v) || /^"[01]+"$/.test(v));
     // comparison that stays legal when the driver is constant: fold it right here
     const eq = (v, bit) => {
       if(!isLit(v)) return `${v} = '${bit}'`;
@@ -6641,13 +7178,41 @@ function generateSchVhdl(sch){
       }
       return v;
     };
-    // async reset/preset: a constant one is meaningless hardware — drop the branch
+    /* CLR / PRE tied to a CONSTANT is ordinary schematic practice, and the two levels
+       say opposite things. These pins are ACTIVE HIGH here, so:
+         GND ('0') — held inactive. That is the classic ISE tie-off for an async pin you
+                     do not want; the branch simply is not emitted, and the register is
+                     a plain one. Worth saying once, but nothing is wrong.
+         VCC ('1') — held asserted forever, so the register can never change: the output
+                     is a constant. `heldAsync` records it and the caller emits that
+                     constant instead of a process that cannot do anything.
+       Either way the literal must never reach the returned value: it would land in
+       process(...) where VHDL accepts signal names only, and the file would not parse. */
+    const heldAsync = [];
     const asyncCtrl = (pid, enabled) => {
       if(!enabled) return null;
       const v = driver(c.id, pid);
       if(!v){ warns.push(`${compDisplay(c)} เปิด async ${pid} แต่ขา ${pid} ไม่ได้ต่อสาย — ข้าม ${pid} ในโค้ด`); return null; }
-      if(isLit(v)){ warns.push(`${compDisplay(c)} ขา '${pid}' ต่อกับค่าคงที่ (GND/VCC) — ข้าม async ${pid} ในโค้ด`); return null; }
+      if(isLit(v)){
+        if(/'1'/.test(v)) heldAsync.push(pid);
+        else warns.push(`${compDisplay(c)} ขา '${pid}' ต่อไว้กับ GND — async ${pid} จึงไม่ทำงานตลอด (เท่ากับไม่เปิดใช้) — ถูกต้องตามแบบ tie-off`);
+        return null;
+      }
       return v;
+    };
+    /* A CLR/PRE wired to VCC never releases — Q is stuck at the value that pin forces.
+       Emitting the register anyway would be a lie (and Vivado would optimise it away),
+       so drive the constant and say why. Reset wins over preset, as in the process. */
+    const holdOutputs = resetSignal => {
+      const q  = heldAsync.includes("rst") ? "0" : "1";
+      const qn = q === "0" ? "1" : "0";
+      const pin = heldAsync.includes("rst") ? "rst" : "pre";
+      warns.push(`${compDisplay(c)} ขา '${pin}' ต่อไว้กับ VCC — async ${pin} ทำงานค้างตลอด flip-flop จึงถูกกดค้างที่ Q='${q}' ไม่จำค่าอะไรเลย`);
+      const qExpr=pin==="pre" && resetSignal ? `'0' when ${resetSignal} = '1' else '1'` : `'${q}'`;
+      const qnExpr=pin==="pre" && resetSignal ? `'1' when ${resetSignal} = '1' else '0'` : `'${qn}'`;
+      concurrent.push(`  ${c._nets.q} <= ${qExpr};`);
+      const QN = ffQn();
+      if(QN) concurrent.push(`  ${QN} <= ${qnExpr};`);
     };
     // when a flip-flop is skipped, still give its outputs a defined value so the rest
     // of the design elaborates instead of collapsing into undriven-signal noise
@@ -6672,7 +7237,19 @@ function generateSchVhdl(sch){
 
     /* ----- gates ----- */
     if(["AND","OR","NAND","NOR","XOR","XNOR","NOT","BUF"].includes(c.type)){
-      const ins = inputsPorts.map(p=>driverFor(p.id));
+      /* On a WIDE gate every operand must be exactly that wide: VHDL has no
+         "vector and bit". A single bit arriving at a wide gate is the ordinary
+         idiom — one select or enable line masking a whole byte — so replicate it
+         across the width, written as a qualified aggregate so no tool has to guess
+         the type. An unwired pin is handled here too: `(others => '0')` is not
+         legal as an operand on its own. */
+      const gw = gateWidth(c.params||{});
+      const ins = inputsPorts.map(p=>{
+        const v = driverFor(p.id);
+        if(gw < 2) return v;
+        if(/^\(others\s*=>\s*'0'\)$/.test(v)) return `std_logic_vector'(${gw-1} downto 0 => '0')`;
+        return (driverWidth(c.id, p.id) || 1) > 1 ? v : `std_logic_vector'(${gw-1} downto 0 => ${v})`;
+      });
       concurrent.push(`  ${c._nets.o} <= ${TYPES[c.type].expr(ins)};`);
       return;
     }
@@ -6713,7 +7290,21 @@ function generateSchVhdl(sch){
     }
     /* ----- BUS TAP: one bit in or out of a bus ----- */
     if(c.type==="BUSTAP"){
-      const bit = c.params.bit ?? 0;
+      const bit  = c.params.bit ?? 0;
+      const nbit = Math.max(1, c.params.nbit ?? 1);
+      const hi   = bit + nbit - 1;
+      // one bit is bus(n); several are bus(hi downto lo) — never bus(0 downto 0),
+      // which is a 1-element ARRAY and will not assign to a std_logic
+      const slice = base => {
+        // A VHDL literal cannot be indexed directly. Fold its slice before emission.
+        const hex=/^x"([0-9a-f]+)"$/i.exec(base), binary=/^"([01]+)"$/.exec(base);
+        if(hex || binary){
+          const value=BigInt((hex?"0x":"0b")+(hex||binary)[1]) >> BigInt(bit);
+          return constVhdl({width:nbit,value:value.toString(16)});
+        }
+        return nbit > 1 ? `${base}(${hi} downto ${bit})` : `${base}(${bit})`;
+      };
+      const range = nbit > 1 ? `${hi}:${bit}` : `${bit}`;
       const sw  = driverWidth(c.id, "d");
       if(c.params.mode==="merge"){
         // the bus is assembled FROM taps: write this bit. Handled with the output
@@ -6722,16 +7313,16 @@ function generateSchVhdl(sch){
         const busSig = busSignalOf(c);
         if(!busSig) warns.push(`${compDisplay(c)} ยังไม่ได้แตะสายบัส`);
         else if(!v) warns.push(`${compDisplay(c)} ยังไม่มีสัญญาณเข้าขาบิต`);
-        else busMerges.push(`  ${busSig}(${bit}) <= ${v};`);
+        else busMerges.push(`  ${slice(busSig)} <= ${v};`);
         return;
       }
       const src = driver(c.id, "d");
       let expr = null;
       if(!src) warns.push(`${compDisplay(c)} ยังไม่ได้แตะสายบัส`);
       else if(!sw || sw <= 1) warns.push(`${compDisplay(c)} ต้องแตะสายบัส (กว้างมากกว่า 1 bit)`);
-      else if(bit > sw-1) warns.push(`${compDisplay(c)} แตะบิต ${bit} แต่บัสมีแค่ (${sw-1}:0)`);
-      else expr = `${src}(${bit})`;
-      concurrent.push(`  ${c._nets.y} <= ${expr || "'0'"};`);
+      else if(hi > sw-1) warns.push(`${compDisplay(c)} แตะบิต ${range} แต่บัสมีแค่ (${sw-1}:0)`);
+      else expr = slice(src);
+      concurrent.push(`  ${c._nets.y} <= ${expr || zlit(nbit)};`);
       return;
     }
     /* ----- COMPARATORS -----
@@ -6813,12 +7404,13 @@ function generateSchVhdl(sch){
     }
     /* ----- D-FF ----- */
     if(c.type==="DFF"){
-      const CLK = ffClock();
-      if(!CLK){ tieOffOutputs(); return; }      // no clock → emit nothing unparseable
-      const D = driverFor("d");
       const RST = asyncCtrl("rst", c.params.reset);
       const PRE = asyncCtrl("pre", c.params.preset);
       warnBothAsync(RST, PRE);
+      if(heldAsync.length){ holdOutputs(RST); return; }   // CLR/PRE on VCC — Q is a constant
+      const CLK = ffClock();
+      if(!CLK){ tieOffOutputs(); return; }
+      const D = driverFor("d");
       const QN = ffQn();
       const set2 = (q, qn) => `      ${c._nets.q}  <= ${q};` + (QN ? `\n      ${QN} <= ${qn};` : "");
       processes.push({
@@ -6832,13 +7424,14 @@ function generateSchVhdl(sch){
     }
     /* ----- JK-FF ----- */
     if(c.type==="JKFF"){
+      const RST = asyncCtrl("rst", c.params.reset);
+      const PRE = asyncCtrl("pre", c.params.preset);
+      warnBothAsync(RST, PRE);
+      if(heldAsync.length){ holdOutputs(RST); return; }
       const CLK = ffClock();
       if(!CLK){ tieOffOutputs(); return; }
       const J = driverFor("j");
       const K = driverFor("k");
-      const RST = asyncCtrl("rst", c.params.reset);
-      const PRE = asyncCtrl("pre", c.params.preset);
-      warnBothAsync(RST, PRE);
       const QN = ffQn();
       const qsig = c._nets.q;
       const put = (q, qn) => `      ${qsig} <= ${q};` + (QN ? ` ${QN} <= ${qn};` : "");
@@ -6871,12 +7464,13 @@ function generateSchVhdl(sch){
     }
     /* ----- T-FF ----- */
     if(c.type==="TFF"){
-      const CLK = ffClock();
-      if(!CLK){ tieOffOutputs(); return; }
-      const T = driverFor("t");
       const RST = asyncCtrl("rst", c.params.reset);
       const PRE = asyncCtrl("pre", c.params.preset);
       warnBothAsync(RST, PRE);
+      if(heldAsync.length){ holdOutputs(RST); return; }
+      const CLK = ffClock();
+      if(!CLK){ tieOffOutputs(); return; }
+      const T = driverFor("t");
       const QN = ffQn();
       const qsig = c._nets.q;
       // on a toggle both read the OLD q: new q = not q, new qn = old q = not(new q)
@@ -6896,13 +7490,14 @@ function generateSchVhdl(sch){
     }
     /* ----- SR-FF ----- */
     if(c.type==="SRFF"){
+      const RST = asyncCtrl("rst", c.params.reset);
+      const PRE = asyncCtrl("pre", c.params.preset);
+      warnBothAsync(RST, PRE);
+      if(heldAsync.length){ holdOutputs(RST); return; }
       const CLK = ffClock();
       if(!CLK){ tieOffOutputs(); return; }
       const S = driverFor("s");
       const R = driverFor("r");
-      const RST = asyncCtrl("rst", c.params.reset);
-      const PRE = asyncCtrl("pre", c.params.preset);
-      warnBothAsync(RST, PRE);
       const QN = ffQn();
       const qsig = c._nets.q;
       const put = (q, qn) => `${qsig} <= ${q};` + (QN ? ` ${QN} <= ${qn};` : "");
@@ -7003,6 +7598,8 @@ function generateSchVhdl(sch){
       else sigScalars.push(c._nets[pid]);
     });
   });
+  // buses assembled by merge taps own their signal too
+  busNets.forEach(b => { if(b.w > 1) sigVectors.push({name:b.name, w:b.w}); else sigScalars.push(b.name); });
 
   // component declarations for sub-entities used (match by sanitized name)
   const compDecls = [];
@@ -7204,12 +7801,245 @@ $("#vhdlEntitySel")?.addEventListener("change",ev=>{
 /* =========================================================================
    FILE I/O
    ========================================================================= */
+/* BEGIN TESTABLE PROJECT IMPORT HELPERS */
+/* Stage the complete copy before committing. Never reuse a destination definition
+   merely because its name matches: the circuits may be different. */
+function projectFileChoices(payload){
+  if(!payload || typeof payload!=="object") throw new Error("ไฟล์ไม่ใช่ Project JSON");
+  if(payload.version!=null && ![1,2].includes(payload.version)) throw new Error("ยังไม่รองรับ Project version "+payload.version);
+  if(payload.workspace && payload.workspace.projects && Object.keys(payload.workspace.projects).length)
+    return Object.entries(payload.workspace.projects).map(([id,project])=>({id,project}));
+  if(payload.project) return [{id:payload.project.id || "source", project:payload.project}];
+  throw new Error("ไม่พบ project ในไฟล์ — เลือกไฟล์ .schproj.json");
+}
+function preserveLegacySubBlockOrder(P){
+  const sheets=[...Object.values(P.schematics||{}),...Object.values(P.customs||{}).map(c=>c.schematic).filter(Boolean)];
+  sheets.forEach(s=>(s.components||[]).forEach(c=>{
+    if(!c.type?.startsWith("SCH:")) return;
+    const child=P.schematics[c.type.slice(4)]; if(!child) return;
+    c.params ||= {};
+    for(const [dir,key,reverse] of [["in","inputOrder","reverseInputs"],["out","outputOrder","reverseOutputs"]]){
+      if(c.params[key]?.length) continue;
+      const ids=schPortList(child).filter(p=>p.dir===dir).map(p=>p.id);
+      c.params[key]=c.params[reverse] ? ids.reverse() : ids;
+    }
+  }));
+}
+function buildProjectImport(source, destination, options={}){
+  const P = cloneData(source);
+  const object = v => v && typeof v==="object" && !Array.isArray(v);
+  if(!object(P) || !object(P.schematics) || !Object.keys(P.schematics).length)
+    throw new Error("โปรเจกต์ไม่มี schematic ที่อ่านได้");
+  if(!object(P.customs||{})) throw new Error("ข้อมูล custom component ไม่ถูกต้อง");
+  P.customs ||= {};
+  if(options.legacyPortOrder) preserveLegacySubBlockOrder(P);
+  if(!Object.hasOwn(P.schematics,P.topId)) throw new Error("ไม่พบ Top schematic ของโปรเจกต์ต้นทาง");
+  const names = new Set([...Object.values(destination.schematics||{}).map(s=>s.name),
+    ...Object.keys(destination.customs||{}), ...Object.values(destination.customs||{}).map(c=>c.name)]
+    .map(n=>sanId(n||"").toLowerCase()));
+  const rename = [];
+  const freshName = base => {
+    const root=sanId(base||"imported") || "imported"; let name=root, n=2;
+    while(names.has(name.toLowerCase())) name=root+"_"+(n++);
+    names.add(name.toLowerCase());
+    if(name!==base) rename.push({from:base,to:name});
+    return name;
+  };
+  const sidMap = new Map(Object.keys(P.schematics).map(id=>[id,uid("sch")]));
+  const customMap = new Map();
+  const customs = Object.create(null), schematics = Object.create(null);
+  // Reserve raw VHDL names first. Textual code cannot be safely renamed by a
+  // schematic importer without parsing its architecture and external references.
+  Object.entries(P.customs).forEach(([key,cc])=>{
+    if(!object(cc)) throw new Error("custom component ไม่ถูกต้อง: "+key);
+    if(!cc.schematic && !cc.vhdl) throw new Error("custom component ไม่มีวงจรหรือ VHDL: "+key);
+    if(!cc.schematic){
+      const name=cc.name || key;
+      if(names.has(sanId(name).toLowerCase())) throw new Error(`Custom VHDL '${name}' ชื่อซ้ำ — เปลี่ยนชื่อ entity ในต้นทางก่อนนำเข้า`);
+      names.add(sanId(name).toLowerCase()); customMap.set(key,name);
+    }
+  });
+  Object.entries(P.customs).forEach(([key,cc])=>{ if(cc.schematic) customMap.set(key,freshName(cc.name||key)); });
+  const sheetNames = new Map(Object.entries(P.schematics).map(([id,s])=>{
+    if(!object(s)) throw new Error("schematic ไม่ถูกต้อง: "+id);
+    return [id,freshName(s.name||id)];
+  }));
+  Object.values(P.customs).filter(cc=>!cc.schematic && cc.vhdl).forEach(cc=>{
+    const code=cc.vhdl.replace(/--[^\n]*/g,"");
+    const renamedEntities=[...customMap.entries(),...Object.entries(P.schematics).map(([id,s])=>[s.name,sheetNames.get(id)])];
+    for(const [oldName,newName] of renamedEntities){
+      if(sanId(oldName)===newName) continue;
+      if(new RegExp("\\b"+sanId(oldName)+"\\b","i").test(code))
+        throw new Error(`Custom VHDL '${cc.name}' อ้างถึง entity '${oldName}' ที่ชื่อซ้ำ — เปลี่ยนชื่อในต้นทางก่อนนำเข้า`);
+    }
+  });
+  const migrateSheet = (s,id) => {
+    if(!object(s) || !Array.isArray(s.components) || !Array.isArray(s.wires))
+      throw new Error("โครงสร้าง schematic ไม่ถูกต้อง: "+id);
+    const cm = new Map(), wireIds = new Set();
+    s.components.forEach(c=>{
+      if(!object(c) || typeof c.id!=="string" || cm.has(c.id) || typeof c.type!=="string")
+        throw new Error("Component ID ซ้ำหรือไม่ถูกต้องใน "+id);
+      cm.set(c.id,uid("c"));
+      if(!Number.isFinite(c.x) || !Number.isFinite(c.y)) throw new Error("ตำแหน่ง component ไม่ถูกต้องใน "+id);
+      c.params ||= {};
+      if(!object(c.params)) throw new Error("ค่า component ไม่ถูกต้องใน "+id);
+      if(c.type==="TAP") c.type="BUSTAP";
+      if(c.type==="BUSTAP" && c.params.bit==null && c.params.lo!=null){
+        c.params.bit=Number(c.params.lo);
+        c.params.nbit=Math.max(1,Number(c.params.hi??c.params.lo)-c.params.bit+1);
+      }
+      if(c.type.startsWith("SCH:")){
+        const mapped=sidMap.get(c.type.slice(4));
+        if(!mapped) throw new Error("ขาด sub-schematic: "+c.type.slice(4));
+        c.type="SCH:"+mapped;
+      }else if(c.type.startsWith("CUSTOM:")){
+        const mapped=customMap.get(c.type.slice(7));
+        if(!mapped) throw new Error("ขาด custom component: "+c.type.slice(7));
+        c.type="CUSTOM:"+mapped;
+      }else if(!Object.hasOwn(TYPES,c.type)) throw new Error("ยังไม่รองรับ component รุ่นเก่า: "+c.type);
+    });
+    s.wires.forEach(w=>{
+      if(!object(w) || typeof w.id!=="string" || wireIds.has(w.id) || !w.from || !w.to ||
+         !cm.has(w.from.cid) || !cm.has(w.to.cid) || typeof w.from.pid!=="string" || typeof w.to.pid!=="string")
+        throw new Error("สายอ้างอิง component ที่หายไป หรือ ID ซ้ำใน "+id);
+      wireIds.add(w.id); w.id=uid("w");
+      w.from.cid=cm.get(w.from.cid); w.to.cid=cm.get(w.to.cid);
+    });
+    s.components.forEach(c=>{ c.id=cm.get(c.id); delete c._net; delete c._nets; delete c._netW; delete c._busNet; delete c._busW; });
+    s.id=id;
+    return s;
+  };
+  Object.entries(P.schematics).forEach(([id,s])=>{
+    const next=sidMap.get(id); s.name=sheetNames.get(id); schematics[next]=migrateSheet(s,next);
+  });
+  Object.entries(P.customs).forEach(([key,cc])=>{
+    cc.name=customMap.get(key);
+    if(cc.schematic) cc.schematic=migrateSheet(cc.schematic,uid("sch"));
+    customs[cc.name]=cc;
+  });
+  // Reject recursive hierarchy before attaching an instance to the current sheet.
+  const visiting=new Set(), done=new Set();
+  const visit = key => {
+    if(visiting.has(key)) throw new Error("วงจรย่อยอ้างอิงวนซ้ำ: "+key);
+    if(done.has(key)) return;
+    visiting.add(key);
+    const s=key.startsWith("SCH:") ? schematics[key.slice(4)] : customs[key.slice(7)]?.schematic;
+    for(const c of s?.components||[]) if(c.type.startsWith("SCH:") || c.type.startsWith("CUSTOM:")) visit(c.type);
+    visiting.delete(key); done.add(key);
+  };
+  Object.keys(schematics).forEach(id=>visit("SCH:"+id));
+  Object.keys(customs).forEach(id=>visit("CUSTOM:"+id));
+  return {schematics,customs,topId:sidMap.get(P.topId),renamed:rename};
+}
+/* END TESTABLE PROJECT IMPORT HELPERS */
+
+function importProjectData(source, options={}){
+  if(state.placementMode) throw new Error("กด Accept หรือ Cancel ของ Placement Mode ก่อนนำเข้า");
+  if((!options.mode || options.mode==="sub") && activeSch()?.locked) throw new Error("ปลดล็อก schematic ก่อนวาง sub-block หรือเลือกนำเข้าเป็นโปรเจกต์ใหม่");
+  const asNew=options.mode==="new";
+  const target=asNew ? {id:uid("prj"), name:uniqueProjectName(options.name||source.name), schematics:{}, customs:{}} : state.project;
+  const staged=buildProjectImport(source,target,options);
+  // Validate pin references against the staged definitions, with no UI/save changes.
+  const previous=state.project;
+  try{
+    state.project={...target,schematics:{...target.schematics,...staged.schematics},customs:{...target.customs,...staged.customs}};
+    for(const s of [...Object.values(staged.schematics),...Object.values(staged.customs).map(c=>c.schematic).filter(Boolean)]){
+      for(const w of s.wires){
+        if(!getPort(comp(w.from.cid,s),w.from.pid) || !getPort(comp(w.to.cid,s),w.to.pid))
+          throw new Error("สายอ้างอิงพอร์ตที่ไม่มีอยู่ใน "+s.name+": "+w.id);
+      }
+    }
+  }finally{ state.project=previous; }
+  Object.assign(target.schematics,staged.schematics);
+  Object.assign(target.customs,staged.customs);
+  if(asNew){
+    target.topId=staged.topId; target.activeId=staged.topId; target.openTabs=[staged.topId];
+    state.projects[target.id]=target;
+    switchProject(target.id);
+  }else{
+    if(options.mode!=="sheets"){
+      const sch=activeSch(), r=canvas.getBoundingClientRect(), v=state.view;
+      const c={id:uid("c"),type:"SCH:"+staged.topId,label:source.name||"",params:{},
+        x:snap((r.width/2-v.x)/v.k),y:snap((r.height/2-v.y)/v.k)};
+      const size=getSize(c);
+      const electrical=sch.components.filter(x=>!isDocumentationComponent(x));
+      if(electrical.some(x=>{ const b=getSize(x); return c.x<x.x+b.w+GRID && c.x+size.w+GRID>x.x && c.y<x.y+b.h+GRID && c.y+size.h+GRID>x.y; })){
+        c.x=snap(Math.max(...electrical.map(x=>x.x+getSize(x).w))+4*GRID);
+      }
+      sch.components.push(c); state.selection=new Set([c.id]);
+    }
+    snapshot(); resetVhdlPanel(); renderAll();
+  }
+  autosave();
+  return staged;
+}
+function openImportProjectDialog(){
+  const m=document.createElement("div"); m.className="modal-bg";
+  m.innerHTML=`<div class="modal"><h2>↓ Import Project <button class="close">×</button></h2>
+    <div class="modal-body">
+      <p>นำโปรเจกต์เดิมเข้ามาใช้งาน พร้อมวงจรย่อยและ custom component ทุกตัว โดยเก็บโปรเจกต์ปัจจุบันไว้</p>
+      <div class="row"><label for="ipFile">ไฟล์โปรเจกต์เดิม</label><input id="ipFile" type="file" accept=".json,application/json"></div>
+      <div class="row"><label for="ipSource">โปรเจกต์ต้นทาง</label><select id="ipSource" disabled></select></div>
+      <div class="row"><label for="ipMode">นำเข้าเป็น</label><select id="ipMode">
+        <option value="sub">Sub-block ใน schematic ปัจจุบัน</option>
+        <option value="new">โปรเจกต์ใหม่ใน Workspace</option>
+        <option value="sheets">Schematics ในโปรเจกต์ปัจจุบัน</option></select></div>
+      <div class="row" id="ipNameRow" hidden><label for="ipName">ชื่อโปรเจกต์ใหม่</label><input id="ipName" spellcheck="false"></div>
+      <p id="ipInfo" style="white-space:pre-wrap;overflow-wrap:anywhere" role="status">เลือกไฟล์ .schproj.json รุ่นเดิม (v1) หรือ Workspace (v2)</p>
+    </div><div class="modal-foot"><button class="btn" id="ipCancel">ยกเลิก</button><button class="btn btn-primary" id="ipGo" disabled>นำเข้า</button></div></div>`;
+  document.body.appendChild(m);
+  let choices=[], readVersion=0, legacyPortOrder=true;
+  const $m=s=>m.querySelector(s);
+  const refresh=()=>{
+    const source=choices[+$m("#ipSource").value]?.project;
+    $m("#ipNameRow").hidden=$m("#ipMode").value!=="new";
+    $m("#ipGo").disabled=!source;
+    if(!source) return;
+    $m("#ipInfo").textContent=`${source.name||"project"}: ${Object.keys(source.schematics||{}).length} schematics · ${Object.keys(source.customs||{}).length} custom components\nTop: ${source.schematics?.[source.topId]?.name||"ไม่พบ"}\nชื่อซ้ำจะเติมเลขต่อท้าย และสร้าง ID ใหม่ให้ทุกชิ้นส่วน · Ctrl+Z ย้อนกลับได้`;
+  };
+  $m("#ipFile").addEventListener("change",async e=>{
+    const version=++readVersion; choices=[]; $m("#ipSource").innerHTML=""; refresh();
+    const f=e.target.files[0]; if(!f) return;
+    try{
+      const payload=JSON.parse(await f.text()); if(version!==readVersion || !m.isConnected) return;
+      choices=projectFileChoices(payload); legacyPortOrder=payload.version!==2;
+      $m("#ipSource").innerHTML=choices.map((c,i)=>`<option value="${i}">${esc(c.project?.name||c.id)}</option>`).join("");
+      $m("#ipSource").disabled=false;
+      const active=choices.findIndex(c=>c.id===payload.workspace?.activeId);
+      $m("#ipSource").value=String(Math.max(0,active));
+      $m("#ipName").value=choices[+$m("#ipSource").value].project?.name||"imported";
+      refresh();
+    }catch(e){ if(version===readVersion){ $m("#ipInfo").textContent=e.message; $m("#ipGo").disabled=true; } }
+  });
+  $m("#ipSource").addEventListener("change",()=>{ $m("#ipName").value=choices[+$m("#ipSource").value]?.project?.name||"imported"; refresh(); });
+  $m("#ipMode").addEventListener("change",refresh);
+  const close=()=>m.remove(); $m(".close").onclick=close; $m("#ipCancel").onclick=close;
+  $m("#ipGo").onclick=()=>{
+    try{
+      const r=importProjectData(choices[+$m("#ipSource").value].project,{mode:$m("#ipMode").value,name:$m("#ipName").value,legacyPortOrder});
+      close(); toast(`นำเข้า ${Object.keys(r.schematics).length} schematics แล้ว${r.renamed.length?` · ปรับชื่อซ้ำ ${r.renamed.length} ชื่อ`:""}`,"ok",4200);
+    }catch(e){ $m("#ipInfo").textContent="นำเข้าไม่สำเร็จ: "+e.message; }
+  };
+}
+
 function serialize(){
   // strip only the VHDL-generator scratch fields (never user data, whose keys
   // could legitimately start with "_" after sanId)
-  const SCRATCH = new Set(["_net","_nets","_netW"]);
+  const SCRATCH = new Set(["_net","_nets","_netW","_busNet","_busW"]);
+  stashProjectUi();
+  // never write an EMPTY workspace: the active project belongs in the map even if
+  // seedWorkspace never ran (a half-built state, a file being repaired)
+  if(!Object.keys(state.projects||{}).length || !state.projects[state.activeProjectId]){
+    if(!state.project.id) state.project.id = uid("prj");
+    state.projects = { [state.project.id]: state.project };
+    state.activeProjectId = state.project.id;
+  }
+  // version 2 carries the whole workspace. `project` is still written out as the
+  // ACTIVE one so a file from here stays readable by anything expecting version 1.
   return JSON.stringify({
-    version: 1,
+    version: 2,
+    workspace: { projects: state.projects, activeId: state.activeProjectId },
     project: state.project,
     activeId: state.activeId,
     openTabs: state.openTabs,
@@ -7222,9 +8052,14 @@ function resetVhdlPanel(){
   pre.dataset.raw = "";
   pre.innerHTML = `<span class="cm">-- กดปุ่ม "⚙ Generate VHDL" ด้านบน เพื่อสร้างโค้ดจากวงจร</span>`;
 }
-function deserialize(json){
-  // parse + repair on a local object first, commit to state only when valid
-  const o = JSON.parse(json);
+function prepareProject(o){
+  if(!o.project || typeof o.project!=="object") throw new Error("Invalid file");
+  // Repairs resolve SCH/CUSTOM pins against this file, never another open project.
+  const previous=state.project, active=state.activeId;
+  try{ state.project=o.project; state.activeId=o.activeId||o.project.topId; return prepareProjectContents(o); }
+  finally{ state.project=previous; state.activeId=active; }
+}
+function prepareProjectContents(o){
   if(!o.project || typeof o.project !== "object") throw new Error("Invalid file");
   const proj = o.project;
   if(!proj.schematics || Object.keys(proj.schematics).length===0){
@@ -7298,20 +8133,33 @@ function deserialize(json){
     seenNames.add(nm);
     s.name = nm;
   });
-  // commit
-  state.project = proj;
-  state.activeId = (o.activeId && proj.schematics[o.activeId]) ? o.activeId : Object.keys(proj.schematics)[0];
-  state.openTabs = (o.openTabs||[]).filter(id=>proj.schematics[id]);
-  if(!state.openTabs.length) state.openTabs = [state.activeId];
-  state.selection.clear();
-  state.pendingWire = null;
-  reseedUid();                     // avoid new-id collisions with loaded ids
-  // now that the project is live, lay out ONLY the branches the legacy-fanout fix
-  // created; a file saved by this app has none, so it loads exactly as it was saved
-  fanoutFixups.forEach(({s, fresh})=>{ try{ healLayout(s, scopeOf(s, {wires: fresh})); }catch(e){} });
-  resetVhdlPanel();                // stale generated code belongs to the old project
-  $("#projectName").value = proj.name || "my_project";
-  snapshot(); renderAll();
+  proj.activeId = o.activeId && proj.schematics[o.activeId] ? o.activeId : proj.topId;
+  proj.openTabs = (Array.isArray(o.openTabs)?o.openTabs:[]).filter(id=>proj.schematics[id]);
+  if(!proj.openTabs.includes(proj.activeId)) proj.openTabs.push(proj.activeId);
+  return {proj,fanoutFixups};
+}
+function deserialize(json){
+  if(state.placementMode) throw new Error("กด Accept หรือ Cancel ของ Placement Mode ก่อนเปิดไฟล์");
+  const o=JSON.parse(json), choices=projectFileChoices(o), built=Object.create(null), repairs=[];
+  for(const choice of choices){
+    const raw=choice.project;
+    if(o.version!==2) preserveLegacySubBlockOrder(raw);
+    const result=prepareProject({project:raw,activeId:raw.activeId || o.activeId,openTabs:raw.openTabs || o.openTabs});
+    const pid=o.workspace ? choice.id : raw.id || uid("prj");
+    result.proj.id=pid; built[pid]=result.proj; repairs.push(result);
+  }
+  const pid=Object.hasOwn(built,o.workspace?.activeId) ? o.workspace.activeId : Object.keys(built)[0];
+  state.projects=built; state.activeProjectId=pid; state.project=built[pid];
+  state.activeId=state.project.activeId; state.openTabs=state.project.openTabs.slice();
+  state.selection.clear(); state.pendingWire=null; state.clipboard=null; state.drag=null;
+  for(const {proj,fanoutFixups} of repairs){
+    state.project=proj; reseedUid(proj);
+    fanoutFixups.forEach(({s,fresh})=>{ try{ healLayout(s,scopeOf(s,{wires:fresh})); }catch(_){} });
+  }
+  state.project=built[pid];
+  state.history={stack:[],idx:-1,muted:false};
+  resetVhdlPanel(); $("#projectName").value=state.project.name||"my_project";
+  snapshot(); renderAll(); autoFitSheet(true);
 }
 function saveProjectToFile(){
   state.project.name = sanId($("#projectName").value || state.project.name || "project");
@@ -7324,7 +8172,7 @@ function saveProjectToFile(){
   a.download = dlName(state.project.name, ".schproj.json", "project");
   a.click();
   URL.revokeObjectURL(u);
-  toast("บันทึกโปรเจกต์แล้ว", "ok");
+  toast("บันทึก Workspace (ทุกโปรเจกต์) แล้ว", "ok");
 }
 function openProjectFromFile(){
   const inp = document.createElement("input");
@@ -7341,18 +8189,79 @@ function openProjectFromFile(){
   };
   inp.click();
 }
-function newProject(){
-  if(!confirm("สร้างโปรเจกต์ใหม่? โปรเจกต์ปัจจุบันที่ยังไม่ได้ Save เป็นไฟล์จะหายไป")) return;
-  state.project = blankProject();
-  state.activeId = Object.keys(state.project.schematics)[0];
-  state.openTabs = [state.activeId];
+/* ---------- WORKSPACE OPERATIONS ---------- */
+function uniqueProjectName(base, excludeId){
+  let nm = sanId(base) || "project";
+  const taken = () => Object.keys(state.projects)
+    .some(id => id !== excludeId && (state.projects[id].name||"") === nm);
+  let k = 2; const root = nm;
+  while(taken()) nm = root + "_" + (k++);
+  return nm;
+}
+/* the desk is remembered per project, not globally */
+function stashProjectUi(){
+  const p = state.project;
+  if(!p) return;
+  p.openTabs = (state.openTabs||[]).slice();
+  p.activeId = state.activeId;
+}
+function switchProject(pid){
+  const p = state.projects[pid];
+  if(!p || pid === state.activeProjectId) return;
+  if(state.placementMode){ toast("กด Accept หรือ Cancel ของ Placement Mode ก่อนสลับโปรเจกต์","warn"); return; }
+  stashProjectUi();
+  state.activeProjectId = pid;
+  state.project = p;
+  state.activeId = (p.activeId && p.schematics[p.activeId]) ? p.activeId : Object.keys(p.schematics)[0];
+  state.openTabs = (p.openTabs||[]).filter(id=>p.schematics[id]);
+  if(!state.openTabs.length && state.activeId) state.openTabs = [state.activeId];
   state.selection.clear();
   state.pendingWire = null;
-  state.view = {x:0, y:0, k:1};
-  state.history = {stack:[], idx:-1, muted:false};
+  state.clipboard=null; state.drag=null; state.wireDrag=null; state.cornerDrag=null;
+  reseedUid(p);
   resetVhdlPanel();
-  $("#projectName").value = "my_project";
+  const nameBox = $("#projectName"); if(nameBox) nameBox.value = p.name || "my_project";
   snapshot(); renderAll();
+  autoFitSheet(true);              // splitting copies ids, so force rather than compare
+}
+function addProject(name, opts){
+  opts = opts || {};
+  const pid = uid("prj");
+  const p = blankProject();
+  p.id = pid;
+  p.name = uniqueProjectName(name || "project", pid);
+  if(opts.empty){ p.schematics = {}; p.topId = null; }
+  state.projects[pid] = p;
+  if(opts.activate !== false) switchProject(pid);
+  return p;
+}
+function renameProjectById(pid, name){
+  const p = state.projects[pid]; if(!p) return;
+  p.name = uniqueProjectName(name, pid);
+  if(pid === state.activeProjectId){ const b = $("#projectName"); if(b) b.value = p.name; }
+  snapshot(); renderAll();
+}
+function deleteProjectById(pid){
+  const p = state.projects[pid]; if(!p) return;
+  if(Object.keys(state.projects).length === 1){ toast("ต้องเหลืออย่างน้อย 1 โปรเจกต์","warn"); return; }
+  const n = Object.keys(p.schematics||{}).length;
+  if(!confirm(`ลบโปรเจกต์ "${p.name}" (${n} schematic)?\nกด Ctrl+Z เพื่อย้อนกลับได้`)) return;
+  delete state.projects[pid];
+  if(pid === state.activeProjectId){
+    state.activeProjectId = null;               // force switchProject to do its work
+    switchProject(Object.keys(state.projects)[0]);
+  } else { snapshot(); renderAll(); }
+  toast(`ลบโปรเจกต์ "${p.name}" แล้ว`, "ok");
+}
+
+/* Adds a project to the workspace — nothing is thrown away any more, so this needs
+   no confirmation. Replacing everything is what opening a file does. */
+function newProject(){
+  const nm = prompt("ชื่อโปรเจกต์ใหม่:", "project");
+  if(!nm) return;
+  const p = addProject(nm);
+  state.view = {x:0, y:0, k:1};
+  toast(`สร้างโปรเจกต์ "${p.name}" แล้ว`, "ok");
 }
 /* ---- layout stamp carried INSIDE the generated VHDL -------------------------
    VHDL has nowhere to put coordinates, so re-importing generated code used to rebuild
@@ -7402,6 +8311,151 @@ function readLayoutStamp(text){
 /* Bring stamped schematics into the CURRENT project without disturbing it: fresh ids
    throughout (so importing the same file twice cannot collide with what is already
    open), names made unique, and sub-block references ("SCH:<id>") repointed. */
+function schClosure(ids, P=state.project){
+  const want=new Set(), customSeen=new Set();
+  const scan=components=>(components||[]).forEach(c=>{
+    if(c.type.startsWith("SCH:")) visit(c.type.slice(4));
+    if(c.type.startsWith("CUSTOM:")){
+      const name=c.type.slice(7);
+      if(!P.customs[name]) throw new Error("ขาด custom component: "+name);
+      if(!customSeen.has(name)){ customSeen.add(name); scan(P.customs[name].schematic?.components); }
+    }
+  });
+  const visit=id=>{
+    if(want.has(id)) return;
+    if(!P.schematics[id]) throw new Error("ขาด schematic: "+id);
+    want.add(id); scan(P.schematics[id].components);
+  };
+  ids.forEach(visit); return want;
+}
+/* sheets that would be left pointing at nothing if `ids` moved out */
+function schDependents(ids,P=state.project){
+  const gone=new Set(ids);
+  const sheets=Object.values(P.schematics).filter(s=>!gone.has(s.id) && [...schClosure([s.id],P)].some(id=>gone.has(id)));
+  // Custom definitions stay in the source library after a move, including unused
+  // definitions. Keep their SCH references valid too; copying is always available.
+  const usesGone=(cc,seen=new Set())=>{
+    if(!cc || seen.has(cc)) return false;
+    seen.add(cc);
+    return (cc.schematic?.components||[]).some(c=>c.type.startsWith("SCH:")
+      ? [...schClosure([c.type.slice(4)],P)].some(id=>gone.has(id))
+      : c.type.startsWith("CUSTOM:") && usesGone(P.customs[c.type.slice(7)],seen));
+  };
+  const customs=Object.values(P.customs||{}).filter(cc=>usesGone(cc)).map(cc=>({name:"custom "+cc.name}));
+  return [...sheets,...customs];
+}
+/* the custom components those sheets instantiate, transitively */
+function customsUsedBy(sheets, P){
+  P = P || state.project;
+  const acc = new Set();
+  sheets.forEach(s=>(s.components||[]).forEach(c=>{
+    if(typeof c.type === "string" && c.type.indexOf("CUSTOM:") === 0){
+      const n = c.type.slice(7);
+      if(P.customs[n] && !acc.has(n)){
+        acc.add(n);
+        collectCustomDeps(P.customs[n], acc, P);
+      }
+    }
+  }));
+  return acc;
+}
+
+/* After sheets leave a project it still has to be a working project: no tab or top
+   pointing at something that is gone, and never zero sheets. Applies to the open
+   project (whose desk is live in `state`) and to one sitting in the list alike. */
+function tidyProjectAfterRemoval(P){
+  const live = P === state.project;
+  let tabs = (live ? state.openTabs : P.openTabs || []).filter(id => P.schematics[id]);
+  let act  = live ? state.activeId : P.activeId;
+  if(!P.schematics[P.topId]) P.topId = Object.keys(P.schematics)[0] || null;
+  if(!P.schematics[act]) act = tabs[0] || P.topId;
+  if(!Object.keys(P.schematics).length){
+    const fresh = blankSchematic(uid("sch"), "top");
+    P.schematics[fresh.id] = fresh; P.topId = fresh.id;
+    tabs = [fresh.id]; act = fresh.id;
+  }
+  if(!tabs.length && P.topId) tabs = [P.topId];
+  if(!act) act = tabs[0];
+  if(live){ state.openTabs = tabs; state.activeId = act; }
+  P.openTabs = tabs.slice(); P.activeId = act;
+}
+/* Build the new project file and, when moving, take the sheets out of this one.
+   Ids are kept exactly as they are: the SCH: references inside the exported set
+   already point at each other, and the file lands in a project of its own where
+   nothing can collide. */
+function splitProject(ids, opts){
+  opts = opts || {};
+  const P = (opts.from && state.projects[opts.from]) || state.project;
+  const keep = [...schClosure(ids, P)];
+  if(!keep.length){ toast("ยังไม่ได้เลือก schematic","warn"); return null; }
+  if(opts.move){
+    const hurt = schDependents(keep, P);
+    if(hurt.length){
+      toast(`ย้ายออกไม่ได้ — ${hurt.map(s=>s.name).join(", ")} ยังใช้แผ่นที่จะย้ายอยู่ (ใช้ "คัดลอก" แทน)`, "err", 6000);
+      return null;
+    }
+  }
+  const sheets = keep.map(id=>P.schematics[id]);
+  const customs = {};
+  customsUsedBy(sheets, P).forEach(n=>{ customs[n] = P.customs[n]; });
+  const topId = keep.includes(P.topId) ? P.topId : keep[0];
+
+  /* Destination is a project IN THE APP unless a file was asked for. This is the
+     point of the whole feature: work is organised into Lab01 / Lab02 / … without
+     anything leaving the browser. Into a NEW project the sheets keep their ids (a
+     fresh project cannot collide, and their SCH: references already point at each
+     other); into an EXISTING one adoptSchematics re-mints ids and repoints those
+     references, because the target may already use the same ones. */
+  if(opts.dest && opts.dest !== "file"){
+    const target=opts.dest==="new"
+      ? {id:uid("prj"),name:uniqueProjectName(opts.name||P.name+"_part"),schematics:{},customs:{}}
+      : state.projects[opts.dest];
+    if(!target || target===P){ toast("เลือกโปรเจกต์ปลายทางอื่น","warn"); return null; }
+    let staged;
+    try{ staged=buildProjectImport({topId,schematics:Object.fromEntries(sheets.map(s=>[s.id,s])),customs},target); }
+    catch(e){ toast(e.message,"err",5000); return null; }
+    Object.assign(target.schematics,staged.schematics); Object.assign(target.customs,staged.customs);
+    target.topId ||= staged.topId; target.activeId ||= staged.topId; target.openTabs ||= [staged.topId];
+    if(opts.dest==="new") state.projects[target.id]=target;
+    if(opts.move){
+      keep.forEach(id=>{ delete P.schematics[id]; });
+      tidyProjectAfterRemoval(P);
+    }
+    snapshot(); renderAll();
+    autoFitSheet();
+    toast(`${opts.move ? "ย้าย" : "คัดลอก"} ${keep.length} schematic ไปที่โปรเจกต์ "${target.name}" แล้ว`, "ok", 4200);
+    return { project: target, ids: keep };
+  }
+  const out = {
+    version: 1,
+    project: {
+      name: sanId(opts.name || (P.name + "_part")) || "project",
+      topId, customs,
+      schematics: keep.reduce((o,id)=>{ o[id] = P.schematics[id]; return o; }, {}),
+    },
+    activeId: topId,
+    openTabs: [topId],
+  };
+  const data = JSON.stringify(out, (k,v)=>["_net","_nets","_netW","_busNet","_busW"].includes(k) ? undefined : v, 2);
+  const b = new Blob([data], {type:"application/json"});
+  const u = URL.createObjectURL(b);
+  const a = document.createElement("a");
+  a.href = u;
+  a.download = dlName(out.project.name, ".schproj.json", "project");
+  a.click();
+  URL.revokeObjectURL(u);
+
+  if(opts.move){
+    keep.forEach(id=>{ delete P.schematics[id]; });
+    tidyProjectAfterRemoval(P);
+    snapshot(); renderAll();
+    autoFitSheet();
+  }
+  toast(`แยก ${keep.length} schematic เป็นโปรเจกต์ "${out.project.name}" แล้ว` +
+        (opts.move ? " และย้ายออกจากโปรเจกต์นี้" : " (ต้นฉบับยังอยู่ครบ)"), "ok", 5200);
+  return out;
+}
+
 function adoptSchematics(list){
   const idMap = new Map();
   list.forEach(s=>{ if(s && s.id) idMap.set(s.id, uid("sch")); });
@@ -7499,6 +8553,95 @@ function startAutoSave(){
    - A deep-copy of the schematic is stored inside the custom, so it is
      self-contained and can be exported/imported as a JSON file.
    ========================================================================= */
+/* Pick the sheets, see what comes with them, then save them out. */
+function openSplitDialog(startId, srcPid){
+  const P = (srcPid && state.projects[srcPid]) || state.project;
+  const from = P.id || state.activeProjectId;
+  const all = Object.values(P.schematics);
+  if(all.length < 2){ toast(`"${P.name}" มี schematic เดียว — ยังไม่มีอะไรให้แยก`,"warn"); return; }
+  const m = document.createElement("div");
+  m.className = "modal-bg";
+  const rows = all.map(s=>`
+    <label class="split-row">
+      <input type="checkbox" value="${s.id}" ${s.id===(startId||(P===state.project?state.activeId:null))?"checked":""}>
+      <span class="nm">${esc(s.name)}</span>
+      ${s.id===P.topId?`<span class="tag">top</span>`:""}
+      <span class="cnt">${(s.components||[]).length} ชิ้น</span>
+    </label>`).join("");
+  m.innerHTML = `
+    <div class="modal">
+      <h2>✂ แยก schematic จาก "${esc(P.name)}"
+        <button class="close">×</button></h2>
+      <div class="modal-body">
+        <div class="row"><label>ย้ายไปที่</label>
+          <select id="spDest">
+            <option value="new">➕ โปรเจกต์ใหม่ในแอป</option>
+            ${Object.keys(state.projects).filter(id=>id!==from)
+               .map(id=>`<option value="${id}">โปรเจกต์ "${esc(state.projects[id].name)}"</option>`).join("")}
+            <option value="file">ดาวน์โหลดเป็นไฟล์ .schproj.json</option>
+          </select></div>
+        <div class="row" id="spNameRow"><label>ชื่อโปรเจกต์ใหม่</label>
+          <input id="spName" value="${esc(sanId(P.name||"project"))}_part" spellcheck="false"></div>
+        <div class="row"><label>ทำอะไรกับต้นฉบับ</label>
+          <select id="spMode">
+            <option value="copy">คัดลอก — เก็บไว้ทั้งสองที่</option>
+            <option value="move">ย้ายออก — ลบออกจากโปรเจกต์นี้</option>
+          </select></div>
+        <div style="margin:14px 0 6px;font-size:11px;color:var(--ink-dim);letter-spacing:1px;font-weight:600">เลือก SCHEMATIC</div>
+        <div id="spList" style="background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:6px;max-height:34vh;overflow:auto">${rows}</div>
+        <div id="spInfo" style="margin-top:12px;font-size:12px;line-height:1.7;color:var(--ink-dim)"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="spCancel">ยกเลิก</button>
+        <button class="btn btn-primary" id="spGo">แยกออกเป็นไฟล์</button>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+  const picked = () => [...m.querySelectorAll("#spList input:checked")].map(i=>i.value);
+  const refresh = () => {
+    const sel = picked();
+    const info = m.querySelector("#spInfo");
+    const go = m.querySelector("#spGo");
+    if(!sel.length){ info.innerHTML = `<span style="color:var(--warn)">ยังไม่ได้เลือก schematic</span>`; go.disabled = true; return; }
+    const closure = [...schClosure(sel, P)];
+    const extra = closure.filter(id=>!sel.includes(id)).map(id=>P.schematics[id].name);
+    const moving = m.querySelector("#spMode").value === "move";
+    const hurt = moving ? schDependents(closure, P).map(s=>s.name) : [];
+    const cust = [...customsUsedBy(closure.map(id=>P.schematics[id]), P)];
+    const dest = m.querySelector("#spDest").value;
+    m.querySelector("#spNameRow").style.display = (dest==="new"||dest==="file") ? "" : "none";
+    m.querySelector("#spGo").textContent = dest==="file" ? "แยกออกเป็นไฟล์"
+      : dest==="new" ? "แยกเป็นโปรเจกต์ใหม่" : "ย้ายไปโปรเจกต์นี้";
+    const where = dest==="file" ? "ไฟล์" : dest==="new" ? "โปรเจกต์ใหม่"
+      : `โปรเจกต์ "${esc(state.projects[dest].name)}"`;
+    let html = `จะแยก <b style="color:var(--ink)">${closure.length}</b> schematic ไปที่${where}`;
+    if(extra.length) html += `<br>พ่วงไปด้วยเพราะถูกใช้เป็นบล็อกย่อย: <b style="color:var(--ink)">${esc(extra.join(", "))}</b>`;
+    if(cust.length) html += `<br>แนบ custom component: ${esc(cust.join(", "))}`;
+    if(hurt.length){
+      html += `<br><span style="color:var(--err)">✖ ย้ายออกไม่ได้ — <b>${esc(hurt.join(", "))}</b> ยังใช้แผ่นที่จะย้ายอยู่ ให้เลือก "คัดลอก" หรือเลือกแผ่นเหล่านั้นด้วย</span>`;
+    }
+    info.innerHTML = html;
+    go.disabled = hurt.length > 0;
+  };
+  m.querySelectorAll("#spList input").forEach(i=>i.addEventListener("change", refresh));
+  m.querySelector("#spMode").addEventListener("change", refresh);
+  m.querySelector("#spDest").addEventListener("change", refresh);
+  const close = () => m.remove();
+  m.querySelector(".close").addEventListener("click", close);
+  m.querySelector("#spCancel").addEventListener("click", close);
+  m.addEventListener("mousedown", ev=>{ if(ev.target===m) close(); });
+  m.querySelector("#spGo").addEventListener("click", ()=>{
+    const r = splitProject(picked(), {
+      name: m.querySelector("#spName").value,
+      move: m.querySelector("#spMode").value === "move",
+      dest: m.querySelector("#spDest").value,
+      from,
+    });
+    if(r) close();
+  });
+  refresh();
+}
+
 function openWizard(editName){
   const isEdit = !!editName;
   const editing = isEdit ? state.project.customs[editName] : null;
@@ -7625,14 +8768,14 @@ function openWizard(editName){
 /* =========================================================================
    EXPORT / IMPORT CUSTOM COMPONENTS  (JSON files)
    ========================================================================= */
-function collectCustomDeps(cc, acc=new Set()){
+function collectCustomDeps(cc, acc=new Set(), P=state.project){
   if(!cc || !cc.schematic) return acc;
   cc.schematic.components.forEach(c=>{
     if(c.type && c.type.startsWith("CUSTOM:")){
       const n = c.type.slice(7);
-      if(!acc.has(n) && state.project.customs[n]){
+      if(!acc.has(n) && P.customs[n]){
         acc.add(n);
-        collectCustomDeps(state.project.customs[n], acc);
+        collectCustomDeps(P.customs[n], acc, P);
       }
     }
   });
@@ -8074,6 +9217,8 @@ document.addEventListener("click",ev=>{
     case "placement-back": backToPlacement(); break;
     case "placement-accept": acceptPlacement(); break;
     case "placement-cancel": cancelPlacement(); break;
+    case "import-project": openImportProjectDialog(); break;
+    case "split-project": openSplitDialog(); break;
     case "new-project": newProject(); break;
     case "open-project": openProjectFromFile(); break;
     case "save-project": saveProjectToFile(); break;
@@ -8190,7 +9335,7 @@ document.addEventListener("click",ev=>{
 });
 
 $("#projectName").addEventListener("change",ev=>{
-  state.project.name = sanId(ev.target.value);
+  renameProjectById(state.activeProjectId,ev.target.value);
 });
 
 /* =========================================================================
@@ -8382,6 +9527,7 @@ function renderAll(){
 }
 
 function init(){
+  seedWorkspace();
   let restored = false;
   try{ restored = loadAutosave(); }catch(e){}
   if(!restored){
@@ -8412,6 +9558,7 @@ function init(){
   // autoPts), so re-running the healers here would silently rearrange their drawing
   // on every reload. Anything broken is still fixed when that part is next edited.
   renderAll();
+  autoFitSheet(true);              // frame whatever the session opens on
   startAutoSave();
   toast("Schematic Studio — พร้อมใช้งาน","ok",1800);
 }
