@@ -1233,10 +1233,8 @@ function gateBodyShape(p, kind){
     ? `<text x="${w/2}" y="${h-1}" text-anchor="middle" font-size="8" fill="var(--muted)">${bits-1}:0</text>` : "";
   return stubs + body + bubble + tag;
 }
-/* ISE ships exactly four sizes of each comparator, and the SIZE decides the pin
-   style: COMP2/COMP4 bring every bit out on its own pin, COMP8/COMP16 carry one bus
-   pin per side. So the style is derived, never a separate switch to get wrong. */
-function cmpIsBus(p){ return (p.width||2) >= 8; }
+/* Explicit pin style for new components; absent mode preserves legacy ISE widths. */
+function cmpIsBus(p){ return p.pinMode ? p.pinMode==="bus" : (p.width||2) >= 8; }
 function cmpDef(mag){
   // 5 rows for the bus form, not 4: a bus pin's label is long ("A(15:0)") and at the
   // top row it runs straight into the block title, which sits centred at y=22.
@@ -1244,9 +1242,10 @@ function cmpDef(mag){
   const sizeOf = p => blockSize(110, 22*(rowsOf(p)+1));
   return {
     label: mag ? "COMPM" : "COMP", category:"cmp",
-    defaultParams:{width:2},
+    defaultParams:{width:2, pinMode:"pins"},
     paramSchema:[
       {key:"width", label:"ขนาด (bit)", type:"select", options:[2,4,8,16]},
+      {key:"pinMode",label:"A / B",type:"select",options:["pins","bus"],optionLabels:{pins:"แยก bit",bus:"Bus"}},
     ],
     size:sizeOf,
     ports(p){
@@ -1546,12 +1545,14 @@ const TYPES = {
      student from having to pick a mode. */
   BUSTAP: {
     label:"Bus Tap", category:"bus",
-    defaultParams:{bit:0, nbit:1, dir:"right", mode:"split"},
+    defaultParams:{bit:0, nbit:1, dir:"right", mode:"split", order:"up", skipUsed:true},
     paramSchema:[
       {key:"bit",  label:"บิตเริ่มที่ ", type:"int", min:0, max:31},
       {key:"nbit", label:"จำนวนบิต", type:"int", min:1, max:32},
       {key:"mode", label:"ทิศทางบิต", type:"select", options:["split","merge"]},
       {key:"dir",  label:"หันไปทาง",  type:"select", options:["right","down","left","up"]},
+      {key:"order",label:"ลำดับ",type:"select",options:["up","down"],optionLabels:{up:"เพิ่มขึ้น",down:"ลดลง"}},
+      {key:"skipUsed",label:"ข้ามช่วงที่ใช้แล้ว",type:"bool"},
     ],
     // 33 in the EXTEND direction (easy to grab), 22 ALONG the bus, so taps sitting
     // 22 apart on the same bus never overlap. Every pin lands on the 11px grid.
@@ -1792,6 +1793,53 @@ const TYPES = {
     }
   }
 };
+
+/* Logical groups share one bus/pin definition with the generator. */
+function ioModeField(key,label){return {key,label,type:"select",options:["pins","bus"],optionLabels:{pins:"แยก bit",bus:"Bus"}};}
+function busGroups(type,p){
+  if(type==="ENC") return [{id:"i",bits:p.inputs,dir:"in",mode:p.inputMode},{id:"y",bits:Math.log2(p.inputs),dir:"out",mode:p.outputMode}];
+  if(type==="DEC") return [{id:"a",bits:Math.log2(p.outputs),dir:"in",mode:p.inputMode},{id:"y",bits:p.outputs,dir:"out",mode:p.outputMode}];
+  if(type==="DEMUX") return [{id:"d",bits:gateWidth(p),dir:"in",mode:p.inputMode,data:true},
+    {id:"s",bits:Math.log2(p.outputs),dir:"in",mode:p.selectMode},
+    ...Array.from({length:p.outputs},(_,i)=>({id:"y"+i,bits:gateWidth(p),dir:"out",mode:p.outputMode,data:true}))];
+  return [];
+}
+function groupPin(g,i){return g.data ? (g.bits===1 ? g.id : g.id+"_"+i) : g.id+i;}
+for(const type of ["DEMUX","ENC","DEC"]){
+  const td=TYPES[type], oldPorts=td.ports, oldSize=td.size, oldShape=td.shape;
+  Object.assign(td.defaultParams,{inputMode:"pins",outputMode:"pins"});
+  td.paramSchema.push(ioModeField("inputMode","Input"),ioModeField("outputMode","Output"));
+  if(type==="DEMUX"){
+    Object.assign(td.defaultParams,{width:1,selectMode:"pins"});
+    td.paramSchema.push({key:"width",label:"ความกว้างข้อมูล (bit)",type:"int",min:1,max:32},ioModeField("selectMode","Select input"));
+  }
+  td.ports=p=>{
+    const base=oldPorts(p), groups=busGroups(type,p);
+    const expanded=type==="DEMUX" && gateWidth(p)>1;
+    const out=[];let rowIn=0,rowOut=0;
+    for(const g of groups){
+      const original=base.find(x=>x.id===(g.data?g.id:g.id+"0"));
+      if(g.mode==="bus"){
+        const row=g.dir==="in"?++rowIn:++rowOut;
+        out.push({...original,id:g.id,width:g.bits,label:g.bits>1?`${g.id}[${g.bits-1}:0]`:g.id,dy:expanded?22*row:(type==="ENC"||type==="DEC"?44:original.dy)});
+      }else for(let i=0;i<g.bits;i++){
+        const row=g.dir==="in"?++rowIn:++rowOut;
+        const old=g.data?original:base.find(x=>x.id===g.id+i);
+        out.push({...old,id:groupPin(g,i),width:1,label:groupPin(g,i),dy:expanded?22*row:old.dy});
+      }
+    }
+    if(type==="DEC")out.push(base.find(x=>x.id==="en"));
+    return out;
+  };
+  td.size=p=>type==="DEMUX" && gateWidth(p)>1 ? {w:99,h:22*(Math.max(...td.ports(p).map(x=>x.dy/22))+1)} : oldSize(p);
+  td.shape=p=>{
+    if(type!=="DEMUX" || gateWidth(p)===1)return oldShape(p);
+    const {w,h}=td.size(p);
+    return `<path class="glow" d="M6,14 L${w-6},4 L${w-6},${h-4} L6,${h-14} Z" fill="var(--gate-fill)" stroke="var(--gate-stroke)" stroke-width="1.7"/>
+      <text x="${w/2}" y="${h/2-6}" text-anchor="middle" font-size="12" fill="var(--ink)">DEMUX</text>
+      <text x="${w/2}" y="${h/2+9}" text-anchor="middle" font-size="9" fill="var(--ink-dim)">1:${p.outputs} · ${gateWidth(p)} bit</text>`;
+  };
+}
 
 /* ---------- helpers for type system ---------- */
 const DOCUMENTATION_TYPES = new Set(["MODULE_FRAME"]);
@@ -2948,6 +2996,7 @@ function setTool(t, silent){
   if(t==="symbol"){ setLeftTab("palette"); toast("ลาก component จากแผง Components ไปวางบน canvas","info",2200); return; }
   if(!TOOL_INFO[t]) t = "select";
   state.tool = t;
+  if(t!=="bustap"){state.tapPlacement=null;document.querySelector("#tapHover")?.remove();}
   if(state.pendingWire){ state.pendingWire = null; healJunctions(); }  // no orphan dots on tool switch
   $$("#canvasToolbar button[data-tool]").forEach(b=>b.classList.toggle("active", b.dataset.tool===t));
   canvas.style.cursor = TOOL_INFO[t].cur;
@@ -2981,10 +3030,17 @@ function applyWireName(w, raw){
 
 /* Which bits of this bus already have a tap? (union over the whole net, both
    directions — a merged bus must not have two taps writing the same bit) */
+function tapNetWires(sch,w){
+  const key=ep=>ep.cid+"."+(comp(ep.cid,sch)?.type==="JUNCTION"?"j":ep.pid);
+  const nodes=new Set([key(w.from),key(w.to)]),result=new Set();let changed=true;
+  while(changed){changed=false;for(const x of sch.wires){if(result.has(x.id))continue;
+    if(nodes.has(key(x.from))||nodes.has(key(x.to))){result.add(x.id);nodes.add(key(x.from));nodes.add(key(x.to));changed=true;}
+  }}return result;
+}
 function tappedBitsOnNet(w, sch){
   sch = sch || activeSch();
   const used = new Set();
-  netWires(sch, w).forEach(id=>{
+  tapNetWires(sch, w).forEach(id=>{
     const x = sch.wires.find(y=>y.id===id); if(!x) return;
     [x.from, x.to].forEach(ep=>{
       const c = comp(ep.cid, sch);
@@ -2997,6 +3053,83 @@ function tappedBitsOnNet(w, sch){
     });
   });
   return used;
+}
+function nextTapRange(width,start,count,order="up",used=new Set()){
+  const step=order==="down"?-1:1;
+  for(let b=start;b>=0 && b+count<=width;b+=step){
+    if(Array.from({length:count},(_,i)=>b+i).every(i=>!used.has(i)))return b;
+  }
+  return null;
+}
+function selectedTap(){
+  if(state.selection.size!==1)return null;
+  const c=comp([...state.selection][0]);return c?.type==="BUSTAP"?c:null;
+}
+function busTapIncomingWire(c,sch=activeSch()){return sch.wires.find(w=>w.to.cid===c.id&&w.to.pid==="d");}
+function duplicateNextTap(){
+  const c=selectedTap();if(!c){toast("เลือก Bus Tap ตัวเดียวก่อน","warn");return false;}
+  const sch=activeSch(),w=busTapIncomingWire(c),count=c.params.nbit||1,order=c.params.order||"up";
+  const bw=w?wireWidth(w,sch):32;
+  const used=w&&c.params.skipUsed!==false?tappedBitsOnNet(w,sch):new Set();
+  const bit=nextTapRange(bw,(c.params.bit||0)+(order==="down"?-count:count),count,order,used);
+  if(bit==null){toast("ไม่มีช่วงบิตถัดไปภายในขอบเขตบัส","warn");return false;}
+  const nc=cloneData(c);nc.id=uid("c");nc.params.bit=bit;
+  const vertical=["up","down"].includes(c.params.dir);
+  nc.x+=vertical?44:0;nc.y+=vertical?0:44;
+  while(sch.components.some(x=>Math.abs(x.x-nc.x)<22&&Math.abs(x.y-nc.y)<22)){nc.x+=vertical?44:0;nc.y+=vertical?0:44;}
+  if(nc.label)nc.label=uniqueLabel(sch,nc.label);
+  sch.components.push(nc);
+  if(w)sch.wires.push({id:uid("w"),from:{...w.from},to:{cid:nc.id,pid:"d"},name:""});
+  state.selection=new Set([nc.id]);snapshot();renderAll();return true;
+}
+function startTapSequence(){
+  const c=selectedTap();if(!c)return;
+  state.tapPlacement={...c.params};
+  setTool("bustap",true);
+  toast("คลิกบัสเพื่อวางต่อเนื่อง — แสดงช่วงบิตก่อนวาง · Esc เพื่อจบ","ok",4000);
+}
+function splitBusTaps(w,options={}){
+  const sch=activeSch(),width=wireWidth(w,sch),count=Math.max(1,options.nbit||1),order=options.order||"up";
+  if(width<2 || !Number.isInteger(count) || count>width || (options.bit!=null && (!Number.isInteger(options.bit)||options.bit<0||options.bit+count>width)))return 0;
+  const used=options.skipUsed===false?new Set():tappedBitsOnNet(w,sch);
+  let start=options.bit??(order==="down"?width-count:0);const bits=[];
+  while(true){const b=nextTapRange(width,start,count,order,used);if(b==null)break;bits.push(b);for(let i=0;i<count;i++)used.add(b+i);start=b+(order==="down"?-count:count);}
+  if(!bits.length){toast("ไม่มีช่วงบิตว่างภายในบัส","warn");return 0;}
+  const source=comp(w.from.cid,sch),pos=portPos(source,w.from.pid);
+  const at=nearestOnWire(w,{x:pos.x+66,y:pos.y},0,sch)||pos;
+  const net=tapNetWires(sch,w),existing=sch.components.filter(c=>c.type==="BUSTAP"&&sch.wires.some(x=>net.has(x.id)&&x.to.cid===c.id));
+  const firstY=snap(Math.max(pos.y+66,...existing.map(c=>c.y+getSize(c).h+44)));
+  const j={id:uid("c"),type:"JUNCTION",x:at.x-6,y:at.y-6,params:{axis:at.seg||"v",fixed:true}};
+  sch.components.push(j);splitWireThroughJunction(w,j,sch);
+  const ids=[];
+  bits.forEach((bit,i)=>{
+    const c={id:uid("c"),type:"BUSTAP",x:snap(pos.x+110),y:firstY+i*44-11,params:{bit,nbit:count,dir:"right",mode:options.mode||"split",order,skipUsed:options.skipUsed!==false}};
+    sch.components.push(c);ids.push(c.id);sch.wires.push({id:uid("w"),from:{cid:j.id,pid:"j"},to:{cid:c.id,pid:"d"},name:""});
+  });
+  state.selection=new Set(ids);snapshot();renderAll();return bits.length;
+}
+function showBusActions(c,w){
+  const m=document.createElement("div");m.className="modal-bg";
+  const width=w?wireWidth(w):32;
+  m.innerHTML=`<div class="modal"><h2>Bus Tap <button class="close">×</button></h2><div class="modal-body">
+    ${c?'<button class="btn" id="tapDuplicate">Duplicate บิตถัดไป · ⌘⇧D / Ctrl+Shift+D</button><button class="btn" id="tapContinue">วางต่อเนื่อง</button>':""}
+    ${w?`<p>แตก Bus ${width} bit — สร้าง Tap พร้อมสายเชื่อม</p>
+    <div class="row"><label>บิตเริ่มต้น</label><input id="tapStart" type="number" min="0" max="${width-1}" value="${c?.params.bit||0}"></div>
+    <div class="row"><label>จำนวนบิตต่อ Tap</label><input id="tapCount" type="number" min="1" max="${width}" value="${c?.params.nbit||1}"></div>
+    <div class="row"><label>ลำดับ</label><select id="tapOrder"><option value="up">เพิ่มขึ้น</option><option value="down">ลดลง</option></select></div>
+    <div class="row"><label>ข้ามช่วงที่ใช้แล้ว</label><input id="tapSkip" type="checkbox" checked></div>
+    <div class="row"><label>ทิศทางบิต</label><select id="tapMode"><option value="split">split</option><option value="merge">merge</option></select></div>
+    <p id="tapPlan"></p><button class="btn btn-primary" id="tapSplit">แตก Bus…</button>`:""}
+    </div></div>`;
+  document.body.appendChild(m);m.querySelector(".close").onclick=()=>m.remove();
+  if(c){m.querySelector("#tapDuplicate").onclick=()=>{m.remove();duplicateNextTap();};m.querySelector("#tapContinue").onclick=()=>{m.remove();startTapSequence();};}
+  if(w){
+    if(c){m.querySelector("#tapOrder").value=c.params.order||"up";m.querySelector("#tapMode").value=c.params.mode||"split";m.querySelector("#tapSkip").checked=c.params.skipUsed!==false;}
+    const read=()=>({bit:Number(m.querySelector("#tapStart").value),nbit:Number(m.querySelector("#tapCount").value),order:m.querySelector("#tapOrder").value,skipUsed:m.querySelector("#tapSkip").checked,mode:m.querySelector("#tapMode").value});
+    const preview=()=>{const p=read(),valid=Number.isInteger(p.bit)&&Number.isInteger(p.nbit)&&p.bit>=0&&p.nbit>=1&&p.bit+p.nbit<=width;m.querySelector("#tapSplit").disabled=!valid;m.querySelector("#tapPlan").textContent=valid?`เริ่ม [${p.bit+p.nbit-1}:${p.bit}] · ทีละ ${p.nbit} bit · Undo ครั้งเดียวคืนทั้งชุด`:"ช่วงบิตเกินขอบเขตบัส";};
+    m.querySelectorAll("input,select").forEach(e=>e.onchange=preview);preview();
+    m.querySelector("#tapSplit").onclick=()=>{const options=read();m.remove();splitBusTaps(w,options);};
+  }
 }
 /* A free wire end (an "endpoint" junction carrying exactly one wire) near `pt` —
    this is the end of the thin wire the user drew BEFORE reaching for the tap. */
@@ -3052,11 +3185,14 @@ function stampTapOnWire(w, point){
     const dx = free.p.x - at.x, dy = free.p.y - at.y;
     dir = Math.abs(dx) >= Math.abs(dy) ? (dx>=0 ? "right" : "left") : (dy>=0 ? "down" : "up");
   } else dir = at.seg==="v" ? "right" : "down";
-  const used = tappedBitsOnNet(w, sch);
-  let bit = 0; while(bit < bw && used.has(bit)) bit++;
-  if(bit >= bw){ toast(`บัสกว้าง ${bw} bit และถูกแตะครบทุกบิตแล้ว`,"warn",3200); return false; }
-
-  const tap = { id:uid("c"), type:"BUSTAP", x:0, y:0, label:"", params:{bit, nbit:1, dir, mode} };
+  const settings=state.tapPlacement||{bit:0,nbit:1,order:"up",skipUsed:true};
+  const count=settings.nbit||1;
+  const used=settings.skipUsed!==false?tappedBitsOnNet(w,sch):new Set();
+  const bit=nextTapRange(bw,settings.bit||0,count,settings.order,used);
+  if(bit==null){toast(`บัส ${bw} bit ไม่มีช่วงถัดไปที่วางได้`,"warn",3200);return false;}
+  const tap = { id:uid("c"), type:"BUSTAP", x:0, y:0, label:"", params:{...settings,bit,nbit:count,dir,mode:state.tapPlacement?settings.mode:mode} };
+  mode=tap.params.mode;
+  if(state.tapPlacement)state.tapPlacement.bit=bit+(settings.order==="down"?-count:count);
   const dp = TYPES.BUSTAP.ports(tap.params).find(p=>p.id==="d");
   tap.x = at.x - dp.dx; tap.y = at.y - dp.dy;   // seat the bus side EXACTLY on the bus
   sch.components.push(tap);
@@ -3081,6 +3217,7 @@ function stampTapOnWire(w, point){
   }
   healJunctions(sch);
   healLayout(sch, scopeOf(sch, {comps:[tap]}));
+  state.selection=new Set([tap.id]);document.querySelector("#tapHover")?.remove();
   snapshot(); render(); renderInspector();
   toast(free ? `แตะบิต ${bit} ของบัส แล้วต่อเข้ากับสายที่ลากไว้` : `วาง Bus Tap บิต ${bit} แล้ว — ลากสายจากปลายแหลมได้เลย`, "ok", 3200);
   return true;
@@ -5364,6 +5501,7 @@ function render(){
                          segIndex:gi, segT, basePts,
                          junctionEnds:junctionFollowersForRun(sch, w, basePts, gi, segT) };
     });
+    hit.addEventListener("contextmenu",ev=>{ev.preventDefault();ev.stopPropagation();if(wireWidth(w,sch)>1)showBusActions(null,w);});
     hit.addEventListener("dblclick",ev=>{
       // rename only when not mid-gesture (drawing/branching)
       if(state.pendingWire) return;
@@ -5537,6 +5675,7 @@ function render(){
     body.addEventListener("contextmenu",ev=>{
       ev.preventDefault();
       openInspectorFor(c);
+      if(c.type==="BUSTAP")showBusActions(c,busTapIncomingWire(c));
     });
     g.appendChild(body);
 
@@ -5744,6 +5883,18 @@ function updateMouseStat(){
 }
 canvas.addEventListener("mousemove",ev=>{
   state.mouse = svgPoint(ev);
+  let hover=document.querySelector("#tapHover");
+  if(state.tool==="bustap"){
+    const sch=activeSch();let nearest=null,dist=Infinity;
+    for(const w of sch.wires){if(wireWidth(w,sch)<2)continue;const at=nearestOnWire(w,state.mouse,0,sch);if(at&&at.d<dist){nearest=w;dist=at.d;}}
+    if(nearest&&dist<22){
+      if(!hover){hover=document.createElement("div");hover.id="tapHover";hover.style.cssText="position:fixed;pointer-events:none;z-index:9999;background:var(--bg-2);color:var(--ink);border:1px solid var(--accent);padding:5px 8px;border-radius:4px";document.body.appendChild(hover);}
+      const p=state.tapPlacement||{bit:0,nbit:1,skipUsed:true,order:"up"},n=p.nbit||1;
+      const bit=nextTapRange(wireWidth(nearest,sch),p.bit||0,n,p.order,p.skipUsed===false?new Set():tappedBitsOnNet(nearest,sch));
+      hover.textContent=bit==null?"ไม่มีช่วงบิตถัดไป":`Bus Tap [${n>1?`${bit+n-1}:`:""}${bit}]`;
+      hover.style.left=(ev.clientX+14)+"px";hover.style.top=(ev.clientY+14)+"px";
+    }else hover?.remove();
+  }else hover?.remove();
   updateMouseStat();
   if(state.drag){
     const dx = state.mouse.x - state.drag.sx, dy = state.mouse.y - state.drag.sy;
@@ -6100,6 +6251,7 @@ window.addEventListener("keydown",ev=>{
   } else if(ev.key==="Delete"||ev.key==="Backspace"){
     if(state.selection.size){ deleteSelection(); ev.preventDefault(); }
   } else if(ev.key==="Escape"){
+    state.tapPlacement=null;document.querySelector("#tapHover")?.remove();
     if(state.pendingWire){
       // 1st Esc: cancel only the wire being drawn — keep the tool & selection
       state.pendingWire = null; state.wireDrag = null;
@@ -6129,7 +6281,7 @@ window.addEventListener("keydown",ev=>{
       : new Set([...sch.components.map(c=>c.id), ...sch.wires.map(w=>w.id)]);
     render(); renderInspector(); ev.preventDefault();
   }
-  else if(ctl && (code==="KeyD" || k==="d")){ duplicateSelection(); ev.preventDefault(); }
+  else if(ctl && (code==="KeyD" || k==="d")){ if(ev.shiftKey)duplicateNextTap();else duplicateSelection(); ev.preventDefault(); }
   else if(ctl && (code==="KeyC" || k==="c")){ copySelection(); ev.preventDefault(); }
   else if(ctl && (code==="KeyV" || k==="v")){ pasteClipboard(); ev.preventDefault(); }
   else if(ctl && (code==="KeyX" || k==="x")){ copySelection(); deleteSelection(); ev.preventDefault(); }
@@ -6329,7 +6481,7 @@ function renderInspector(){
           <input id="iLabel" value="${esc(c.label||"")}" placeholder="เช่น carry, sum_gate"></div>`;
       }
       schema.forEach(f=>{
-        const v = (c.params||{})[f.key] ?? (td.defaultParams||{})[f.key];
+        const v = f.key==="pinMode" && ["COMP","COMPM"].includes(c.type) ? (cmpIsBus(c.params||{})?"bus":"pins") : ((c.params||{})[f.key] ?? (td.defaultParams||{})[f.key]);
         if(f.type==="string"){
           html += `<div class="row"><label>${esc(f.label)}</label><input data-pk="${f.key}" value="${esc(v||"")}" placeholder="${esc(f.placeholder||"")}"></div>`;
         } else if(f.type==="int"){
@@ -6345,6 +6497,7 @@ function renderInspector(){
       if(orientable(c)) html += `<div class="row"><label>ทิศทาง</label><span style="display:flex;gap:4px">
         <button class="btn" id="iRotate" title="หมุน 90° (R · Shift+R = ทวนเข็ม)">↻ หมุน</button>
         <button class="btn" id="iMirror" title="พลิกซ้าย-ขวา (M)">⇋ พลิก</button></span></div>`;
+      if(c.type==="BUSTAP")html+=`<div style="padding:8px 12px;display:flex;gap:5px;flex-wrap:wrap"><button class="btn" data-act="tap-next" title="⌘⇧D / Ctrl+Shift+D">บิตถัดไป</button><button class="btn" data-act="tap-sequence">วางต่อเนื่อง</button><button class="btn" data-act="tap-split">แตก Bus…</button></div>`;
       html += `<div class="row"><label></label><button class="btn" data-act="delete-sel">🗑 Delete</button></div>`;
       html += `</div>`;
       root.innerHTML = html;
@@ -6466,6 +6619,11 @@ function renderInspector(){
             } else if(selectWires.length && !confirm(`เปลี่ยนรูปแบบ Select จะถอดสาย Select เดิม ${selectWires.length} เส้น เพื่อให้ต่อใหม่ตามรูปแบบที่เลือก (Undo ย้อนกลับได้) ต้องการเปลี่ยนหรือไม่?`)){
               renderInspector(); return;
             }
+          }
+          if(["DEMUX","ENC","DEC","COMP","COMPM"].includes(c.type) && ["inputMode","outputMode","selectMode","pinMode"].includes(k)){
+            const after=td.ports({...c.params,[k]:v});
+            const lost=sch.wires.filter(w=>[w.from,w.to].some(ep=>ep.cid===c.id&&!after.some(p=>p.id===ep.pid)));
+            if(lost.length&&!confirm(`เปลี่ยนรูปแบบขาจะถอดสายที่ใช้ขาเดิม ${lost.length} เส้น (Undo ย้อนกลับได้) ต้องการเปลี่ยนหรือไม่?`)){renderInspector();return;}
           }
           // renaming an IN/OUT renames this sheet's SUB-BLOCK PIN too — take the
           // parents' wires with it instead of leaving them on a dead pin
@@ -6856,6 +7014,23 @@ function runSynthesis(){
       }
     });
 
+    // Merge taps write slices; two writers on the same bit are a real conflict.
+    const mergeOwners=new Map();
+    sch.components.filter(c=>c.type==="BUSTAP"&&c.params.mode==="merge").forEach(c=>{
+      const w=busTapIncomingWire(c,sch);if(!w)return;
+      const net=tapNetWires(sch,w),key=[...net].sort().join("|"),owners=mergeOwners.get(key)||new Map();
+      mergeOwners.set(key,owners);
+      const bit=c.params.bit||0,count=c.params.nbit||1;
+      for(let i=bit;i<bit+count;i++){
+        if(owners.has(i))issues.push({lvl:"err",msg:`Bus Tap เขียนบิต ${i} ซ้อนกับ Tap อีกตัว (multi-driver)`,ref:sch.name,schId:sch.id,cid:c.id});
+        owners.set(i,c.id);
+      }
+      const wholeDriver=sch.wires.some(x=>net.has(x.id)&&[x.from,x.to].some(ep=>{
+        const src=comp(ep.cid,sch);if(!src||src.type==="JUNCTION")return false;
+        const port=getPort(src,ep.pid);return port?.dir==="out"&&(port.width||1)>1;
+      }));
+      if(wholeDriver)issues.push({lvl:"err",msg:"Bus Tap แบบ merge เขียนลงบัสที่มีตัวขับทั้งบัสอยู่แล้ว (multi-driver)",ref:sch.name,schId:sch.id,cid:c.id});
+    });
     // what really drives a pin, looking through junctions
     const srcOfPin = (cid, pid) => {
       const w = sch.wires.find(x=>x.to.cid===cid && x.to.pid===pid);
@@ -7294,6 +7469,16 @@ function generateSchVhdl(sch){
     };
 
 
+    const groupBit = (g,i) => {
+      if(g.mode!=="bus")return driverFor(groupPin(g,i));
+      const v=driverFor(g.id);
+      if(g.bits===1)return v;
+      if(v==="(others => '0')")return "'0'";
+      const hex=/^x"([0-9a-f]+)"$/i.exec(v), bin=/^"([01]+)"$/.exec(v);
+      if(hex||bin)return "'"+Number((BigInt((hex?"0x":"0b")+(hex||bin)[1])>>BigInt(i))&1n)+"'";
+      return `${v}(${i})`;
+    };
+    const outputBit = (g,i) => g.mode==="bus" ? c._nets[g.id]+(g.bits>1?`(${i})`:"") : c._nets[groupPin(g,i)];
     /* ----- gates ----- */
     if(["AND","OR","NAND","NOR","XOR","XNOR","NOT","BUF"].includes(c.type)){
       /* On a WIDE gate every operand must be exactly that wide: VHDL has no
@@ -7335,16 +7520,10 @@ function generateSchVhdl(sch){
     }
     /* ----- DEMUX ----- */
     if(c.type==="DEMUX"){
-      const n = c.params.outputs;
-      const selW = Math.ceil(Math.log2(n));
-      const d = driverFor("d");
-      const selIns  = []; for(let i=0;i<selW;i++) selIns.push(driverFor("s"+i));
-      for(let i=0;i<n;i++){
-        const bits = i.toString(2).padStart(selW,"0");
-        const cond = selIns.length===1
-          ? eq(selIns[0], bits)
-          : `(${selIns.slice().reverse().map((s,k)=>eq(s, bits[k])).join(" and ")})`;
-        concurrent.push(`  ${c._nets["y"+i]} <= ${d} when ${cond} else '0';`);
+      const groups=busGroups(c.type,c.params), data=groups[0], select=groups[1];
+      for(let channel=0;channel<c.params.outputs;channel++){
+        const cond=Array.from({length:select.bits},(_,i)=>eq(groupBit(select,i),(channel>>i)&1)).join(" and ");
+        for(let bit=0;bit<data.bits;bit++)concurrent.push(`  ${outputBit(groups[channel+2],bit)} <= ${groupBit(data,bit)} when (${cond}) else '0';`);
       }
       return;
     }
@@ -7435,7 +7614,8 @@ function generateSchVhdl(sch){
     if(c.type==="ENC"){
       const n = c.params.inputs;
       const ow = Math.ceil(Math.log2(n));
-      const ins = []; for(let i=0;i<n;i++) ins.push(driverFor("i"+i));
+      const groups=busGroups(c.type,c.params);
+      const ins = []; for(let i=0;i<n;i++) ins.push(groupBit(groups[0],i));
       // priority: highest index wins
       for(let b=0;b<ow;b++){
         // y_b = OR of i_k where bit b of k = 1, and no higher i is active
@@ -7447,7 +7627,7 @@ function generateSchVhdl(sch){
             terms.push(higher.length ? `(${ins[k]} and ${higher.join(" and ")})` : ins[k]);
           }
         }
-        concurrent.push(`  ${c._nets["y"+b]} <= ${terms.length?terms.join(" or "):"'0'"};`);
+        concurrent.push(`  ${outputBit(groups[1],b)} <= ${terms.length?terms.join(" or "):"'0'"};`);
       }
       return;
     }
@@ -7455,12 +7635,13 @@ function generateSchVhdl(sch){
     if(c.type==="DEC"){
       const n = c.params.outputs;
       const iw = Math.ceil(Math.log2(n));
-      const a = []; for(let i=0;i<iw;i++) a.push(driverFor("a"+i));
+      const groups=busGroups(c.type,c.params);
+      const a = []; for(let i=0;i<iw;i++) a.push(groupBit(groups[0],i));
       const en = driverFor("en");
       for(let i=0;i<n;i++){
         const bits = i.toString(2).padStart(iw,"0");
         const cond = a.slice().reverse().map((s,k)=>eq(s, bits[k])).join(" and ");
-        concurrent.push(`  ${c._nets["y"+i]} <= ${en} when (${cond}) else '0';`);
+        concurrent.push(`  ${outputBit(groups[1],i)} <= ${en} when (${cond}) else '0';`);
       }
       return;
     }
@@ -9344,6 +9525,9 @@ document.addEventListener("click",ev=>{
     }
     case "undo": undo(); break;
     case "redo": redo(); break;
+    case "tap-next": duplicateNextTap(); break;
+    case "tap-sequence": startTapSequence(); break;
+    case "tap-split": {const c=selectedTap();if(c)showBusActions(c,busTapIncomingWire(c));break;}
     case "duplicate": duplicateSelection(); break;
     case "copy": copySelection(); break;
     case "paste": pasteClipboard(); break;

@@ -154,3 +154,41 @@ test('MUX bus select accepts constants and reports missing select while compilin
   compile(a.run('generateSchVhdl(sch).code'));
  }
 });
+
+for(const type of ['ENC','DEC','DEMUX'])for(const inputMode of ['pins','bus'])for(const outputMode of ['pins','bus'])test(`${type} ${inputMode}/${outputMode} bus groups compile and simulate`,()=>{
+ const a=circuit(`const p={inputs:8,outputs:8,width:4,inputMode:'${inputMode}',outputMode:'${outputMode}',selectMode:'bus'};
+ const g=c('${type}',p);const groups=busGroups(g.type,p);
+ for(const group of groups){if(group.dir!=='in')continue;
+ if(group.mode==='bus'){const x=c('IN',{name:group.id+'_in',width:group.bits});w(x,'o',g,group.id);}
+ else for(let i=0;i<group.bits;i++){const pid=groupPin(group,i),x=c('IN',{name:pid+'_in',width:1});w(x,'o',g,pid);}}
+ if(g.type==='DEC'){const en=c('IN',{name:'enable',width:1});w(en,'o',g,'en');}
+ for(const group of groups){if(group.dir!=='out')continue;
+ if(group.mode==='bus'){const o=c('OUT',{name:group.id+'_out',width:group.bits});w(g,group.id,o,'i');}
+ else for(let i=0;i<group.bits;i++){const pid=groupPin(group,i),o=c('OUT',{name:pid+'_out',width:1});w(g,pid,o,'i');}}`);
+ assert.deepEqual(a.json('runSynthesis().filter(x=>x.lvl==="err")'),[]);
+ const groups=a.json('groups'), maps=[],signals=[];
+ for(const group of groups){
+  signals.push(`signal v_${group.id}:std_logic_vector(${group.bits-1} downto 0):=(others=>'0');`);
+  const suffix=group.dir==='in'?'_in':'_out';
+  if(group.mode==='bus')maps.push(`${group.id+suffix}=>v_${group.id}`);
+  else for(let i=0;i<group.bits;i++)maps.push(`${a.run(`groupPin(groups.find(g=>g.id==='${group.id}'),${i})`)+suffix}=>v_${group.id}(${i})`);
+ }
+ if(type==='DEC'){signals.push("signal en:std_logic:='1';");maps.push('enable=>en');}
+ const exercise=type==='ENC'?`for i in 0 to 255 loop v_i<=std_logic_vector(to_unsigned(i,8));wait for 0.05 ns;expected:=0;for j in 0 to 7 loop if (i/(2**j)) mod 2=1 then expected:=j;end if;end loop;assert unsigned(v_y)=expected severity failure;end loop;`
+ :type==='DEC'?`for i in 0 to 7 loop v_a<=std_logic_vector(to_unsigned(i,3));wait for 1 ns;assert unsigned(v_y)=2**i severity failure;end loop;en<='0';wait for 1 ns;assert unsigned(v_y)=0 severity failure;`
+ :`v_d<="1010";for i in 0 to 7 loop v_s<=std_logic_vector(to_unsigned(i,3));wait for 1 ns;${Array.from({length:8},(_,j)=>`if i=${j} then assert v_y${j}="1010" severity failure;else assert v_y${j}="0000" severity failure;end if;`).join('')}end loop;`;
+ compile(a.run('generateSchVhdl(sch).code'),'tb',`library ieee;use ieee.std_logic_1164.all;use ieee.numeric_std.all;entity tb is end;architecture sim of tb is ${signals.join('\n')}begin u:entity work.top port map(${maps.join(',')});process variable expected:integer;begin ${exercise}wait;end process;end;`);
+ const saved=a.run('serialize()');a.ctx.saved=saved;a.run('deserialize(saved)');assert.deepEqual(a.json('runSynthesis().filter(x=>x.lvl==="err")'),[]);
+});
+test('Comparator newly placed defaults are pins while legacy widths retain bus form',()=>{
+ const a=loadApp();
+ assert.equal(a.run(`cmpIsBus({...TYPES.COMP.defaultParams,width:8})`),false);
+ assert.equal(a.run(`cmpIsBus({width:8})`),true);
+ assert.equal(a.run(`cmpIsBus({width:2,pinMode:'bus'})`),true);
+ for(const pinMode of ['pins','bus']){
+  const b=circuit(`const g=c('COMPM',{width:4,pinMode:'${pinMode}'}),o=c('OUT',{name:'result',width:1});w(g,'gt',o,'i');
+  if('${pinMode}'==='bus'){for(const [pid,value] of [['a','A'],['b','5']]){const k=c('CONST',{width:4,value});w(k,'o',g,pid);}}
+  else for(let i=0;i<4;i++){for(const [pid,value] of [['a',10],['b',5]]){const k=c('CONST',{width:1,value:((value>>i)&1).toString()});w(k,'o',g,pid+i);}}`);
+  compile(b.run('generateSchVhdl(sch).code'),'tb',`library ieee;use ieee.std_logic_1164.all;entity tb is end;architecture sim of tb is signal y:std_logic;begin u:entity work.top port map(result=>y);process begin wait for 1 ns;assert y='1' severity failure;wait;end process;end;`);
+ }
+});

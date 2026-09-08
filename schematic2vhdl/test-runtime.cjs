@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 function loadApp(){
   const stub=()=>({style:{setProperty(){}},dataset:{},classList:{add(){},remove(){},toggle(){}},
-    addEventListener(){},removeEventListener(){},setAttribute(){},removeAttribute(){},append(){},appendChild(){},
+    addEventListener(){},removeEventListener(){},setAttribute(){},removeAttribute(){},remove(){},append(){},appendChild(){},
     querySelectorAll(){return [];},querySelector(){return stub();},getBoundingClientRect(){return {width:900,height:650};},
     children:[],value:'',innerHTML:'',textContent:''});
   const els=new Map(), get=s=>{if(!els.has(s))els.set(s,stub());return els.get(s);};
