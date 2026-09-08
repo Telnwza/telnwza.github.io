@@ -1467,10 +1467,11 @@ const TYPES = {
      the 11px grid and always sits on the body edge — same as the gates. */
   MUX: {
     label:"MUX", category:"mux",
-    defaultParams:{inputs:2, width:1},
+    defaultParams:{inputs:2, width:1, selectMode:"pins"},
     paramSchema:[
       {key:"inputs",label:"Data inputs",type:"select",options:[2,4,8,16]},
-      {key:"width",label:"ความกว้าง (bit)",type:"int",min:1,max:32}
+      {key:"width",label:"ความกว้าง (bit)",type:"int",min:1,max:32},
+      {key:"selectMode",label:"Select input",type:"select",options:["pins","bus"],optionLabels:{pins:"แยกขา (1 bit)",bus:"Bus"}}
     ],
     size(p){ const n=p.inputs; const sel=Math.ceil(Math.log2(n));
       return blockSize(99, 22*(n+sel+2)); },
@@ -1480,7 +1481,8 @@ const TYPES = {
       const w = 99;
       const ports = [];
       for(let i=0;i<n;i++)   ports.push({id:"d"+i, dir:"in", dx:0, dy: 22*(i+1), label:"d"+i, width:gateWidth(p)});
-      for(let i=0;i<sel;i++) ports.push({id:"s"+i, dir:"in", dx:0, dy: h - 22*(sel-i), label:"s"+i});
+      if(p.selectMode==="bus") ports.push({id:"s", dir:"in", dx:0, dy:h-22, label:sel>1 ? `s[${sel-1}:0]` : "s", width:sel});
+      else for(let i=0;i<sel;i++) ports.push({id:"s"+i, dir:"in", dx:0, dy: h - 22*(sel-i), label:"s"+i});
       ports.push({id:"y", dir:"out", dx:w, dy: h/2, label:"y", width:gateWidth(p)});
       return ports;
     },
@@ -6336,7 +6338,7 @@ function renderInspector(){
           html += `<div class="row"><label>${esc(f.label)}</label><input type="checkbox" data-pk="${f.key}" ${v?"checked":""}></div>`;
         } else if(f.type==="select"){
           html += `<div class="row"><label>${esc(f.label)}</label><select data-pk="${f.key}">
-            ${f.options.map(o=>`<option value="${o}" ${o==v?"selected":""}>${o}</option>`).join("")}
+            ${f.options.map(o=>`<option value="${o}" ${o==v?"selected":""}>${esc(f.optionLabels?.[o] ?? o)}</option>`).join("")}
           </select></div>`;
         }
       });
@@ -6455,6 +6457,15 @@ function renderInspector(){
             if(k==="value" && String(e.value).trim().replace(/^0[xX]/,"").toUpperCase() !== shown)
               toast(`ค่าคงที่ ${constWidth(merged)} bit → 0x${shown}`, "warn", 2600);
             if(k==="width") c.params.value = shown;
+          }
+          if(c.type==="MUX" && k==="selectMode" && v!==(c.params.selectMode||"pins")){
+            const selectWires=sch.wires.filter(w=>w.to.cid===c.id && /^s(?:[0-9]+)?$/.test(w.to.pid));
+            if(c.params.inputs===2){
+              // Both forms have one bit: keep the existing select connection.
+              selectWires.forEach(w=>{w.to.pid=v==="bus" ? "s" : "s0";});
+            } else if(selectWires.length && !confirm(`เปลี่ยนรูปแบบ Select จะถอดสาย Select เดิม ${selectWires.length} เส้น เพื่อให้ต่อใหม่ตามรูปแบบที่เลือก (Undo ย้อนกลับได้) ต้องการเปลี่ยนหรือไม่?`)){
+              renderInspector(); return;
+            }
           }
           // renaming an IN/OUT renames this sheet's SUB-BLOCK PIN too — take the
           // parents' wires with it instead of leaving them on a dead pin
@@ -7306,15 +7317,16 @@ function generateSchVhdl(sch){
       const n = c.params.inputs;
       const selW = Math.ceil(Math.log2(n));
       const dataIns = []; for(let i=0;i<n;i++) dataIns.push(driverFor("d"+i));
-      const selIns  = []; for(let i=0;i<selW;i++) selIns.push(driverFor("s"+i));
-      // build: y <= dataIns[ to_integer(sel) ];
-      const selExpr = selIns.length===1 ? selIns[0]
-        : selIns.slice().reverse().map(s=>s).join(" & ");
+      const busSelect = c.params.selectMode==="bus";
+      const selIns = busSelect ? [driverFor("s")] : Array.from({length:selW},(_,i)=>driverFor("s"+i));
+      // Qualify vector literals too, so constant and missing selects elaborate.
+      const busExpr = selIns[0]==="(others => '0')" ? `"${"0".repeat(selW)}"` : selIns[0];
       const condChain = [];
       for(let i=0;i<n;i++){
         const bits = i.toString(2).padStart(selW,"0");
-        const cond = selIns.length===1
-          ? eq(selIns[0], bits)
+        const cond = busSelect && selW>1
+          ? `std_logic_vector'(${busExpr}) = "${bits}"`
+          : selIns.length===1 ? eq(selIns[0], bits)
           : `(${selIns.slice().reverse().map((s,k)=>eq(s, bits[k])).join(" and ")})`;
         condChain.push(`${dataIns[i]} when ${cond}`);
       }

@@ -132,3 +132,25 @@ test('MUX legacy scalar and unconnected bus inputs generate correctly typed fall
   assert.equal(a.run(`wireWidth(sch.wires[0],sch)`),width);
  }
 });
+
+test('MUX bus select simulates every channel for 2, 4, 8 and 16 inputs',()=>{
+ for(const inputs of [2,4,8,16]){
+  const sw=Math.log2(inputs),st=sw===1?'std_logic':`std_logic_vector(${sw-1} downto 0)`;
+  const a=circuit(`const m=c('MUX',{inputs:${inputs},width:8,selectMode:'bus'}),s=c('IN',{name:'sel',width:${sw}}),o=c('OUT',{name:'result',width:8});
+   for(let i=0;i<${inputs};i++){const d=c('CONST',{width:8,value:(128+i).toString(16)});w(d,'o',m,'d'+i);}w(s,'o',m,'s');w(m,'y',o,'i');`);
+  assert.deepEqual(a.json('runSynthesis().filter(i=>i.lvl==="err")'),[]);
+  compile(a.run('generateSchVhdl(sch).code'),'tb',`library ieee;use ieee.std_logic_1164.all;use ieee.numeric_std.all;
+   entity tb is end;architecture sim of tb is signal s:${st};signal y:std_logic_vector(7 downto 0);
+   begin u:entity work.top port map(sel=>s,result=>y);process begin
+   for i in 0 to ${inputs-1} loop ${sw===1?"if i=0 then s<='0';else s<='1';end if;":`s<=std_logic_vector(to_unsigned(i,${sw}));`}
+   wait for 1 ns;assert y=std_logic_vector(to_unsigned(128+i,8)) severity failure;end loop;
+   s<=${sw===1?"'X'":"(others=>'X')"};wait for 1 ns;assert y=x"00" severity failure;wait;end process;end;`);
+ }
+});
+test('MUX bus select accepts constants and reports missing select while compiling its fallback',()=>{
+ for(const inputs of [2,4,8,16])for(const connected of [false,true]){
+  const a=circuit(`const m=c('MUX',{inputs:${inputs},width:8,selectMode:'bus'}),o=c('OUT',{name:'result',width:8});
+  if(${connected}){const s=c('CONST',{width:Math.log2(${inputs}),value:'1'});w(s,'o',m,'s');}w(m,'y',o,'i');`);
+  compile(a.run('generateSchVhdl(sch).code'));
+ }
+});
