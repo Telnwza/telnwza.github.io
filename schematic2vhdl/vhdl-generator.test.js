@@ -108,3 +108,27 @@ test('invalid Bus Tap, missing clock and isolated OUT expose fallback diagnostic
  assert.ok(a.run('fallbackDisplay(sch).components.has(t.id)'));assert.ok(a.run('fallbackDisplay(sch).components.has(f.id)'));assert.ok(a.run('fallbackDisplay(sch).components.has(loose.id)'));
  assert.equal(a.run('fallbackDisplay(sch).wires.size'),2);
 });
+
+test('bus MUX selects every 8-bit input with s0 as the least significant select',()=>{
+ const a=circuit(`const m=c('MUX',{inputs:4,width:8}),o=c('OUT',{name:'result',width:8});
+ for(let i=0;i<4;i++){const x=c('IN',{name:'data'+i,width:8});w(x,'o',m,'d'+i);}
+ for(let i=0;i<2;i++){const x=c('IN',{name:'sel'+i,width:1});w(x,'o',m,'s'+i);}w(m,'y',o,'i');`);
+ const code=a.run('generateSchVhdl(sch).code');
+ assert.match(code,/STD_LOGIC_VECTOR\(7 downto 0\)/i);
+ compile(code,'tb',`library ieee;use ieee.std_logic_1164.all;use ieee.numeric_std.all;
+ entity tb is end;architecture sim of tb is signal s:std_logic_vector(1 downto 0):="00";signal y:std_logic_vector(7 downto 0);
+ begin u:entity work.top port map(data0=>x"A5",data1=>x"3C",data2=>x"81",data3=>x"7E",sel0=>s(0),sel1=>s(1),result=>y);
+ process begin wait for 1 ns;assert y=x"A5" severity failure;
+ s<="01";wait for 1 ns;assert y=x"3C" severity failure;
+ s<="10";wait for 1 ns;assert y=x"81" severity failure;
+ s<="11";wait for 1 ns;assert y=x"7E" severity failure;
+ s<="XX";wait for 1 ns;assert y=x"00" severity failure;wait;end process;end;`);
+});
+test('MUX legacy scalar and unconnected bus inputs generate correctly typed fallbacks',()=>{
+ for(const inputs of [2,4,8,16])for(const width of [1,8,32]){
+  const params=width===1?`{inputs:${inputs}}`:`{inputs:${inputs},width:${width}}`;
+  const a=circuit(`const m=c('MUX',${params}),o=c('OUT',{name:'result',width:${width}});w(m,'y',o,'i');`);
+  const code=a.run('generateSchVhdl(sch).code');compile(code);
+  assert.equal(a.run(`wireWidth(sch.wires[0],sch)`),width);
+ }
+});
