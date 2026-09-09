@@ -1,0 +1,10 @@
+format schematic-text 1
+circuit merge_nibbles
+input lo[4], hi[4]
+output result[8]
+part l BUSTAP bit=0 nbit=4 mode=merge
+part h BUSTAP bit=4 nbit=4 mode=merge
+connect lo -> l.y
+connect hi -> h.y
+connect l.d -> result
+connect h.d -> result

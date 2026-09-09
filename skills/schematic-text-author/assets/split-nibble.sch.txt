@@ -1,0 +1,7 @@
+format schematic-text 1
+circuit split_nibble
+input data[8]
+output upper[4]
+part t BUSTAP bit=4 nbit=4
+connect data -> t.d
+connect t.y -> upper

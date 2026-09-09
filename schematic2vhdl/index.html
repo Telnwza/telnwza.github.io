@@ -352,6 +352,8 @@ body.sidebar-resizing,body.sidebar-resizing *{cursor:col-resize!important;user-s
         </div></div>
       <div class="mi"><button data-menu="tools">Tools</button>
         <div class="dd">
+          <button data-act="import-sch-text">↓ Import Schematic Text…</button>
+          <button data-act="sch-text-catalog">Copy Circuit Info for AI…</button>
           <button data-act="import-vhdl">↓ Import VHDL as Schematic…</button>
           <hr>
           <button data-act="synth">🔍 Run Synthesis Check<span class="kbd">F7</span></button>
@@ -8049,6 +8051,206 @@ $("#vhdlEntitySel")?.addEventListener("change",ev=>{
 /* BEGIN TESTABLE PROJECT IMPORT HELPERS */
 /* Stage the complete copy before committing. Never reuse a destination definition
    merely because its name matches: the circuits may be different. */
+/* Schematic Text v1: staged compilation, using the application's type registry. */
+function schematicTextType(type){
+  if(typeof type!=='string') return null;
+  const exists=type.startsWith('SCH:') ? Object.hasOwn(state.project.schematics,type.slice(4)) :
+    type.startsWith('CUSTOM:') ? Object.hasOwn(state.project.customs||{},type.slice(7)) : Object.hasOwn(TYPES,type);
+  return exists ? typeDef({type}) : null;
+}
+function schematicTextSignature(type){
+  return getPorts({type,params:cloneData(schematicTextType(type)?.defaultParams||{})})
+    .map(p=>`${p.id}:${p.dir}:${p.width||1}`).sort().join(',');
+}
+function compileSchematicText(text){
+  const fail=(line,msg)=>{throw new Error(`บรรทัด ${line}: ${msg}`);};
+  const decode=(value,line)=>{try{return value[0]==='"'?JSON.parse(value):value;}catch{fail(line,'ข้อความในเครื่องหมายคำพูดไม่ถูกต้อง');}};
+  if(text.length>250000) throw new Error('ข้อความยาวเกิน 250,000 ตัวอักษร');
+  const lines=text.split(/\r?\n/).map((s,i)=>({s:s.replace(/"(?:\\.|[^"\\])*"|#[^\n]*/g,m=>m.startsWith('#')?'':m).trim(),line:i+1})).filter(x=>x.s);
+  if(lines.shift()?.s!=='format schematic-text 1') fail(1,'ต้องเริ่มด้วย format schematic-text 1');
+  const ident='[A-Za-z][A-Za-z0-9_]*', nodes=new Map(), aliases=new Map(), links=[], warnings=[];
+  let name=null;
+  const add=(id,type,params,line)=>{
+    if(nodes.has(id.toLowerCase())) fail(line,'ชื่อซ้ำ: '+id);
+    if([...nodes.values()].some(x=>sanId(x.c.id)===sanId(id))) fail(line,'ชื่อซ้ำหลังแปลงเป็น VHDL: '+id);
+    const c={id,type,params,x:0,y:0,label:['IN','OUT'].includes(type)?'':id}; nodes.set(id.toLowerCase(),{c,line}); return c;
+  };
+  for(const {s,line} of lines){
+    let m;
+    if((m=new RegExp(`^circuit (${ident})$`).exec(s))){if(name) fail(line,'ประกาศ circuit ได้ครั้งเดียว');name=m[1];}
+    else if((m=/^use ("(?:\\.|[^"\\])*"|\S+) as ([A-Za-z][A-Za-z0-9_]*)(?: signature ("(?:\\.|[^"\\])*"))?$/.exec(s))){
+      const ref=decode(m[1],line), alias=m[2];
+      if(aliases.has(alias)) fail(line,'alias ซ้ำ: '+alias);
+      const types=ref.startsWith('SCH:')||ref.startsWith('CUSTOM:') ? [ref].filter(t=>schematicTextType(t)) :
+        [...Object.values(state.project.schematics).filter(s=>s.name===ref).map(s=>'SCH:'+s.id),
+         ...Object.entries(state.project.customs||{}).filter(([k,c])=>k===ref||c.name===ref).map(([k])=>'CUSTOM:'+k)];
+      if(types.length!==1) fail(line,types.length?'ชื่อวงจรย่อยกำกวม ใช้รหัสจากข้อมูลสำหรับ AI':'ไม่พบวงจรย่อย '+ref);
+      if(m[3] && decode(m[3],line)!==schematicTextSignature(types[0])) fail(line,'ขาของวงจรย่อยเปลี่ยน กรุณาคัดลอกข้อมูลสำหรับ AI ใหม่');
+      aliases.set(alias,{type:types[0],line});
+    }
+    else if((m=/^(input|output) (.+)$/.exec(s))){
+      for(const item of m[2].split(',')){
+        const p=new RegExp(`^\\s*(${ident})(?:\\[(\\d+)\\])?\\s*$`).exec(item);
+        if(!p) fail(line,'รูปแบบพอร์ตไม่ถูกต้อง');
+        const width=Number(p[2]||1); if(width<1||width>32) fail(line,'ความกว้างต้องเป็น 1–32 บิต');
+        add(p[1],m[1]==='input'?'IN':'OUT',{name:p[1],width},line);
+      }
+    }
+    else if((m=new RegExp(`^part (${ident}) (@?${ident})(.*)$`).exec(s))){
+      const type=m[2][0]==='@'?aliases.get(m[2].slice(1))?.type:m[2];
+      if(!type || !schematicTextType(type) || ['IN','OUT','JUNCTION','MODULE_FRAME'].includes(type)) fail(line,'ไม่พบชนิดอุปกรณ์ หรือใช้ชนิดนี้กับ part ไม่ได้: '+m[2]);
+      const td=schematicTextType(type), params=cloneData(td.defaultParams||{}), seen=new Set();
+      let rest=m[3].trim();
+      while(rest){
+        const p=/^([A-Za-z]\w*)=("(?:\\.|[^"\\])*"|[^\s]+)(?:\s+|$)/.exec(rest);
+        if(!p) fail(line,'พารามิเตอร์ต้องเป็น key=value');
+        const rule=(td.paramSchema||[]).find(r=>r.key===p[1]);
+        if(!rule||seen.has(p[1])) fail(line,'พารามิเตอร์ไม่รู้จักหรือซ้ำ: '+p[1]);
+        let v=decode(p[2],line);
+        if(rule.type==='int'){v=Number(v);if(!Number.isInteger(v)||v<(rule.min??-Infinity)||v>(rule.max??Infinity)) fail(line,'ค่าพารามิเตอร์อยู่นอกช่วง: '+p[1]);}
+        else if(rule.type==='select'){const option=rule.options.find(x=>String(x)===v);if(option===undefined) fail(line,'ตัวเลือกไม่ถูกต้อง: '+p[1]);v=option;}
+        else if(rule.type==='bool'||rule.type==='boolean'){if(!['true','false'].includes(v)) fail(line,'ต้องเป็น true/false');v=v==='true';}
+        else if(rule.type!=='string') fail(line,'ยังไม่รองรับพารามิเตอร์ชนิด '+rule.type);
+        params[p[1]]=v;seen.add(p[1]);rest=rest.slice(p[0].length);
+      }
+      if(type==='CONST' && !/^(?:0x)?[0-9a-f]+$/i.test(params.value)) fail(line,'CONST value ต้องเป็นเลขฐานสิบหก');
+      if(type==='CONST' && BigInt('0x'+String(params.value).replace(/^0x/i,'')) >= (1n<<BigInt(params.width))) fail(line,'ค่า CONST เกินความกว้าง');
+      add(m[1],type,params,line);
+    }
+    else if((m=/^connect (\S+)\s*->\s*(.+)$/.exec(s))){for(const to of m[2].split(',')) links.push({from:m[1],to:to.trim(),line});}
+    else fail(line,'ไม่รู้จักคำสั่ง: '+s);
+  }
+  if(!name) fail(1,'ไม่พบ circuit');
+  if(!nodes.size) fail(1,'วงจรไม่มีอุปกรณ์');
+  if(nodes.size>1000||links.length>5000) fail(1,'วงจรเกินขีดจำกัด 1,000 อุปกรณ์ / 5,000 สาย');
+  const endpoint=(s,dir,line)=>{
+    const pieces=s.split('.'), entry=nodes.get(pieces[0].toLowerCase());
+    if(!entry||pieces.length>2) fail(line,'ไม่พบอุปกรณ์ '+s);
+    const c=entry.c, pid=pieces[1]||(c.type==='IN'?'o':c.type==='OUT'?'i':null), p=getPort(c,pid);
+    if(!p) fail(line,'ไม่พบขา '+s);
+    const tapBus=c.type==='BUSTAP'&&pid==='d';
+    const effectiveDir=tapBus&&c.params.mode==='merge'?'out':p.dir;
+    if(effectiveDir!==dir) fail(line,'ทิศทางขาไม่ถูกต้อง: '+s);
+    return {cid:c.id,pid,width:tapBus?null:(p.width||1),tap:tapBus?c:null};
+  };
+  const driven=new Set(), wires=[], merges=new Map(), tapWidths=new Map();
+  for(const l of links){
+    const from=endpoint(l.from,'out',l.line),to=endpoint(l.to,'in',l.line), key=to.cid+'.'+to.pid;
+    if(from.tap&&to.tap) fail(l.line,'ต่อ Bus Tap เข้าหากันโดยตรงไม่ได้');
+    const tap=from.tap||to.tap;
+    if(tap){
+      const width=from.tap?to.width:from.width;
+      if(tap.params.bit+tap.params.nbit>width) fail(l.line,'ช่วง Bus Tap เกินความกว้างบัส');
+      if(tapWidths.has(tap.id)&&tapWidths.get(tap.id)!==width) fail(l.line,'Bus Tap เดียวกันต่อบัสคนละความกว้าง');
+      tapWidths.set(tap.id,width);
+      if(from.tap){
+        if(!merges.has(key)) merges.set(key,{to,taps:[],line:l.line});
+        const group=merges.get(key);
+        if(group.taps.some(t=>t.params.bit<tap.params.bit+tap.params.nbit&&tap.params.bit<t.params.bit+t.params.nbit)) fail(l.line,'Bus Tap merge มีช่วงบิตซ้อนกัน');
+        group.taps.push(tap);driven.add(tap.id+'.d');continue;
+      }
+    }
+    if(!tap&&from.width!==to.width) fail(l.line,`ความกว้างไม่ตรง: ${l.from} (${from.width}) → ${l.to} (${to.width})`);
+    if(driven.has(key)) fail(l.line,'ขาปลายทางมีสายขับอยู่แล้ว: '+l.to);
+    driven.add(key); wires.push({id:'st_w'+wires.length,from:{cid:from.cid,pid:from.pid},to:{cid:to.cid,pid:to.pid},name:''});
+  }
+  for(const [key,g] of merges){
+    if(driven.has(key)) fail(g.line,'บัสมีทั้งตัวขับเต็มบัสและ Bus Tap merge');
+    driven.add(key);
+    const id='st_merge_'+merges.size+'_'+wires.length;
+    nodes.set(id,{c:{id,type:'JUNCTION',params:{},x:0,y:0,label:''},line:g.line});
+    for(const target of [...g.taps.map(t=>({cid:t.id,pid:'d'})),{cid:g.to.cid,pid:g.to.pid}]) wires.push({id:'st_w'+wires.length,from:{cid:id,pid:'j'},to:target,name:''});
+    if(g.taps.reduce((n,t)=>n+t.params.nbit,0)<g.to.width) warnings.push(`บรรทัด ${g.line}: Bus Tap merge ยังเติมบิตไม่ครบ`);
+  }
+  const visiting=new Set(),done=new Set();
+  const visit=(type,line)=>{
+    if(visiting.has(type)) fail(line,'วงจรย่อยอ้างอิงวน: '+type);
+    if(done.has(type)) return;
+    if(!schematicTextType(type)) fail(line,'วงจรย่อยขาด dependency: '+type);
+    visiting.add(type);
+    const sch=type.startsWith('SCH:')?state.project.schematics[type.slice(4)]:state.project.customs[type.slice(7)]?.schematic;
+    for(const c of sch?.components||[]) if(/^(SCH:|CUSTOM:)/.test(c.type)) visit(c.type,line);
+    visiting.delete(type);done.add(type);
+  };
+  for(const {c,line} of nodes.values()){
+    if(/^(SCH:|CUSTOM:)/.test(c.type)) visit(c.type,line);
+    for(const p of getPorts(c)) if(p.dir==='in'&&!driven.has(c.id+'.'+p.id)){
+      if(p.id==='clk') fail(line,'ต้องต่อ clock: '+c.id+'.clk');
+      warnings.push(`บรรทัด ${line}: ${c.id}.${p.id} ยังไม่ได้ต่อสาย`);
+    }
+  }
+  const sch=blankSchematic('st_preview',name);sch.components=[...nodes.values()].map(x=>x.c);sch.wires=wires;
+  // Bounded depth propagation: sequential inputs break feedback; cycles never hang layout.
+  const depth=new Map(sch.components.map(c=>[c.id,c.type==='IN'||c.type==='CONST'||c.type==='VCC'||c.type==='GND'?0:1]));
+  for(let i=0;i<Math.min(sch.components.length,12);i++){
+    let changed=false;
+    for(const c of sch.components){
+      if(['IN','CONST','VCC','GND','DFF','JKFF','TFF','SRFF'].includes(c.type)) continue;
+      const incoming=wires.filter(w=>w.to.cid===c.id);const d=Math.min(12,Math.max(1,...incoming.map(w=>(depth.get(w.from.cid)||0)+1)));
+      if(d!==depth.get(c.id)){depth.set(c.id,d);changed=true;}
+    }
+    if(!changed) break;
+  }
+  let x=66;
+  for(const d of [...new Set(depth.values())].sort((a,b)=>a-b)){
+    const col=sch.components.filter(c=>depth.get(c.id)===d);let y=66,maxW=0;
+    for(const c of col){const size=getSize(c);c.x=snap(x);c.y=snap(y);y+=size.h+66;maxW=Math.max(maxW,size.w);}
+    x+=maxW+132;
+  }
+  return {sch,warnings,dependencies:[...done]};
+}
+function importSchematicText(text){
+  if(state.placementMode) throw new Error('กด Accept หรือ Cancel ของ Placement Mode ก่อน');
+  const result=compileSchematicText(text),sch=result.sch;
+  sch.id=uid('sch');sch.name=uniqueSchName(sch.name,sch.id);
+  const ids=new Map(sch.components.map(c=>[c.id,uid('c')]));
+  sch.components.forEach(c=>c.id=ids.get(c.id));
+  sch.wires.forEach(w=>{w.id=uid('w');w.from.cid=ids.get(w.from.cid);w.to.cid=ids.get(w.to.cid);});
+  normalizePortFanout(sch);healLayout(sch);
+  state.project.schematics[sch.id]=sch;
+  openSchTab(sch.id);snapshot();renderAll();zoomFit();
+  return {...result,sch};
+}
+function schematicTextCatalog(types){
+  const out=['Schematic Text v1. Use format schematic-text 1, circuit NAME, input/output name[width], part ID TYPE key=value, connect source -> target[, target].',
+    'Declare use before part. Boolean values are true/false; comments start with #. BUSTAP d has the attached bus width (not the drawing marker 2): split connect bus -> tap.d; merge connect tap.d -> destination. BUSTAP y has nbit width. Other listed ports are for default parameters; changing parameters can change ports. Use exact pin IDs. Widths must match. Existing subcircuits are live references. Descriptions may be absent; do not infer behavior from ports alone.'];
+  for(const type of types){
+    const td=schematicTextType(type);if(!td) continue;
+    const params=cloneData(td.defaultParams||{});
+    if(/^(SCH:|CUSTOM:)/.test(type)){
+      const s=type.startsWith('SCH:')?state.project.schematics[type.slice(4)]:state.project.customs[type.slice(7)];
+      out.push(`\nsubcircuit ${JSON.stringify(s.name)}\nuse ${JSON.stringify(type)} as block${out.length} signature ${JSON.stringify(schematicTextSignature(type))}`);
+      if(s.description) out.push('description '+JSON.stringify(s.description));
+    }else out.push('\npart-type '+type+' defaults='+JSON.stringify(params)+' parameters='+JSON.stringify(td.paramSchema||[]));
+    out.push('ports '+getPorts({type,params}).map(p=>`${p.id}:${p.dir}[${p.width||1}]`).join(' '));
+  }
+  return out.join('\n');
+}
+function openSchematicTextDialog(){
+  const projectId=state.activeProjectId;
+  const m=document.createElement('div');m.className='modal-bg';
+  m.innerHTML=`<div class="modal"><h2>Import Schematic Text <button class="close">×</button></h2><div class="modal-body">
+    <p>สร้างหน้าใหม่ในโปรเจกต์ปัจจุบัน · วงจรย่อยอ้างอิงตัวเดิม · Undo ได้</p>
+    <input id="stFile" type="file" accept=".txt,.sch.txt"><textarea id="stText" aria-label="Schematic Text" spellcheck="false" style="width:100%;height:260px;font-family:monospace"></textarea>
+    <pre id="stInfo" role="status" style="white-space:pre-wrap;max-height:180px;overflow:auto">วางข้อความแล้วกดตรวจสอบ</pre>
+    </div><div class="modal-foot"><button class="btn" id="stCheck">ตรวจสอบ</button><button class="btn btn-primary" id="stGo" disabled>นำเข้า</button></div></div>`;
+  document.body.appendChild(m);const q=s=>m.querySelector(s);
+  q('.close').onclick=()=>m.remove();
+  const invalidate=()=>{q('#stGo').disabled=true;q('#stInfo').textContent='ข้อความเปลี่ยนแล้ว กรุณาตรวจสอบ';};
+  let revision=0;q('#stText').oninput=()=>{revision++;invalidate();};
+  q('#stFile').onchange=async e=>{const r=++revision;invalidate();try{const f=e.target.files[0];if(!f)return;if(f.size>1000000) throw new Error('ไฟล์ใหญ่เกิน 1 MB');const text=await f.text();if(r===revision&&m.isConnected){q('#stText').value=text;invalidate();}}catch(e){q('#stInfo').textContent=e.message;}};
+  q('#stCheck').onclick=()=>{q('#stGo').disabled=true;try{const r=compileSchematicText(q('#stText').value);q('#stInfo').textContent=`${r.sch.name}: ${r.sch.components.length} อุปกรณ์ · ${r.sch.wires.length} สาย\nวงจรย่อย: ${r.dependencies.join(', ')||'ไม่มี'}\n`+(r.warnings.length?r.warnings.join('\n'):'โครงสร้างผ่าน — ยังไม่ยืนยันพฤติกรรมด้วย simulation');q('#stGo').disabled=false;}catch(e){q('#stInfo').textContent=e.message;}};
+  q('#stGo').onclick=()=>{try{if(projectId!==state.activeProjectId) throw new Error('โปรเจกต์เปลี่ยนแล้ว กรุณาเปิดหน้าต่างนำเข้าใหม่');const r=importSchematicText(q('#stText').value);m.remove();toast('นำเข้า '+r.sch.name+' แล้ว','ok');}catch(e){q('#stInfo').textContent=e.message;q('#stGo').disabled=true;}};
+}
+function openSchematicTextCatalog(){
+  const types=[...Object.keys(TYPES).filter(t=>!['IN','OUT','JUNCTION','MODULE_FRAME'].includes(t)),...Object.keys(state.project.schematics).map(id=>'SCH:'+id),...Object.keys(state.project.customs||{}).map(id=>'CUSTOM:'+id)];
+  const m=document.createElement('div');m.className='modal-bg';
+  m.innerHTML=`<div class="modal"><h2>ข้อมูลวงจรสำหรับ AI <button class="close">×</button></h2><div class="modal-body"><p>เลือกอุปกรณ์และวงจรย่อยที่ต้องการส่งให้ AI (Ctrl/Cmd เพื่อเลือกหลายรายการ)</p><select id="stTypes" multiple aria-label="อุปกรณ์สำหรับ AI" style="width:100%;height:170px">${types.map(t=>`<option value="${esc(t)}">${esc(t.startsWith('SCH:')?state.project.schematics[t.slice(4)].name+' — '+t:t)}</option>`).join('')}</select><textarea id="stCatalog" readonly aria-label="ข้อมูลสำหรับ AI" style="width:100%;height:200px"></textarea><p id="stCopyStatus" role="status"></p></div><div class="modal-foot"><button class="btn" id="stCopy">คัดลอก</button></div></div>`;
+  document.body.appendChild(m);const q=s=>m.querySelector(s);q('.close').onclick=()=>m.remove();
+  const refresh=()=>{q('#stCatalog').value=schematicTextCatalog([...q('#stTypes').selectedOptions].map(o=>o.value));};
+  q('#stTypes').onchange=refresh;refresh();q('#stCopy').onclick=async()=>{try{await navigator.clipboard.writeText(q('#stCatalog').value);q('#stCopyStatus').textContent='คัดลอกแล้ว';}catch{q('#stCatalog').focus();q('#stCatalog').select();q('#stCopyStatus').textContent='กด Ctrl/Cmd+C เพื่อคัดลอก';}};
+}
+
 function projectFileChoices(payload){
   if(!payload || typeof payload!=="object") throw new Error("ไฟล์ไม่ใช่ Project JSON");
   if(payload.version!=null && ![1,2].includes(payload.version)) throw new Error("ยังไม่รองรับ Project version "+payload.version);
@@ -9533,6 +9735,8 @@ document.addEventListener("click",ev=>{
     case "paste": pasteClipboard(); break;
     case "cut": copySelection(); deleteSelection(); break;
     case "import-custom": importCustomComponent(); break;
+    case "import-sch-text": openSchematicTextDialog(); break;
+    case "sch-text-catalog": openSchematicTextCatalog(); break;
     case "import-vhdl": importVhdlFile(); break;
     case "export-active-custom": exportActiveAsCustom(); break;
     case "delete-sel": deleteSelection(); break;

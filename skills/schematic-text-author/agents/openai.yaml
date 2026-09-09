@@ -1,0 +1,4 @@
+interface:
+  display_name: "Schematic Text Author"
+  short_description: "Create compact circuits for Schematic Studio"
+  default_prompt: "Use $schematic-text-author to create a Schematic Text circuit from my requirements and available subcircuits."

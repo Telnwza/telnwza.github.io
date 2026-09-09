@@ -1,0 +1,9 @@
+format schematic-text 1
+circuit dff_reset
+input d, clk, rst
+output q
+part ff DFF reset=true
+connect d -> ff.d
+connect clk -> ff.clk
+connect rst -> ff.rst
+connect ff.q -> q

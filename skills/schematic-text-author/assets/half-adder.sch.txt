@@ -1,0 +1,10 @@
+format schematic-text 1
+circuit half_adder
+input a, b
+output sum, carry
+part x XOR
+part g AND
+connect a -> x.i0, g.i0
+connect b -> x.i1, g.i1
+connect x.o -> sum
+connect g.o -> carry

@@ -1,0 +1,22 @@
+format schematic-text 1
+circuit counter2
+# Count 0,1,2,3,0 on rising clk when en=1. rst=1 asynchronously clears.
+input clk, rst, en
+output q[2]
+part f0 DFF reset=true
+part f1 DFF reset=true
+part x0 XOR
+part x1 XOR
+part carry AND
+part lo BUSTAP bit=0 nbit=1 mode=merge
+part hi BUSTAP bit=1 nbit=1 mode=merge
+connect clk -> f0.clk, f1.clk
+connect rst -> f0.rst, f1.rst
+connect en -> x0.i1, carry.i1
+connect f0.q -> x0.i0, carry.i0, lo.y
+connect f1.q -> x1.i0, hi.y
+connect carry.o -> x1.i1
+connect x0.o -> f0.d
+connect x1.o -> f1.d
+connect lo.d -> q
+connect hi.d -> q
