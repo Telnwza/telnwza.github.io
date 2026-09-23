@@ -1592,7 +1592,9 @@ const TYPES = {
       const anchor = vert ? "start" : "middle";
       return `<path class="glow" d="${tri}" fill="var(--gate-fill)" stroke="var(--wire-bus)" stroke-width="1.8"/>
               <text x="${lx}" y="${ly}" text-anchor="${anchor}" font-size="8"
-                font-family="monospace" fill="var(--ink-dim)">${tag}</text>`;
+                font-family="monospace" fill="var(--ink-dim)">${tag}</text>
+              <text x="${W/2}" y="15" text-anchor="middle" font-size="9" font-weight="700"
+                fill="var(--ink)">${p.mode==="merge"?"M":"S"}</text>`;
     }
   },
 
@@ -3068,6 +3070,25 @@ function selectedTap(){
   const c=comp([...state.selection][0]);return c?.type==="BUSTAP"?c:null;
 }
 function busTapIncomingWire(c,sch=activeSch()){return sch.wires.find(w=>w.to.cid===c.id&&w.to.pid==="d");}
+/* Changing a tap's mode changes the direction of y. Reorient only wires whose
+   other endpoint has an unambiguous, compatible direction. Never leave an old
+   source/sink ordering in the saved schematic after a mode change. */
+function setBusTapMode(sch, tap, mode){
+  if(tap.params.mode===mode) return true;
+  const attached=sch.wires.filter(w=>[w.from,w.to].some(ep=>ep.cid===tap.id&&ep.pid==="y"));
+  const changes=[];
+  for(const w of attached){
+    const other=w.from.cid===tap.id&&w.from.pid==="y"?w.to:w.from;
+    const oc=comp(other.cid,sch), op=oc&&getPort(oc,other.pid);
+    if(!op || (oc.type!=="JUNCTION" && op.dir===(mode==="split"?"out":"in"))) return false;
+    const fromTap=mode==="split";
+    const isFromTap=w.from.cid===tap.id&&w.from.pid==="y";
+    if(fromTap!==isFromTap) changes.push(w);
+  }
+  tap.params.mode=mode;
+  changes.forEach(w=>{[w.from,w.to]=[w.to,w.from];if(w.pts)w.pts.reverse();});
+  return true;
+}
 function duplicateNextTap(){
   const c=selectedTap();if(!c){toast("เลือก Bus Tap ตัวเดียวก่อน","warn");return false;}
   const sch=activeSch(),w=busTapIncomingWire(c),count=c.params.nbit||1,order=c.params.order||"up";
@@ -5087,6 +5108,49 @@ function netHasDriver(sch, w, seen){
   return up ? netHasDriver(sch, up, seen) : false;      // a dot with nothing coming in
 }
 
+/* A merge net is valid only when every bit of its real bus width is written.
+   Count a tap's slice only when its y pin has a genuine upstream output. */
+function mergeBusCoverage(sch){
+  const result=[], visited=new Set();
+  const bitDriven=tap=>{
+    let w=sch.wires.find(x=>x.to.cid===tap.id&&x.to.pid==="y");
+    const seen=new Set();
+    while(w){
+      const source=comp(w.from.cid,sch);
+      if(!source)return false;
+      if(source.type!=="JUNCTION")return getPort(source,w.from.pid)?.dir==="out";
+      if(seen.has(source.id))return false;
+      seen.add(source.id);
+      w=sch.wires.find(x=>x.to.cid===source.id);
+    }
+    return false;
+  };
+  sch.components.filter(c=>c.type==="BUSTAP"&&c.params.mode==="merge").forEach(tap=>{
+    const dw=busTapIncomingWire(tap,sch);
+    if(!dw||visited.has(dw.id))return;
+    const net=netWires(sch,dw);
+    net.forEach(id=>visited.add(id));
+    const wires=sch.wires.filter(w=>net.has(w.id));
+    const width=netPortWidth(sch,dw);
+    if(width<2)return;
+    const wholeDriver=wires.some(w=>[w.from,w.to].some(ep=>{
+      const c=comp(ep.cid,sch),p=c&&getPort(c,ep.pid);
+      return c?.type!=="BUSTAP"&&c?.type!=="JUNCTION"&&p?.dir==="out"&&(p.width||1)>1;
+    }));
+    if(wholeDriver)return; // reported separately as a multi-driver
+    const taps=sch.components.filter(c=>c.type==="BUSTAP"&&c.params.mode==="merge"&&
+      wires.some(w=>w.to.cid===c.id&&w.to.pid==="d"));
+    const covered=new Set();
+    taps.filter(bitDriven).forEach(c=>{
+      const first=c.params.bit??0,count=Math.max(1,c.params.nbit??1);
+      for(let bit=first;bit<first+count;bit++)covered.add(bit);
+    });
+    const missing=Array.from({length:width},(_,i)=>i).filter(i=>!covered.has(i));
+    if(missing.length)result.push({wires:net,taps,missing,width});
+  });
+  return result;
+}
+
 /* Canvas-only electrical status. Geometry never creates connectivity: two paths may
    cross or touch, but only shared component/port references and real JUNCTION nodes
    belong to the same VHDL net. Colour a segment when the generator cannot trace a
@@ -5155,10 +5219,17 @@ function wireCompletionMap(sch){
     if(!a||!b||!getPort(a,w.from.pid)||!getPort(b,w.to.pid)){
       result.set(w.id,"ปลายสายอ้างอิง component หรือ pin ที่ไม่มีอยู่"); return;
     }
+    if((a.type!=="JUNCTION"&&getPort(a,w.from.pid).dir!=="out") ||
+       (b.type!=="JUNCTION"&&getPort(b,w.to.pid).dir!=="in")){
+      result.set(w.id,"ทิศทางสายไม่ตรงกับขา input/output"); return;
+    }
     const group=groupOf.get(w.id);
     if(!hasDriver(w)) result.set(w.id,"ไม่มี driver เชื่อมมาถึงสายนี้");
     else if(!(group&&group.mergeDriven)&&(isLoose(w.from)||isLoose(w.to))) result.set(w.id,"ปลายสายยังลอยอยู่");
   });
+  mergeBusCoverage(sch).forEach(issue=>issue.wires.forEach(id=>{
+    if(!result.has(id))result.set(id,`บัส ${issue.width} bit ยังไม่มีตัวขับบิต ${issue.missing.join(", ")}`);
+  }));
   return result;
 }
 
@@ -5644,7 +5715,8 @@ function render(){
       const dw = sch.wires.find(w=>w.to.cid===c.id && w.to.pid==="d");
       const bw = dw ? (wWidth.get(dw.id) || 1) : 0;
       const bit = (c.params.bit ?? 0) + Math.max(1, c.params.nbit ?? 1) - 1;   // top of the slice
-      if(bw > 1 && bit > bw-1){
+      const badWire=sch.wires.some(w=>[w.from,w.to].some(ep=>ep.cid===c.id)&&wCompletion.has(w.id));
+      if((bw > 1 && bit > bw-1) || badWire){
         const tri = body.querySelector("path"), num = body.querySelector("text");
         if(tri) tri.setAttribute("stroke", "var(--err)");
         if(num){ num.setAttribute("fill", "var(--err)"); num.setAttribute("font-weight", "700"); }
@@ -6627,6 +6699,10 @@ function renderInspector(){
             const lost=sch.wires.filter(w=>[w.from,w.to].some(ep=>ep.cid===c.id&&!after.some(p=>p.id===ep.pid)));
             if(lost.length&&!confirm(`เปลี่ยนรูปแบบขาจะถอดสายที่ใช้ขาเดิม ${lost.length} เส้น (Undo ย้อนกลับได้) ต้องการเปลี่ยนหรือไม่?`)){renderInspector();return;}
           }
+          if(c.type==="BUSTAP" && k==="mode" && !setBusTapMode(sch,c,v)){
+            toast("เปลี่ยนโหมดไม่ได้: ขา y จะชนกับขาทิศเดียวกัน — ถอดสายขา y ก่อน", "warn", 4000);
+            renderInspector(); return;
+          }
           // renaming an IN/OUT renames this sheet's SUB-BLOCK PIN too — take the
           // parents' wires with it instead of leaving them on a dead pin
           const portsBefore = (k==="name" && (c.type==="IN" || c.type==="OUT")) ? schPortList(sch) : null;
@@ -6967,6 +7043,16 @@ function runSynthesis(){
           ref:sch.name, schId:sch.id, cid});
       }
     });
+    sch.wires.forEach(w=>{
+      const from=comp(w.from.cid,sch),to=comp(w.to.cid,sch);
+      const fp=from&&getPort(from,w.from.pid),tp=to&&getPort(to,w.to.pid);
+      if(!fp||!tp)return;
+      if((from.type!=="JUNCTION"&&fp.dir!=="out") ||
+         (to.type!=="JUNCTION"&&tp.dir!=="in")){
+        issues.push({lvl:"err",msg:`สายระหว่าง ${compDisplay(from)} กับ ${compDisplay(to)} มีทิศทางขาไม่ถูกต้อง — ตรวจ split/merge ของ Bus Tap`,
+          ref:sch.name,schId:sch.id,cid:from.type==="BUSTAP"?from.id:to.id});
+      }
+    });
     // bus width mismatch — every consuming port must receive a signal of its
     // own width. Junctions are width-transparent, so trace back through them
     // to the real driving port; mismatches across a junction are caught too.
@@ -7033,6 +7119,9 @@ function runSynthesis(){
       }));
       if(wholeDriver)issues.push({lvl:"err",msg:"Bus Tap แบบ merge เขียนลงบัสที่มีตัวขับทั้งบัสอยู่แล้ว (multi-driver)",ref:sch.name,schId:sch.id,cid:c.id});
     });
+    mergeBusCoverage(sch).forEach(g=>issues.push({lvl:"err",
+      msg:`บัส ${g.width} bit ที่ประกอบด้วย Bus Tap ยังไม่มีตัวขับบิต ${g.missing.join(", ")} — VHDL จะได้ค่า U`,
+      ref:sch.name,schId:sch.id,cid:g.taps[0]?.id}));
     // what really drives a pin, looking through junctions
     const srcOfPin = (cid, pid) => {
       const w = sch.wires.find(x=>x.to.cid===cid && x.to.pid===pid);
@@ -7194,6 +7283,7 @@ function generateAllVhdl(){
 function generateSchVhdl(sch){
   sch.components.forEach(c=>{ delete c._busNet; delete c._busW; });
   const warns = [];
+  mergeBusCoverage(sch).forEach(g=>warns.push(`บัส ${g.width} bit ที่ประกอบด้วย Bus Tap ยังไม่มีตัวขับบิต ${g.missing.join(", ")} — VHDL จะได้ค่า U`));
   const fallbacks = [];
   const fallback = (c,pid,dir,reason) => fallbacks.push({cid:c.id,pid,dir,reason});
   const ename = sanId(sch.name) || "my_circuit";
@@ -7995,8 +8085,11 @@ function generateVHDL(){
     });
     if(warnItems.length) renderErrors(issues.concat(warnItems));
     const nEnt = Object.keys(all).length;
+    const errorCount = issues.filter(i=>i.lvl==="err").length;
     const skipped = unused.length ? ` · ข้าม ${unused.length} แผ่นที่ยังไม่ได้วางใน top (${unused.map(s=>s.name).join(", ")})` : "";
-    if(warnItems.length){
+    if(errorCount){
+      toast(`สร้าง VHDL ไว้ตรวจสอบ — Check พบ error ${errorCount} รายการ ยังไม่ควรนำไป build`, "err", 5200);
+    } else if(warnItems.length){
       toast(`สร้าง ${nEnt} entity แล้ว — มีคำเตือน ${warnItems.length} รายการในแท็บ Issues${skipped}`, "warn", skipped?5200:4000);
     } else if(skipped){
       toast(`สร้าง ${nEnt} entity เรียบร้อย ✓${skipped}`, "warn", 5200);
